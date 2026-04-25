@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quad_s_team12_app/app/app.dart';
+import 'package:bridge_k/app/app.dart';
 
 void main() {
   testWidgets('child start screen renders primary actions', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const QuadSTeam12App());
+    await tester.pumpWidget(const BridgeKApp());
     await tester.pumpAndSettle();
 
     expect(find.text('Bridge'), findsOneWidget);
