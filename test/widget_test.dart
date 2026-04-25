@@ -20,7 +20,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: ChildHomePage(showOnboarding: true)),
+      const MaterialApp(
+        home: ChildHomePage(showOnboarding: true, showContent: false),
+      ),
     );
     await tester.pumpAndSettle();
 
