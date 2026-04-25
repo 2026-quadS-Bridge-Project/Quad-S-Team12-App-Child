@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
@@ -16,7 +17,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  static const String _mockUsername = 'gdg12';
+  static const Set<String> _mockUsernames = <String>{'gdg12', 'abcd00'};
   static const String _mockPassword = 'Gdg123456789!';
 
   final TextEditingController _usernameController = TextEditingController();
@@ -55,10 +56,10 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
-    if (_username != _mockUsername) {
+    if (!_mockUsernames.contains(_username)) {
       setState(() {
         _activeError = _LoginErrorType.missingUser;
       });
@@ -75,6 +76,11 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _activeError = null;
     });
+
+    await AuthSession.saveLogin(username: _username);
+    if (!mounted) {
+      return;
+    }
     context.go('/child-home/onboarding');
   }
 

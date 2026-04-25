@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -18,8 +19,29 @@ const TextStyle _bridgeTitleStyle = TextStyle(
   letterSpacing: -0.776,
 );
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  @override
+  void initState() {
+    super.initState();
+    _redirectCachedLogin();
+  }
+
+  Future<void> _redirectCachedLogin() async {
+    if (!await AuthSession.isLoggedIn()) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    context.go('/child-home/onboarding');
+  }
 
   @override
   Widget build(BuildContext context) {
