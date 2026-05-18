@@ -30,4 +30,58 @@ abstract final class AppColors {
   static const Color border = gray200;
   static const Color textPrimary = labelStrong;
   static const Color textSecondary = gray600;
+
+  // region: Cross-screen validated tokens (Figma — see docs/figma-specs/00-CATALOG.md §1.1)
+
+  // Near-black ink, distinct from gray900. Input values, topbar titles, section headers.
+  static const Color inkBlack = Color(0xFF050505);
+
+  // Gray scale extension — sits between gray100 and gray200.
+  // Separator bands, donut base ring, completed-mission card bg.
+  static const Color gray150 = Color(0xFFEDEEF1);
+
+  // Primary tonal ramp (light end) — speech bubbles, info backgrounds, button :active.
+  static const Color primarySoft = Color(0xFFE1F0FE);
+  static const Color primary025 = primarySoft;
+  static const Color primaryLight = Color(0xFFEBF5FE);
+  static const Color primary050 = primaryLight;
+  static const Color primarySubtle = Color(0xFFC2DFFD);
+  static const Color primary100 = primarySubtle;
+
+  // Destructive tonal extensions — chip bg + soft error border.
+  static const Color destructiveSubtle = Color(0xFFFFD3D3);
+  static const Color destructive100 = destructiveSubtle;
+  static const Color destructiveBorderSoft = Color(0xFFFF7878);
+
+  // Bonus time donut + label (previously hardcoded in child_home).
+  static const Color bonusAmber = Color(0xFFFFBF00);
+
+  // Softer variant of bonusAmber — child_home completed-ring color.
+  static const Color bonusAmberSoft = Color(0xFFFFD980);
+
+  // Modal scrim for dialogs and bottom sheets — rgba(68,68,68,0.60).
+  static const Color scrim = Color(0x99444444);
+
+  // Brand wordmark color — lighter blue tint used ONLY for the "Bridge" logo
+  // on the intro screen (Figma 662-8356). Distinct from `primary` (#3A99F8);
+  // do not reuse for CTAs, links, or icons.
+  static const Color brandWordmark = Color(0xFF6DB5FF);
+
+  // region: Declared-only tokens (reserved — present in Figma, not yet used in app)
+
+  // Figma variable — highlight/darkest.
+  static const Color highlightDarkest = Color(0xFF006FFD);
+  // Reserved for mission reward badge (Figma style library).
+  static const Color secondaryYellow = Color(0xFFFFCC33);
+  // Figma variable only — line/purple style.
+  static const Color lineStylePurple = Color(0xFF655B96);
+
+  // region: Semantic aliases
+
+  static const Color inputText = inkBlack;
+  static const Color dialogScrim = scrim;
+  static const Color cardSeparator = gray150;
+
+  // Card drop shadow color — 50% gray (#D9D9D9 @ 50% alpha).
+  static const Color cardShadow = Color(0x80D9D9D9);
 }
