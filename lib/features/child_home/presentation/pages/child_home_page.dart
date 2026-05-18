@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -23,6 +24,10 @@ class ChildHomePage extends StatefulWidget {
 
 class _ChildHomePageState extends State<ChildHomePage> {
   late bool _showOnboarding = widget.showOnboarding;
+  // TODO: Wire `_hasSchedule` to real schedule state once persistence lands.
+  // Default false so the empty-state + button is reachable on first run.
+  // Long-press the time card to toggle for debug (see _toggleHasScheduleForDebug).
+  bool _hasSchedule = false;
 
   @override
   void didUpdateWidget(covariant ChildHomePage oldWidget) {
@@ -38,6 +43,12 @@ class _ChildHomePageState extends State<ChildHomePage> {
     }
     setState(() {
       _showOnboarding = false;
+    });
+  }
+
+  void _toggleHasScheduleForDebug() {
+    setState(() {
+      _hasSchedule = !_hasSchedule;
     });
   }
 
@@ -61,6 +72,10 @@ class _ChildHomePageState extends State<ChildHomePage> {
                   child: _ChildHomeContent(
                     onboarding: _showOnboarding,
                     hasContent: widget.showContent,
+                    hasSchedule: _hasSchedule,
+                    onDebugToggleSchedule: kDebugMode
+                        ? _toggleHasScheduleForDebug
+                        : null,
                   ),
                 ),
               ),
@@ -94,10 +109,19 @@ class _ChildHomePageState extends State<ChildHomePage> {
 }
 
 class _ChildHomeContent extends StatelessWidget {
-  const _ChildHomeContent({required this.onboarding, required this.hasContent});
+  const _ChildHomeContent({
+    required this.onboarding,
+    required this.hasContent,
+    required this.hasSchedule,
+    required this.onDebugToggleSchedule,
+  });
 
   final bool onboarding;
   final bool hasContent;
+  final bool hasSchedule;
+  // Null in release builds — see ChildHomePage build(). Keeps the long-press
+  // debug toggle from silently flipping schedule state for end users.
+  final VoidCallback? onDebugToggleSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -118,13 +142,19 @@ class _ChildHomeContent extends StatelessWidget {
             children: [
               const SizedBox(height: 12),
               _TopBar(hasNotification: hasContent),
-              SizedBox(height: onboarding ? 29 : (hasContent ? 30 : 20)),
+              // v2 (hasContent==true) requires 40 px top gap per
+              // 02-child-home.md "Deltas" §1; v1 keeps 20.
+              SizedBox(height: onboarding ? 29 : (hasContent ? 40 : 20)),
               Opacity(
                 opacity: onboarding ? 0.2 : 1,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _TodayTimeSection(hasContent: hasContent),
+                    _TodayTimeSection(
+                      hasContent: hasContent,
+                      hasSchedule: hasSchedule,
+                      onDebugToggleSchedule: onDebugToggleSchedule,
+                    ),
                     SizedBox(height: onboarding ? 46 : 50),
                     _MissionSection(
                       emptyOnboardingCopy: onboarding,
@@ -155,28 +185,32 @@ class _TopBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const _MyPageButton(),
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const Icon(
-                Icons.notifications_none_rounded,
-                size: 30,
-                color: AppColors.gray900,
-              ),
-              if (hasNotification)
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: AppColors.destructive,
-                      shape: BoxShape.circle,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.push('/child-home/notifications'),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(
+                  Icons.notifications_none_rounded,
+                  size: 30,
+                  color: AppColors.gray900,
+                ),
+                if (hasNotification)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: AppColors.destructive,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -219,12 +253,23 @@ class _MyPageButton extends StatelessWidget {
 }
 
 class _TodayTimeSection extends StatelessWidget {
-  const _TodayTimeSection({required this.hasContent});
+  const _TodayTimeSection({
+    required this.hasContent,
+    required this.hasSchedule,
+    required this.onDebugToggleSchedule,
+  });
 
   final bool hasContent;
+  final bool hasSchedule;
+  // Null in release builds; long-press becomes a no-op.
+  final VoidCallback? onDebugToggleSchedule;
 
   @override
   Widget build(BuildContext context) {
+    // Donut + bonus details only when there's actually a registered schedule.
+    // All other states fall through to the empty card with a tappable + button.
+    final bool showDonut = hasContent && hasSchedule;
+
     return SizedBox(
       height: 223,
       child: Stack(
@@ -243,7 +288,73 @@ class _TodayTimeSection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.settings, color: AppColors.gray300, size: 22),
+                // Per audit Issue 4 / fix-request #3: the bar-chart "사용 리포트"
+                // entry point must render whenever the user has app content,
+                // regardless of whether a schedule is registered yet.
+                // The gear (schedule confirm) only makes sense once a schedule
+                // exists, so it stays gated behind showDonut.
+                if (hasContent)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 22,
+                          minHeight: 22,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        icon: SvgPicture.asset(
+                          'assets/icons/bar_chart.svg',
+                          width: 20,
+                          height: 20,
+                          colorFilter: const ColorFilter.mode(
+                            AppColors.gray600,
+                            BlendMode.srcIn,
+                          ),
+                          placeholderBuilder: (_) => const Icon(
+                            Icons.bar_chart_rounded,
+                            size: 20,
+                            color: AppColors.gray600,
+                          ),
+                        ),
+                        onPressed: () => context.push('/child-home/report'),
+                      ),
+                      if (showDonut) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 22,
+                            minHeight: 22,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          icon: SvgPicture.asset(
+                            'assets/icons/settings.svg',
+                            width: 20,
+                            height: 20,
+                            colorFilter: const ColorFilter.mode(
+                              AppColors.gray600,
+                              BlendMode.srcIn,
+                            ),
+                            placeholderBuilder: (_) => const Icon(
+                              Icons.settings_outlined,
+                              size: 20,
+                              color: AppColors.gray600,
+                            ),
+                          ),
+                          onPressed: () =>
+                              context.push('/child-home/time-setup/confirm'),
+                        ),
+                      ],
+                    ],
+                  )
+                else
+                  const Icon(
+                    Icons.settings,
+                    color: AppColors.gray300,
+                    size: 22,
+                  ),
                 if (!hasContent) ...[
                   const Spacer(),
                   Text(
@@ -264,21 +375,65 @@ class _TodayTimeSection extends StatelessWidget {
             right: 0,
             top: 48,
             height: 175,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x80D9D9D9),
-                    offset: Offset(0, 4),
-                    blurRadius: 4,
-                  ),
-                ],
+            child: GestureDetector(
+              // Debug-only long-press to flip between schedule states until
+              // real state is wired up. Hit area is the card.
+              behavior: HitTestBehavior.opaque,
+              onLongPress: onDebugToggleSchedule,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: AppTokens.cardShadowColor,
+                      offset: Offset(0, 4),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                // Three card states:
+                // - has schedule: donut + bonus details
+                // - no schedule (normal path): empty-state with tappable + button
+                // - hasContent=false (legacy onboarding path): same empty-state
+                //   so the + button is always reachable.
+                child: showDonut
+                    ? const _TimeSummaryContent()
+                    : const _ScheduleEmptyState(),
               ),
-              child: hasContent
-                  ? const _TimeSummaryContent()
-                  : const Center(child: _AddCircleButton()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleEmptyState extends StatelessWidget {
+  const _ScheduleEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '아직 등록된 시간 계획이 없어요.',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.gray500),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.push('/child-home/time-setup'),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: AppColors.primaryLight,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.add, color: AppColors.primary),
             ),
           ),
         ],
@@ -354,15 +509,15 @@ class _TimeDonutChartPainter extends CustomPainter {
     drawRing(
       radius: 55,
       strokeWidth: 14,
-      baseColor: const Color(0xFFEDEEF1),
+      baseColor: AppColors.gray150,
       progressColor: AppColors.primary,
       progress: 0.76,
     );
     drawRing(
       radius: 39,
       strokeWidth: 11,
-      baseColor: const Color(0xFFEDEEF1),
-      progressColor: const Color(0xFFFFBF00),
+      baseColor: AppColors.gray150,
+      progressColor: AppColors.bonusAmber,
       progress: 0.78,
     );
   }
@@ -398,7 +553,7 @@ class _TimeDetails extends StatelessWidget {
             child: _TimeDetailGroup(
               label: '보너스시간',
               value: '00:30',
-              color: Color(0xFFFFBF00),
+              color: AppColors.bonusAmber,
             ),
           ),
         ],
@@ -446,23 +601,6 @@ class _TimeDetailGroup extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _AddCircleButton extends StatelessWidget {
-  const _AddCircleButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: const BoxDecoration(
-        color: Color(0xFFEBF5FE),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(Icons.add_rounded, color: AppColors.primary, size: 30),
     );
   }
 }
@@ -553,13 +691,49 @@ class _MissionListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // TODO: Replace mock data once mission data wiring lands.
     const List<_MissionItemData> missions = [
-      _MissionItemData(status: _MissionStatus.pendingCheck),
-      _MissionItemData(status: _MissionStatus.rejected),
-      _MissionItemData(status: _MissionStatus.reviewing),
-      _MissionItemData(status: _MissionStatus.completed),
-      _MissionItemData(status: _MissionStatus.completed),
+      _MissionItemData(
+        id: '1',
+        status: _MissionStatus.pendingCheck,
+        title: '방청소 하기',
+        rewardText: '1시간 지급',
+        iconAsset: 'assets/icons/청소.svg',
+      ),
+      _MissionItemData(
+        id: '2',
+        status: _MissionStatus.rejected,
+        title: '운동하기',
+        rewardText: '30분 지급',
+        iconAsset: 'assets/icons/운동.svg',
+      ),
+      _MissionItemData(
+        id: '3',
+        status: _MissionStatus.reviewing,
+        title: '숙제하기',
+        rewardText: '15분 지급',
+        iconAsset: 'assets/icons/학습.svg',
+      ),
+      _MissionItemData(
+        id: '4',
+        status: _MissionStatus.completed,
+        title: '심부름하기',
+        rewardText: '20분 지급',
+        iconAsset: 'assets/icons/심부름.svg',
+      ),
+      _MissionItemData(
+        id: '5',
+        status: _MissionStatus.completed,
+        title: '루틴 지키기',
+        rewardText: '10분 지급',
+        iconAsset: 'assets/icons/루틴.svg',
+      ),
     ];
+
+    final int completedCount = missions
+        .where((m) => m.status == _MissionStatus.completed)
+        .length;
+    final int totalCount = missions.length;
 
     return SizedBox(
       height: 520,
@@ -577,7 +751,7 @@ class _MissionListSection extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '2개 완료',
+                '$completedCount개 완료',
                 style: AppTypography.labelBold.copyWith(
                   color: AppColors.gray700,
                   fontSize: 14,
@@ -589,7 +763,7 @@ class _MissionListSection extends StatelessWidget {
               Container(width: 1, height: 14, color: AppColors.gray200),
               const SizedBox(width: 8),
               Text(
-                '4',
+                '$totalCount',
                 style: AppTypography.labelBold.copyWith(
                   color: AppColors.gray200,
                   fontSize: 14,
@@ -613,9 +787,19 @@ class _MissionListSection extends StatelessWidget {
 enum _MissionStatus { pendingCheck, rejected, reviewing, completed }
 
 class _MissionItemData {
-  const _MissionItemData({required this.status});
+  const _MissionItemData({
+    required this.id,
+    required this.status,
+    required this.title,
+    required this.rewardText,
+    required this.iconAsset,
+  });
 
+  final String id;
   final _MissionStatus status;
+  final String title;
+  final String rewardText;
+  final String iconAsset;
 }
 
 class _MissionCard extends StatelessWidget {
@@ -627,36 +811,50 @@ class _MissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 84,
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
-      decoration: BoxDecoration(
-        color: _isCompleted ? const Color(0xFFEDEEF1) : AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Opacity(
-            opacity: _isCompleted ? 0.3 : 1,
-            child: SvgPicture.asset(
-              'assets/icons/청소.svg',
-              width: 48,
-              height: 48,
+    // TODO: Mission detail route `/child-home/mission/:id` lands in Phase 6;
+    // until then go_router surfaces its default 404 on tap.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push('/child-home/mission/${data.id}'),
+      child: Container(
+        height: 84,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
+        decoration: BoxDecoration(
+          color: _isCompleted ? AppColors.gray150 : AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Opacity(
+              opacity: _isCompleted ? 0.3 : 1,
+              child: SvgPicture.asset(data.iconAsset, width: 48, height: 48),
             ),
-          ),
-          const SizedBox(width: 19),
-          Expanded(child: _MissionText(completed: _isCompleted)),
-          _MissionStatusIcon(status: data.status),
-        ],
+            const SizedBox(width: 19),
+            Expanded(
+              child: _MissionText(
+                title: data.title,
+                rewardText: data.rewardText,
+                completed: _isCompleted,
+              ),
+            ),
+            _MissionStatusIcon(status: data.status),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _MissionText extends StatelessWidget {
-  const _MissionText({required this.completed});
+  const _MissionText({
+    required this.title,
+    required this.rewardText,
+    required this.completed,
+  });
 
+  final String title;
+  final String rewardText;
   final bool completed;
 
   @override
@@ -671,7 +869,7 @@ class _MissionText extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '방청소 하기',
+          title,
           style: AppTypography.bodyMedium.copyWith(
             color: color,
             fontSize: 16,
@@ -682,7 +880,7 @@ class _MissionText extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          '1시간 지급',
+          rewardText,
           style: AppTypography.captionRegular.copyWith(
             color: completed ? AppColors.gray300 : AppColors.gray500,
             fontSize: 12,
@@ -713,8 +911,10 @@ class _MissionStatusIcon extends StatelessWidget {
         icon: Icons.close_rounded,
       ),
       _MissionStatus.reviewing => const _ReviewingStatusIcon(),
+      // Softer amber variant — see AppColors.bonusAmberSoft (distinct from
+      // bonusAmber #FFBF00); used for completed-mission ring per Figma.
       _MissionStatus.completed => const _CircleStatusIcon(
-        color: Color(0xFFFFD980),
+        color: AppColors.bonusAmberSoft,
         icon: Icons.check_rounded,
       ),
     };
@@ -747,7 +947,7 @@ class _ReviewingStatusIcon extends StatelessWidget {
       width: 20,
       height: 20,
       decoration: const BoxDecoration(
-        color: Color(0xFF16BF40),
+        color: AppColors.positive,
         shape: BoxShape.circle,
       ),
       child: const Center(
@@ -762,15 +962,22 @@ class _ParentConnectGuide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // IgnorePointer: the bubble is purely informational. Without this, taps
+    // on the bubble visual would be absorbed before reaching the overlay's
+    // GestureDetector(behavior: translucent) dismiss handler, and if the
+    // bubble overlaps the my-button or notification bell those hit areas
+    // would also be blocked.
     return Positioned(
       left: 62,
       top: 21,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Padding(padding: EdgeInsets.only(top: 12), child: _GuidePointer()),
-          _GuideBubble(),
-        ],
+      child: IgnorePointer(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Padding(padding: EdgeInsets.only(top: 12), child: _GuidePointer()),
+            _GuideBubble(),
+          ],
+        ),
       ),
     );
   }
@@ -783,7 +990,7 @@ class _GuidePointer extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipPath(
       clipper: _GuidePointerClipper(),
-      child: Container(width: 11, height: 14, color: const Color(0xFFE1F0FE)),
+      child: Container(width: 11, height: 14, color: AppColors.primarySoft),
     );
   }
 }
@@ -797,7 +1004,7 @@ class _GuideBubble extends StatelessWidget {
       width: 204,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
       decoration: BoxDecoration(
-        color: const Color(0xFFE1F0FE),
+        color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -851,7 +1058,7 @@ class _GuideStepBadge extends StatelessWidget {
       width: 20,
       height: 20,
       decoration: const BoxDecoration(
-        color: Color(0xFFC2DFFD),
+        color: AppColors.primarySubtle,
         shape: BoxShape.circle,
       ),
       child: Center(
