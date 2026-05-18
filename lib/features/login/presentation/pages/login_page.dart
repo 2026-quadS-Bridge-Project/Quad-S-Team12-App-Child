@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/buttons/bridge_button.dart';
+import '../../../../core/widgets/layout/bridge_app_bar.dart';
 
 enum _LoginErrorType { missingUser, wrongPassword }
 
@@ -81,7 +82,9 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) {
       return;
     }
-    context.go('/child-home/onboarding');
+    // Land on the actual home (donut/empty + missions). `/child-home/onboarding`
+    // is reserved for the first-time parent-connect overlay, not every login.
+    context.go('/child-home');
   }
 
   @override
@@ -112,7 +115,10 @@ class _LoginPageState extends State<LoginPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Column(
                           children: [
-                            _LoginTopBar(onBack: () => context.go('/')),
+                            BridgeAppBar(
+                              title: '로그인',
+                              onBack: () => context.pop(),
+                            ),
                             const SizedBox(height: 25),
                             _LoginField(
                               label: '아이디',
@@ -144,15 +150,18 @@ class _LoginPageState extends State<LoginPage> {
                               ],
                               keyboardType: TextInputType.visiblePassword,
                               labelBottomSpacing: 12,
+                              obscureText: true,
                             ),
                             const Spacer(),
                             if (_errorMessage case final String message) ...[
                               _LoginToast(message: message),
                               const SizedBox(height: 15),
                             ],
-                            _LoginButton(
+                            BridgeButton(
                               label: '로그인',
-                              enabled: _canSubmit,
+                              variant: BridgeButtonVariant.primary,
+                              size: BridgeButtonSize.large,
+                              fullWidth: true,
                               onPressed: _canSubmit ? _submit : null,
                             ),
                             const SizedBox(height: 29),
@@ -171,51 +180,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class _LoginTopBar extends StatelessWidget {
-  const _LoginTopBar({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 14,
-            width: 24,
-            height: 24,
-            child: GestureDetector(
-              onTap: onBack,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(2),
-                child: SvgPicture.asset(
-                  'assets/icons/cmp/btn/back.svg',
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-          Center(
-            child: Text(
-              '로그인',
-              style: AppTypography.headlineMedium.copyWith(
-                fontSize: 18,
-                height: 1.445,
-                letterSpacing: -0.0036,
-                color: const Color(0xFF050505),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _LoginField extends StatelessWidget {
   const _LoginField({
     required this.label,
@@ -225,6 +189,7 @@ class _LoginField extends StatelessWidget {
     required this.inputFormatters,
     required this.keyboardType,
     required this.labelBottomSpacing,
+    this.obscureText = false,
   });
 
   final String label;
@@ -234,6 +199,7 @@ class _LoginField extends StatelessWidget {
   final List<TextInputFormatter> inputFormatters;
   final TextInputType keyboardType;
   final double labelBottomSpacing;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -264,6 +230,7 @@ class _LoginField extends StatelessWidget {
               controller: controller,
               onChanged: onChanged,
               keyboardType: keyboardType,
+              obscureText: obscureText,
               autocorrect: false,
               enableSuggestions: false,
               textCapitalization: TextCapitalization.none,
@@ -350,47 +317,6 @@ class _LoginToastWarningIcon extends StatelessWidget {
             height: 1,
             letterSpacing: 0,
             color: AppColors.white,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginButton extends StatelessWidget {
-  const _LoginButton({
-    required this.label,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool enabled;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: FilledButton(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          elevation: 0,
-          backgroundColor: AppColors.primary,
-          disabledBackgroundColor: AppColors.gray200,
-          foregroundColor: AppColors.white,
-          disabledForegroundColor: AppColors.gray300,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.headlineMedium.copyWith(
-            fontSize: 18,
-            height: 1.445,
-            letterSpacing: -0.0036,
-            fontWeight: FontWeight.w500,
-            color: enabled ? AppColors.white : AppColors.gray300,
           ),
         ),
       ),

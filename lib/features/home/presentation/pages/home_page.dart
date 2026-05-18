@@ -7,9 +7,10 @@ import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/buttons/bridge_button.dart';
 
 const TextStyle _bridgeTitleStyle = TextStyle(
-  color: Color(0xFF6DB5FF),
+  color: AppColors.brandWordmark,
   fontFamily: 'Sigmar',
   fontFamilyFallback: <String>[AppTypography.fontFamily],
   fontSize: 40,
@@ -27,20 +28,30 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // Gate the build until we know whether the user is already logged in. This
+  // prevents a one-frame flash of the intro screen before the redirect runs.
+  Future<bool>? _shouldShowIntro;
+
   @override
   void initState() {
     super.initState();
-    _redirectCachedLogin();
+    _shouldShowIntro = _redirectCachedLogin();
   }
 
-  Future<void> _redirectCachedLogin() async {
+  /// Returns `true` when the intro screen should be rendered (i.e. the user is
+  /// not logged in). When a cached login is found, navigates to the real home
+  /// and returns `false` so the build stays blank during the transition.
+  Future<bool> _redirectCachedLogin() async {
     if (!await AuthSession.isLoggedIn()) {
-      return;
+      return true;
     }
     if (!mounted) {
-      return;
+      return false;
     }
-    context.go('/child-home/onboarding');
+    // Cached-login users skip straight to the real home, not the first-time
+    // onboarding overlay (which is reserved for the first parent-connect flow).
+    context.go('/child-home');
+    return false;
   }
 
   @override
@@ -50,35 +61,46 @@ class _HomePageState extends State<HomePage> {
       child: Scaffold(
         backgroundColor: AppColors.gray050,
         body: SafeArea(
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: AppTokens.mobileFrameWidth,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.mobileHorizontalPadding,
-                    ),
-                    child: Column(
-                      children: [
-                        const Expanded(
-                          child: Align(
-                            alignment: Alignment(0, -0.08),
-                            child: _IntroContent(),
-                          ),
+          child: FutureBuilder<bool>(
+            future: _shouldShowIntro,
+            builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+              // While the auth check is in flight, render nothing to avoid the
+              // intro flashing for one frame before the redirect lands.
+              if (snapshot.connectionState != ConnectionState.done ||
+                  snapshot.data != true) {
+                return const SizedBox.shrink();
+              }
+              return LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: AppTokens.mobileFrameWidth,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTokens.mobileHorizontalPadding,
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 18),
-                          child: _BottomActions(
-                            isCompact: constraints.maxHeight < 700,
-                          ),
+                        child: Column(
+                          children: [
+                            const Expanded(
+                              child: Align(
+                                alignment: Alignment(0, -0.08),
+                                child: _IntroContent(),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: _BottomActions(
+                                isCompact: constraints.maxHeight < 700,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),
@@ -123,25 +145,9 @@ class _BottomActions extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: ElevatedButton(
-            onPressed: () => context.push('/signup'),
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle: AppTypography.headlineMedium.copyWith(
-                color: AppColors.white,
-                letterSpacing: -0.02,
-              ),
-            ),
-            child: const Text('자녀 회원가입'),
-          ),
+        BridgeButton(
+          label: '자녀 회원가입',
+          onPressed: () => context.push('/signup'),
         ),
         SizedBox(height: isCompact ? 14 : 16),
         Row(
@@ -155,15 +161,11 @@ class _BottomActions extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => context.push('/login'),
-              child: Text(
-                '로그인',
-                style: AppTypography.bodyBold.copyWith(
-                  color: AppColors.primary,
-                  letterSpacing: 0.09,
-                ),
-              ),
+            BridgeButton(
+              label: '로그인',
+              variant: BridgeButtonVariant.textLink,
+              fullWidth: false,
+              onPressed: () => context.push('/login'),
             ),
           ],
         ),
