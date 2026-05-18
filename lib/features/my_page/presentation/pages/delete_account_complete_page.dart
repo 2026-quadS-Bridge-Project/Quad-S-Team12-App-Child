@@ -38,23 +38,24 @@ class _DeleteAccountCompletePageState extends State<DeleteAccountCompletePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.gray050,
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 375),
-            child: Center(
+    // Block hardware back so the 3-second redirect to the entry page is not
+    // interrupted by an unexpected pop.
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppColors.gray050,
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 375),
               child: SizedBox(
-                width: 294.897,
+                width: 328,
                 child: Text(
                   '탈퇴가 완료되었습니다.\n언제든 다시 찾아와주세요!',
                   textAlign: TextAlign.center,
-                  style: AppTypography.heading2Regular.copyWith(
-                    fontSize: 17.982,
-                    height: 1.4,
-                    letterSpacing: -0.2158,
+                  // Spec 05-delete.md L121 (Figma 773-11070) calls for gray600,
+                  // not inkBlack — restoring per audit 10 Issue 6.
+                  style: AppTypography.heading2Bold.copyWith(
                     color: AppColors.gray600,
                     decoration: TextDecoration.none,
                   ),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/buttons/bridge_button.dart';
+import '../../../../core/widgets/layout/bridge_app_bar.dart';
 
 class MyPage extends StatefulWidget {
   const MyPage({super.key});
@@ -14,6 +15,9 @@ class MyPage extends StatefulWidget {
 }
 
 class _MyPageState extends State<MyPage> {
+  // TODO(backend): wire _accountType and _childCode to user profile API.
+  // Static placeholders until the backend endpoint is available
+  // (see audit 08-mypage.md Issue 8).
   static const String _accountType = '자녀회원';
   static const String _childCode = 'XY785eZ';
 
@@ -70,14 +74,6 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
-  Future<void> _logout() async {
-    await AuthSession.clearLogin();
-    if (!mounted) {
-      return;
-    }
-    context.go('/');
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,10 +86,7 @@ class _MyPageState extends State<MyPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: _MyPageTopBar(onBack: context.pop),
-                ),
+                const BridgeAppBar(title: '마이페이지'),
                 const SizedBox(height: 25),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -114,73 +107,26 @@ class _MyPageState extends State<MyPage> {
                 Container(
                   width: double.infinity,
                   height: 7,
-                  color: const Color(0xFFEDEEF1),
+                  color: AppColors.gray150,
                 ),
                 const SizedBox(height: 25),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _MyPageActionButton(
-                          label: '로그아웃',
-                          backgroundColor: const Color(0xFFEDEEF1),
-                          foregroundColor: AppColors.gray600,
-                          onTap: _logout,
-                        ),
-                        const SizedBox(width: 12),
-                        _MyPageActionButton(
-                          label: '탈퇴하기',
-                          backgroundColor: const Color(0xFFFFD3D3),
-                          foregroundColor: AppColors.destructive,
-                          onTap: () => _showDeleteAccountDialog(context),
-                        ),
-                      ],
+                    // 로그아웃 button intentionally absent per Figma 773:11103.
+                    // Only 탈퇴하기 (80×35 chip, node 257:3713) is rendered.
+                    child: BridgeButton(
+                      label: '탈퇴하기',
+                      variant: BridgeButtonVariant.destructive,
+                      size: BridgeButtonSize.small,
+                      fullWidth: false,
+                      onPressed: () => _showDeleteAccountDialog(context),
                     ),
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MyPageActionButton extends StatelessWidget {
-  const _MyPageActionButton({
-    required this.label,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 80,
-        height: 35,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTypography.bodyMedium.copyWith(
-            color: foregroundColor,
-            letterSpacing: 0.091,
           ),
         ),
       ),
@@ -329,48 +275,6 @@ class _DeleteDialogButton extends StatelessWidget {
   }
 }
 
-class _MyPageTopBar extends StatelessWidget {
-  const _MyPageTopBar({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 14,
-            width: 24,
-            height: 24,
-            child: GestureDetector(
-              onTap: onBack,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(2),
-                child: SvgPicture.asset(
-                  'assets/icons/cmp/btn/back.svg',
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-          Center(
-            child: Text(
-              '마이페이지',
-              style: AppTypography.headlineMedium.copyWith(
-                color: const Color(0xFF050505),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.label, required this.value});
 
@@ -399,7 +303,7 @@ class _InfoRow extends StatelessWidget {
           Text(
             value,
             style: AppTypography.bodyMedium.copyWith(
-              color: const Color(0xFF050505),
+              color: AppColors.inkBlack,
               letterSpacing: 0.091,
             ),
           ),

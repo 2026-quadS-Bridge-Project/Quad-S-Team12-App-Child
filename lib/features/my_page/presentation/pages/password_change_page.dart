@@ -4,9 +4,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/layout/bridge_app_bar.dart';
 
 enum _PasswordChangeErrorType { currentMismatch }
+
+enum _HelperSeverity { neutral, error }
 
 class PasswordChangePage extends StatefulWidget {
   const PasswordChangePage({super.key});
@@ -32,7 +36,8 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
   final FocusNode _confirmPasswordFocusNode = FocusNode();
 
   _PasswordChangeErrorType? _currentPasswordError;
-  bool _showNewPasswordRuleError = false;
+  bool _showNewPasswordRuleHint = false;
+  bool _newPasswordRuleSeverityIsError = false;
   bool _showSameAsCurrentError = false;
   bool _showConfirmMismatchError = false;
 
@@ -66,10 +71,20 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
     if (_showSameAsCurrentError) {
       return '새 비밀번호는 기존 비밀번호와 달라야 합니다.';
     }
-    if (_showNewPasswordRuleError) {
+    if (_showNewPasswordRuleHint) {
       return '영문 대문자, 소문자, 숫자, 특수문자 모두 혼합 (12~15자)';
     }
     return null;
+  }
+
+  _HelperSeverity get _newPasswordHelperSeverity {
+    if (_showSameAsCurrentError) {
+      return _HelperSeverity.error;
+    }
+    if (_newPasswordRuleSeverityIsError) {
+      return _HelperSeverity.error;
+    }
+    return _HelperSeverity.neutral;
   }
 
   String? get _confirmPasswordHelperText {
@@ -87,7 +102,10 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
 
   void _handleNewPasswordChanged(String value) {
     setState(() {
-      _showNewPasswordRuleError = value.isNotEmpty && !_isNewPasswordValid;
+      _showNewPasswordRuleHint = value.isNotEmpty && !_isNewPasswordValid;
+      if (!_showNewPasswordRuleHint) {
+        _newPasswordRuleSeverityIsError = false;
+      }
       _showSameAsCurrentError = value.isNotEmpty && _isSameAsCurrentPassword;
       _showConfirmMismatchError =
           _confirmPassword.isNotEmpty && !_isConfirmMatched;
@@ -115,8 +133,9 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
       _currentPasswordError = _isCurrentPasswordValid
           ? null
           : _PasswordChangeErrorType.currentMismatch;
-      _showNewPasswordRuleError =
+      _showNewPasswordRuleHint =
           _newPassword.isNotEmpty && !_isNewPasswordValid;
+      _newPasswordRuleSeverityIsError = _showNewPasswordRuleHint;
       _showSameAsCurrentError =
           _newPassword.isNotEmpty && _isSameAsCurrentPassword;
       _showConfirmMismatchError =
@@ -146,140 +165,104 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
     return Scaffold(
       backgroundColor: AppColors.gray100,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 375),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 375),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                BridgeAppBar(title: '비밀번호 변경', onBack: context.pop),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.pageHorizontal,
+                      vertical: 12,
                     ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 22),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _PasswordChangeTopBar(onBack: context.pop),
-                            const SizedBox(height: 20),
-                            _PasswordChangeField(
-                              label: '기존 비밀번호',
-                              placeholder: '기존 비밀번호를 입력해주세요',
-                              controller: _currentPasswordController,
-                              focusNode: _currentPasswordFocusNode,
-                              helperText: _currentPasswordHelperText,
-                              borderColor: _currentPasswordHelperText != null
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              onChanged: _handleCurrentPasswordChanged,
-                              onClear: () {
-                                _clearField(
-                                  _currentPasswordController,
-                                  _handleCurrentPasswordChanged,
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            _PasswordChangeField(
-                              label: '새 비밀번호',
-                              placeholder: '새 비밀번호를 입력해주세요',
-                              controller: _newPasswordController,
-                              focusNode: _newPasswordFocusNode,
-                              helperText: _newPasswordHelperText,
-                              borderColor: _newPasswordHelperText != null
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              onChanged: _handleNewPasswordChanged,
-                              onClear: () {
-                                _clearField(
-                                  _newPasswordController,
-                                  _handleNewPasswordChanged,
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            _PasswordChangeField(
-                              label: '새 비밀번호 확인',
-                              placeholder: '새 비밀번호를 한번 더 입력해주세요',
-                              controller: _confirmPasswordController,
-                              focusNode: _confirmPasswordFocusNode,
-                              helperText: _confirmPasswordHelperText,
-                              borderColor: _confirmPasswordHelperText != null
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              onChanged: _handleConfirmPasswordChanged,
-                              onClear: () {
-                                _clearField(
-                                  _confirmPasswordController,
-                                  _handleConfirmPasswordChanged,
-                                );
-                              },
-                            ),
-                            const Spacer(),
-                            _PasswordChangeButton(
-                              enabled: _canSubmit,
-                              onPressed: _submit,
-                            ),
-                            const SizedBox(height: 28),
-                          ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        _PasswordChangeField(
+                          label: '기존 비밀번호',
+                          placeholder: '기존 비밀번호를 입력해주세요',
+                          controller: _currentPasswordController,
+                          focusNode: _currentPasswordFocusNode,
+                          helperText: _currentPasswordHelperText,
+                          helperSeverity: _currentPasswordHelperText != null
+                              ? _HelperSeverity.error
+                              : _HelperSeverity.neutral,
+                          onChanged: _handleCurrentPasswordChanged,
+                          onClear: () {
+                            _clearField(
+                              _currentPasswordController,
+                              _handleCurrentPasswordChanged,
+                            );
+                          },
                         ),
-                      ),
+                        const SizedBox(height: 20),
+                        _PasswordChangeField(
+                          label: '새 비밀번호',
+                          placeholder: '새 비밀번호를 입력해주세요',
+                          controller: _newPasswordController,
+                          focusNode: _newPasswordFocusNode,
+                          helperText: _newPasswordHelperText,
+                          helperSeverity: _newPasswordHelperSeverity,
+                          onChanged: _handleNewPasswordChanged,
+                          onClear: () {
+                            _clearField(
+                              _newPasswordController,
+                              _handleNewPasswordChanged,
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        _PasswordChangeField(
+                          label: '새 비밀번호 확인',
+                          placeholder: '새 비밀번호를 한번 더 입력해주세요',
+                          controller: _confirmPasswordController,
+                          focusNode: _confirmPasswordFocusNode,
+                          helperText: _confirmPasswordHelperText,
+                          helperSeverity: _confirmPasswordHelperText != null
+                              ? _HelperSeverity.error
+                              : _HelperSeverity.neutral,
+                          onChanged: _handleConfirmPasswordChanged,
+                          onClear: () {
+                            _clearField(
+                              _confirmPasswordController,
+                              _handleConfirmPasswordChanged,
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         ),
       ),
-    );
-  }
-}
-
-class _PasswordChangeTopBar extends StatelessWidget {
-  const _PasswordChangeTopBar({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 14,
-            width: 24,
-            height: 24,
-            child: GestureDetector(
-              onTap: onBack,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(2),
-                child: SvgPicture.asset(
-                  'assets/icons/cmp/btn/back.svg',
-                  fit: BoxFit.contain,
-                ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 375),
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: AppTokens.pageHorizontal,
+                right: AppTokens.pageHorizontal,
+                bottom: MediaQuery.viewInsetsOf(context).bottom + 28,
+              ),
+              child: _PasswordChangeButton(
+                enabled: _canSubmit,
+                onPressed: _submit,
               ),
             ),
           ),
-          Center(
-            child: Text(
-              '비밀번호 수정',
-              style: AppTypography.headlineMedium.copyWith(
-                fontSize: 16.18,
-                height: 1.445,
-                letterSpacing: -0.0032,
-                color: const Color(0xFF050505),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -292,7 +275,7 @@ class _PasswordChangeField extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     required this.helperText,
-    required this.borderColor,
+    required this.helperSeverity,
     required this.onChanged,
     required this.onClear,
   });
@@ -302,7 +285,7 @@ class _PasswordChangeField extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final String? helperText;
-  final Color borderColor;
+  final _HelperSeverity helperSeverity;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
 
@@ -349,13 +332,20 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
     final bool showClearButton =
         widget.focusNode.hasFocus && widget.controller.text.isNotEmpty;
 
+    final Color borderColor = widget.helperSeverity == _HelperSeverity.error
+        ? AppColors.destructive
+        : AppColors.gray200;
+
+    final Color helperColor = widget.helperSeverity == _HelperSeverity.error
+        ? AppColors.destructive
+        : AppColors.gray500;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           widget.label,
           style: AppTypography.labelMedium.copyWith(
-            fontSize: 14.39,
             height: 1.5,
             letterSpacing: 0.082,
             color: AppColors.gray600,
@@ -363,12 +353,12 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
         ),
         const SizedBox(height: 9),
         Container(
-          height: 44.954,
+          height: 50,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: widget.borderColor, width: 0.899),
+            border: Border.all(color: borderColor, width: 1),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 14.385),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
               Expanded(
@@ -384,11 +374,10 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
                     LengthLimitingTextInputFormatter(15),
                   ],
                   cursorColor: AppColors.black,
-                  style: AppTypography.labelMedium.copyWith(
-                    fontSize: 14.39,
+                  style: AppTypography.bodyMedium.copyWith(
                     height: 1.5,
                     letterSpacing: 0.082,
-                    color: const Color(0xFF050505),
+                    color: AppColors.inkBlack,
                   ),
                   decoration: InputDecoration(
                     isDense: true,
@@ -402,8 +391,7 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
                     focusedErrorBorder: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
                     hintText: widget.placeholder,
-                    hintStyle: AppTypography.labelMedium.copyWith(
-                      fontSize: 14.39,
+                    hintStyle: AppTypography.bodyMedium.copyWith(
                       height: 1.5,
                       letterSpacing: 0.082,
                       color: AppColors.gray300,
@@ -418,8 +406,8 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
                   behavior: HitTestBehavior.opaque,
                   child: SvgPicture.asset(
                     'assets/icons/Clear button.svg',
-                    width: 21.578,
-                    height: 21.578,
+                    width: 24,
+                    height: 24,
                   ),
                 ),
               ],
@@ -432,16 +420,11 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
             padding: const EdgeInsets.only(left: 2),
             child: Text(
               widget.helperText!,
-              style: AppTypography.captionMedium.copyWith(
-                fontSize: 12,
-                height: 1.334,
-                letterSpacing: 0.12,
-                color: AppColors.destructive,
-              ),
+              style: AppTypography.captionMedium.copyWith(color: helperColor),
             ),
           ),
         ] else
-          const SizedBox(height: 16.183),
+          const SizedBox(height: 18),
       ],
     );
   }
@@ -457,21 +440,22 @@ class _PasswordChangeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 48.55,
+      height: 54,
       child: FilledButton(
-        onPressed: onPressed,
+        onPressed: enabled ? onPressed : null,
         style: FilledButton.styleFrom(
           elevation: 0,
-          backgroundColor: enabled ? AppColors.primary : AppColors.gray200,
-          foregroundColor: enabled ? AppColors.white : AppColors.gray300,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          disabledBackgroundColor: AppColors.gray200,
+          disabledForegroundColor: AppColors.gray300,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+          ),
         ),
         child: Text(
           '완료',
           style: AppTypography.headlineMedium.copyWith(
-            fontSize: 16.18,
-            height: 1.445,
-            letterSpacing: -0.0032,
             color: enabled ? AppColors.white : AppColors.gray300,
           ),
         ),
