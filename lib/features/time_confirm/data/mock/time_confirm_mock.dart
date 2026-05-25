@@ -41,9 +41,4 @@ class TimeConfirmMock {
   static const TimeConfirmData filled = TimeConfirmData(
     schedule: _figmaFilledSchedule,
   );
-
-  static const TimeConfirmData filledWithOnboarding = TimeConfirmData(
-    schedule: _figmaFilledSchedule,
-    showOnboarding: true,
-  );
 }

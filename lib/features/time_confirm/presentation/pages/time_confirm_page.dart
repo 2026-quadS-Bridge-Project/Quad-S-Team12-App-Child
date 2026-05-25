@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
-import '../../../../core/widgets/feedback/bridge_onboarding_tooltip.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../../../core/widgets/layout/bridge_day_row.dart';
 import '../../../../core/widgets/layout/bridge_total_time_card.dart';
@@ -14,13 +13,12 @@ import '../../state/time_confirm_controller.dart';
 
 /// Read-only review of the parent-set time schedule.
 ///
-/// Three visual variants are driven by [TimeConfirmController.data]:
+/// Two visual variants are driven by [TimeConfirmController.data]:
 ///   * empty   — no schedule set by parent → centered text-only empty state
 ///   * filled  — weekly total + per-day allocation rows
-///   * onboarding — filled + onboarding tooltip anchored to 수정하기 pill
 ///
 /// The variant is initialised once in [initState] from the optional
-/// `?variant=empty|filled|onboarding` query param on `/child-home/time-setup/confirm`.
+/// `?variant=empty|filled` query param on `/child-home/time-setup/confirm`.
 /// Default is `filled`.
 ///
 /// Spec: docs/figma-specs/10-time-confirm.md
@@ -51,8 +49,6 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
     switch (raw) {
       case 'empty':
         return TimeConfirmMock.empty;
-      case 'onboarding':
-        return TimeConfirmMock.filledWithOnboarding;
       case 'filled':
       default:
         return TimeConfirmMock.filled;
@@ -90,7 +86,6 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
               data: data,
               onConfirm: () => context.pop(),
               onRequestEdit: _showRequestSnack,
-              onDismissOnboarding: _controller.dismissOnboarding,
             );
           },
         ),
@@ -139,130 +134,74 @@ class _FilledVariant extends StatelessWidget {
     required this.data,
     required this.onConfirm,
     required this.onRequestEdit,
-    required this.onDismissOnboarding,
   });
 
   final TimeConfirmData data;
   final VoidCallback onConfirm;
   final VoidCallback onRequestEdit;
-  final VoidCallback onDismissOnboarding;
 
   @override
   Widget build(BuildContext context) {
     // schedule is non-null here — `isEmpty` short-circuits in the parent.
     final schedule = data.schedule!;
-    return Stack(
-      clipBehavior: Clip.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: BridgeTotalTimeCard(
-                variant: BridgeTotalTimeCardVariant.compact,
-                title: '2월 1주 사용 시간',
-                hours: schedule.weeklyHoursAt(0),
-                minutes: schedule.weeklyMinutesAt(0),
-              ),
-            ),
-            const SizedBox(height: 28),
-            Container(height: 7, color: AppColors.gray150),
-            const SizedBox(height: 38),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  Text(
-                    '일간 사용 계획',
-                    style: AppTypography.heading2Bold.copyWith(
-                      color: AppColors.gray800,
-                    ),
-                  ),
-                  _RequestEditPill(onPressed: onRequestEdit),
-                ],
-              ),
-            ),
-            const SizedBox(height: 15),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: schedule.dayAllocations.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 15),
-                  itemBuilder: (context, index) {
-                    final alloc = schedule.dayAllocations[index];
-                    return BridgeDayRow(
-                      daysLabel: alloc.daysLabel,
-                      hours: alloc.hours,
-                      minutes: alloc.minutes,
-                      onEdit: null,
-                      showPencil: false,
-                    );
-                  },
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: BridgeTotalTimeCard(
+            variant: BridgeTotalTimeCardVariant.compact,
+            title: '2월 1주 사용 시간',
+            hours: schedule.weeklyHoursAt(0),
+            minutes: schedule.weeklyMinutesAt(0),
+          ),
+        ),
+        const SizedBox(height: 28),
+        Container(height: 7, color: AppColors.gray150),
+        const SizedBox(height: 38),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                '일간 사용 계획',
+                style: AppTypography.heading2Bold.copyWith(
+                  color: AppColors.gray800,
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              child: BridgeButton(label: '확인', onPressed: onConfirm),
-            ),
-          ],
+              _RequestEditPill(onPressed: onRequestEdit),
+            ],
+          ),
         ),
-        if (data.showOnboarding)
-          Positioned(
-            // Body sits below the pill; arrow (topCenter) points up at the
-            // pill per Figma 662-11249. Kept as a top-level overlay so it
-            // paints above the plan cards.
-            top: 207,
-            right: 24,
-            child: _TimeConfirmOnboardingTooltip(
-              onDismiss: onDismissOnboarding,
+        const SizedBox(height: 15),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: schedule.dayAllocations.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 15),
+              itemBuilder: (context, index) {
+                final alloc = schedule.dayAllocations[index];
+                return BridgeDayRow(
+                  daysLabel: alloc.daysLabel,
+                  hours: alloc.hours,
+                  minutes: alloc.minutes,
+                  onEdit: null,
+                  showPencil: false,
+                );
+              },
             ),
           ),
-      ],
-    );
-  }
-}
-
-class _TimeConfirmOnboardingTooltip extends StatelessWidget {
-  const _TimeConfirmOnboardingTooltip({required this.onDismiss});
-
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return BridgeOnboardingTooltip(
-      title: '시간 계획 수정은 어떻게 하나요?',
-      maxWidth: 255,
-      bullets: const <TextSpan>[
-        TextSpan(
-          children: <TextSpan>[
-            TextSpan(text: '시간 설정은 '),
-            TextSpan(
-              text: '주 1회',
-              style: TextStyle(decoration: TextDecoration.underline),
-            ),
-            TextSpan(text: ' 진행돼요. 이번주 시간계획이 미흡했다면 다음주에 반영해서 수정해봐요!'),
-          ],
         ),
-        TextSpan(
-          children: <TextSpan>[
-            TextSpan(text: '꼭 필요한 경우에 부모님의 '),
-            TextSpan(
-              text: '시간 설정 탭',
-              style: TextStyle(decoration: TextDecoration.underline),
-            ),
-            TextSpan(text: '에서 허락을 받아, 수정할 수 있어요.'),
-          ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: BridgeButton(label: '확인', onPressed: onConfirm),
         ),
       ],
-      arrowAlignment: TooltipArrowAlignment.topCenter,
-      onDismiss: onDismiss,
     );
   }
 }

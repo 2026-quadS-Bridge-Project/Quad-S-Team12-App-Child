@@ -50,15 +50,6 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const ChildHomePage(),
     ),
     GoRoute(
-      path: '/child-home/onboarding',
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => ChildHomePage(
-        showOnboarding: true,
-        showContent: false,
-        onDismissOnboarding: () => context.go('/child-home'),
-      ),
-    ),
-    GoRoute(
       path: '/child-home/report',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const ReportPage(),
