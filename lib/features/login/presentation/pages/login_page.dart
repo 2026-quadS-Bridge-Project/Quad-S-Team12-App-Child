@@ -27,6 +27,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
 
   _LoginErrorType? _activeError;
+  String? _genericErrorMessage;
   bool _isSubmitting = false;
 
   String get _username => _usernameController.text;
@@ -41,7 +42,7 @@ class _LoginPageState extends State<LoginPage> {
       case _LoginErrorType.wrongPassword:
         return '비밀번호가 일치하지 않습니다.';
       case null:
-        return null;
+        return _genericErrorMessage;
     }
   }
 
@@ -50,6 +51,7 @@ class _LoginPageState extends State<LoginPage> {
       if (_activeError == _LoginErrorType.missingUser) {
         _activeError = null;
       }
+      _genericErrorMessage = null;
     });
   }
 
@@ -58,10 +60,14 @@ class _LoginPageState extends State<LoginPage> {
       if (_activeError == _LoginErrorType.wrongPassword) {
         _activeError = null;
       }
+      _genericErrorMessage = null;
     });
   }
 
   Future<void> _submit() async {
+    if (_isSubmitting) {
+      return;
+    }
     FocusScope.of(context).unfocus();
 
     setState(() {
@@ -81,6 +87,7 @@ class _LoginPageState extends State<LoginPage> {
       case Success<AuthToken>(:final AuthToken data):
         setState(() {
           _activeError = null;
+          _genericErrorMessage = null;
         });
         await AuthSession.saveLogin(username: data.username);
         await AuthSession.saveTokens(
@@ -95,19 +102,30 @@ class _LoginPageState extends State<LoginPage> {
         context.go('/child-home');
       case Failure<AuthToken>(:final String message):
         setState(() {
-          _activeError = _errorTypeFor(message);
+          _applyFailure(message);
           _isSubmitting = false;
         });
     }
   }
 
-  /// Maps a repository failure [message] back into the local error enum so
-  /// the existing border-color + toast UI keeps working unchanged.
-  _LoginErrorType _errorTypeFor(String message) {
-    if (message == AuthFailureMessages.wrongPassword) {
-      return _LoginErrorType.wrongPassword;
+  /// Maps a repository failure [message] into either a field-bound error
+  /// (red border + canned toast copy) or a generic toast that surfaces the
+  /// raw message verbatim. Network/timeout messages from
+  /// [failureFromDioException] do not match the [AuthFailureMessages]
+  /// constants, so they fall through to the generic path instead of being
+  /// mislabelled as an unknown-user error.
+  void _applyFailure(String message) {
+    switch (message) {
+      case AuthFailureMessages.unknownUser:
+        _activeError = _LoginErrorType.missingUser;
+        _genericErrorMessage = null;
+      case AuthFailureMessages.wrongPassword:
+        _activeError = _LoginErrorType.wrongPassword;
+        _genericErrorMessage = null;
+      default:
+        _activeError = null;
+        _genericErrorMessage = message;
     }
-    return _LoginErrorType.missingUser;
   }
 
   @override

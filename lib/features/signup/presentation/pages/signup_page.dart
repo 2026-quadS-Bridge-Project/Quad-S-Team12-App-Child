@@ -44,6 +44,7 @@ class _SignupPageState extends State<SignupPage> {
       TextEditingController();
 
   _SignupErrorType? _activeError;
+  String? _genericErrorMessage;
 
   String get _username => _usernameController.text;
   String get _password => _passwordController.text;
@@ -121,7 +122,7 @@ class _SignupPageState extends State<SignupPage> {
       case _SignupErrorType.passwordMismatch:
         return '비밀번호가 일치하지 않습니다. 확인해주세요.';
       case null:
-        return null;
+        return _genericErrorMessage;
     }
   }
 
@@ -156,6 +157,7 @@ class _SignupPageState extends State<SignupPage> {
       // the user can retry with the same (corrected) value without a phantom
       // helper message stuck on screen.
       _serverReportedDuplicate = false;
+      _genericErrorMessage = null;
     });
   }
 
@@ -165,6 +167,7 @@ class _SignupPageState extends State<SignupPage> {
           _activeError == _SignupErrorType.passwordMismatch) {
         _activeError = null;
       }
+      _genericErrorMessage = null;
     });
   }
 
@@ -173,10 +176,16 @@ class _SignupPageState extends State<SignupPage> {
       if (_activeError == _SignupErrorType.passwordMismatch) {
         _activeError = null;
       }
+      _genericErrorMessage = null;
     });
   }
 
   Future<void> _submit() async {
+    // Re-entrancy guard: a rapid double-tap can fire `_submit` twice before
+    // the button rebuilds with `onPressed: null`. Bail out on the second call.
+    if (_isSubmitting) {
+      return;
+    }
     FocusScope.of(context).unfocus();
 
     if (!_isUsernameFormatValid) {
@@ -202,6 +211,7 @@ class _SignupPageState extends State<SignupPage> {
 
     setState(() {
       _activeError = null;
+      _genericErrorMessage = null;
       _isSubmitting = true;
     });
 
@@ -231,10 +241,14 @@ class _SignupPageState extends State<SignupPage> {
           if (message == AuthFailureMessages.duplicatedUsername) {
             _activeError = _SignupErrorType.duplicatedUsername;
             _serverReportedDuplicate = true;
+            _genericErrorMessage = null;
           } else {
-            // Defensive fallback — Mock impl only emits the duplicate failure,
-            // but Api impl may surface additional server-side rule violations.
-            _activeError = _SignupErrorType.invalidUsername;
+            // Network / generic server failures (e.g. messages produced by
+            // failureFromDioException) flow through here. Surface them via
+            // the existing toast instead of misleading the user with an
+            // "invalid username" inline rule violation.
+            _activeError = null;
+            _genericErrorMessage = message;
           }
         });
     }
