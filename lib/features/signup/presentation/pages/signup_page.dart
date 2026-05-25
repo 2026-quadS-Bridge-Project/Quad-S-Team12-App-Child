@@ -125,6 +125,13 @@ class _SignupPageState extends State<SignupPage> {
     return _CheckState.inactive;
   }
 
+  _CheckState get _passwordCheckState {
+    if (_isPasswordValid) {
+      return _CheckState.active;
+    }
+    return _CheckState.inactive;
+  }
+
   _CheckState get _passwordConfirmCheckState {
     if (_isPasswordValid && _isPasswordMatched) {
       return _CheckState.active;
@@ -209,104 +216,113 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.gray100,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 375),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          children: [
-                            BridgeAppBar(
-                              title: '회원가입',
-                              onBack: () => context.pop(),
-                            ),
-                            const SizedBox(height: 25),
-                            _SignupField(
-                              label: '아이디',
-                              controller: _usernameController,
-                              borderColor: _hasUsernameError
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              checkState: _usernameCheckState,
-                              helperText: _usernameInlineMessage,
-                              onChanged: _onUsernameChanged,
-                              inputFormatters: <TextInputFormatter>[
-                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                                LengthLimitingTextInputFormatter(12),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: AppColors.gray100,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 375),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            children: [
+                              BridgeAppBar(
+                                title: '회원가입',
+                                onBack: () => context.pop(),
+                              ),
+                              const SizedBox(height: 25),
+                              _SignupField(
+                                label: '아이디',
+                                controller: _usernameController,
+                                borderColor: _hasUsernameError
+                                    ? AppColors.destructive
+                                    : AppColors.gray200,
+                                checkState: _usernameCheckState,
+                                helperText: _usernameInlineMessage,
+                                onChanged: _onUsernameChanged,
+                                inputFormatters: <TextInputFormatter>[
+                                  FilteringTextInputFormatter.deny(
+                                    RegExp(r'\s'),
+                                  ),
+                                  LengthLimitingTextInputFormatter(12),
+                                ],
+                                keyboardType: TextInputType.text,
+                                labelBottomSpacing: 10,
+                              ),
+                              const SizedBox(height: 35),
+                              _SignupField(
+                                label: '비밀번호',
+                                controller: _passwordController,
+                                borderColor: _hasPasswordError
+                                    ? AppColors.destructive
+                                    : AppColors.gray200,
+                                checkState: _passwordCheckState,
+                                helperText: _passwordInlineMessage,
+                                onChanged: _onPasswordChanged,
+                                inputFormatters: <TextInputFormatter>[
+                                  FilteringTextInputFormatter.deny(
+                                    RegExp(r'\s'),
+                                  ),
+                                  LengthLimitingTextInputFormatter(15),
+                                ],
+                                keyboardType: TextInputType.visiblePassword,
+                                labelBottomSpacing: 12,
+                                obscureText: true,
+                              ),
+                              const SizedBox(height: 35),
+                              _SignupField(
+                                label: '비밀번호 재확인',
+                                controller: _passwordConfirmController,
+                                borderColor: _hasPasswordConfirmError
+                                    ? AppColors.destructive
+                                    : AppColors.gray200,
+                                checkState: _passwordConfirmCheckState,
+                                helperText: _passwordConfirmInlineMessage,
+                                onChanged: _onPasswordConfirmChanged,
+                                inputFormatters: <TextInputFormatter>[
+                                  FilteringTextInputFormatter.deny(
+                                    RegExp(r'\s'),
+                                  ),
+                                  LengthLimitingTextInputFormatter(15),
+                                ],
+                                keyboardType: TextInputType.visiblePassword,
+                                labelBottomSpacing: 10,
+                                obscureText: true,
+                              ),
+                              const Spacer(),
+                              if (_errorMessage case final String message) ...[
+                                _SignupToast(message: message),
+                                const SizedBox(height: 15),
                               ],
-                              keyboardType: TextInputType.text,
-                              labelBottomSpacing: 10,
-                            ),
-                            const SizedBox(height: 35),
-                            _SignupField(
-                              label: '비밀번호',
-                              controller: _passwordController,
-                              borderColor: _hasPasswordError
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              checkState: _CheckState.hidden,
-                              helperText: _passwordInlineMessage,
-                              onChanged: _onPasswordChanged,
-                              inputFormatters: <TextInputFormatter>[
-                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                                LengthLimitingTextInputFormatter(15),
-                              ],
-                              keyboardType: TextInputType.visiblePassword,
-                              labelBottomSpacing: 12,
-                              obscureText: true,
-                            ),
-                            const SizedBox(height: 35),
-                            _SignupField(
-                              label: '비밀번호 재확인',
-                              controller: _passwordConfirmController,
-                              borderColor: _hasPasswordConfirmError
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              checkState: _passwordConfirmCheckState,
-                              helperText: _passwordConfirmInlineMessage,
-                              onChanged: _onPasswordConfirmChanged,
-                              inputFormatters: <TextInputFormatter>[
-                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                                LengthLimitingTextInputFormatter(15),
-                              ],
-                              keyboardType: TextInputType.visiblePassword,
-                              labelBottomSpacing: 10,
-                              obscureText: true,
-                            ),
-                            const Spacer(),
-                            if (_errorMessage case final String message) ...[
-                              _SignupToast(message: message),
-                              const SizedBox(height: 15),
+                              BridgeButton(
+                                label: '회원가입',
+                                variant: BridgeButtonVariant.primary,
+                                size: BridgeButtonSize.large,
+                                fullWidth: true,
+                                onPressed: _canSubmit ? _submit : null,
+                              ),
+                              const SizedBox(height: 29),
                             ],
-                            BridgeButton(
-                              label: '회원가입',
-                              variant: BridgeButtonVariant.primary,
-                              size: BridgeButtonSize.large,
-                              fullWidth: true,
-                              onPressed: _canSubmit ? _submit : null,
-                            ),
-                            const SizedBox(height: 29),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -431,21 +447,18 @@ class _FieldCheck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Reserve trailing slot width without painting a false-success affordance:
-    // only the `active` state shows the check; `inactive` and `hidden` are blank.
-    final bool showCheck = state == _CheckState.active;
     return SizedBox(
       width: 30,
       height: 30,
-      child: showCheck
-          ? const Center(
-              child: Icon(
-                Icons.check_rounded,
-                size: 20,
-                color: AppColors.primary,
-              ),
-            )
-          : const SizedBox.shrink(),
+      child: Visibility(
+        visible: state == _CheckState.active,
+        maintainSize: true,
+        maintainAnimation: true,
+        maintainState: true,
+        child: const Center(
+          child: Icon(Icons.check_rounded, size: 20, color: AppColors.primary),
+        ),
+      ),
     );
   }
 }

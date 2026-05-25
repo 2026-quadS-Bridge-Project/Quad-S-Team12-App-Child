@@ -96,84 +96,92 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.gray100,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 375),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          children: [
-                            BridgeAppBar(
-                              title: '로그인',
-                              onBack: () => context.pop(),
-                            ),
-                            const SizedBox(height: 25),
-                            _LoginField(
-                              label: '아이디',
-                              controller: _usernameController,
-                              borderColor:
-                                  _activeError == _LoginErrorType.missingUser
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              onChanged: _onUsernameChanged,
-                              inputFormatters: <TextInputFormatter>[
-                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                                LengthLimitingTextInputFormatter(12),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: AppColors.gray100,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 375),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            children: [
+                              BridgeAppBar(
+                                title: '로그인',
+                                onBack: () => context.pop(),
+                              ),
+                              const SizedBox(height: 25),
+                              _LoginField(
+                                label: '아이디',
+                                controller: _usernameController,
+                                borderColor:
+                                    _activeError == _LoginErrorType.missingUser
+                                    ? AppColors.destructive
+                                    : AppColors.gray200,
+                                onChanged: _onUsernameChanged,
+                                inputFormatters: <TextInputFormatter>[
+                                  FilteringTextInputFormatter.deny(
+                                    RegExp(r'\s'),
+                                  ),
+                                  LengthLimitingTextInputFormatter(12),
+                                ],
+                                keyboardType: TextInputType.text,
+                                labelBottomSpacing: 10,
+                              ),
+                              const SizedBox(height: 35),
+                              _LoginField(
+                                label: '비밀번호',
+                                controller: _passwordController,
+                                borderColor:
+                                    _activeError ==
+                                        _LoginErrorType.wrongPassword
+                                    ? AppColors.destructive
+                                    : AppColors.gray200,
+                                onChanged: _onPasswordChanged,
+                                inputFormatters: <TextInputFormatter>[
+                                  FilteringTextInputFormatter.deny(
+                                    RegExp(r'\s'),
+                                  ),
+                                  LengthLimitingTextInputFormatter(15),
+                                ],
+                                keyboardType: TextInputType.visiblePassword,
+                                labelBottomSpacing: 12,
+                                obscureText: true,
+                              ),
+                              const Spacer(),
+                              if (_errorMessage case final String message) ...[
+                                _LoginToast(message: message),
+                                const SizedBox(height: 15),
                               ],
-                              keyboardType: TextInputType.text,
-                              labelBottomSpacing: 10,
-                            ),
-                            const SizedBox(height: 35),
-                            _LoginField(
-                              label: '비밀번호',
-                              controller: _passwordController,
-                              borderColor:
-                                  _activeError == _LoginErrorType.wrongPassword
-                                  ? AppColors.destructive
-                                  : AppColors.gray200,
-                              onChanged: _onPasswordChanged,
-                              inputFormatters: <TextInputFormatter>[
-                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                                LengthLimitingTextInputFormatter(15),
-                              ],
-                              keyboardType: TextInputType.visiblePassword,
-                              labelBottomSpacing: 12,
-                              obscureText: true,
-                            ),
-                            const Spacer(),
-                            if (_errorMessage case final String message) ...[
-                              _LoginToast(message: message),
-                              const SizedBox(height: 15),
+                              BridgeButton(
+                                label: '로그인',
+                                variant: BridgeButtonVariant.primary,
+                                size: BridgeButtonSize.large,
+                                fullWidth: true,
+                                onPressed: _canSubmit ? _submit : null,
+                              ),
+                              const SizedBox(height: 29),
                             ],
-                            BridgeButton(
-                              label: '로그인',
-                              variant: BridgeButtonVariant.primary,
-                              size: BridgeButtonSize.large,
-                              fullWidth: true,
-                              onPressed: _canSubmit ? _submit : null,
-                            ),
-                            const SizedBox(height: 29),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
