@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
+import '../../../../core/services/fcm_bootstrap.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
@@ -232,6 +235,9 @@ class _SignupPageState extends State<SignupPage> {
           accessToken: data.accessToken,
           refreshToken: data.refreshToken,
         );
+        // Register the FCM device for the new session — see LoginPage
+        // for rationale. Mock impl is a no-op.
+        unawaited(FcmBootstrap.registerForCurrentSession());
         if (!mounted) {
           return;
         }
