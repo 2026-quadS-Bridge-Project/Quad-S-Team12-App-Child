@@ -48,6 +48,11 @@ class WeeklyTimeSetupPage extends StatelessWidget {
     final String totalTimeTitle = controller.showPastWeekDim
         ? '$_monthLabel 잔여 시간'
         : '$_monthLabel 총 사용 시간';
+    final String headerDescription = switch (controller.mode) {
+      TimeSetupMode.v2NextWeek =>
+        '2월 1주차에 사용하고 남은 시간으로\n주별 시간 분배를 다시 설정해요!',
+      TimeSetupMode.v1Initial => '부모님이 부여한 이번 달 총 사용 시간을\n주별로 분배해요!',
+    };
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -71,11 +76,13 @@ class WeeklyTimeSetupPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               // Title + description verbatim per Figma 08a 695:11870 nodes
-              // 695:11880 (title) and 695:11883 (2-line description).
-              const BridgeStepHeader(
+              // 695:11880 (title) and 695:11883 (2-line description). Spec
+              // 09-time-v2 §v2-3 overrides the description for v2 next-week
+              // edits, branched via [controller.mode] above.
+              BridgeStepHeader(
                 step: 2,
                 title: '주별 시간 분배',
-                description: '부모님이 부여한 이번 달 총 사용 시간을\n주별로 분배해요!',
+                description: headerDescription,
               ),
               const SizedBox(height: 24),
               BridgeTotalTimeCard(

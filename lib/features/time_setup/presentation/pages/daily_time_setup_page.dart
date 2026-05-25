@@ -104,6 +104,7 @@ class DailyTimeSetupPage extends StatelessWidget {
                         isUnder: controller.isUnderBudget,
                         showErrorFrame: controller.showPastWeekDim,
                         showAddButton: !controller.showPastWeekDim,
+                        showScheduleAction: controller.showPastWeekDim,
                         showUsageReportAction: controller.showPastWeekDim,
                         onSchedulePressed: () => _openSchedulePreview(
                           context,
@@ -590,6 +591,7 @@ class _DailyAllocationSection extends StatelessWidget {
     required this.isUnder,
     required this.showErrorFrame,
     required this.showAddButton,
+    required this.showScheduleAction,
     required this.showUsageReportAction,
     required this.onSchedulePressed,
     required this.onUsageReportPressed,
@@ -602,6 +604,7 @@ class _DailyAllocationSection extends StatelessWidget {
   final bool isUnder;
   final bool showErrorFrame;
   final bool showAddButton;
+  final bool showScheduleAction;
   final bool showUsageReportAction;
   final VoidCallback onSchedulePressed;
   final VoidCallback onUsageReportPressed;
@@ -618,6 +621,7 @@ class _DailyAllocationSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _DailyAllocationHeader(
+          showScheduleAction: showScheduleAction,
           showUsageReportAction: showUsageReportAction,
           onSchedulePressed: onSchedulePressed,
           onUsageReportPressed: onUsageReportPressed,
@@ -653,11 +657,13 @@ class _DailyAllocationSection extends StatelessWidget {
 
 class _DailyAllocationHeader extends StatelessWidget {
   const _DailyAllocationHeader({
+    required this.showScheduleAction,
     required this.showUsageReportAction,
     required this.onSchedulePressed,
     required this.onUsageReportPressed,
   });
 
+  final bool showScheduleAction;
   final bool showUsageReportAction;
   final VoidCallback onSchedulePressed;
   final VoidCallback onUsageReportPressed;
@@ -665,12 +671,13 @@ class _DailyAllocationHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Widget> actions = <Widget>[
-      BridgePillIconButton(
-        label: '스케줄 보기',
-        trailingIcon: Icons.arrow_forward,
-        variant: BridgePillVariant.tonal,
-        onPressed: onSchedulePressed,
-      ),
+      if (showScheduleAction)
+        BridgePillIconButton(
+          label: '스케줄 보기',
+          trailingIcon: Icons.arrow_forward,
+          variant: BridgePillVariant.tonal,
+          onPressed: onSchedulePressed,
+        ),
       if (showUsageReportAction)
         BridgePillIconButton(
           label: '사용리포트 보기',
@@ -680,13 +687,19 @@ class _DailyAllocationHeader extends StatelessWidget {
         ),
     ];
 
+    final Text title = Text(
+      '일별 시간 분배',
+      style: AppTypography.heading2Bold.copyWith(color: AppColors.gray800),
+    );
+
+    if (actions.isEmpty) {
+      return Align(alignment: Alignment.centerLeft, child: title);
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          '일별 시간 분배',
-          style: AppTypography.heading2Bold.copyWith(color: AppColors.gray800),
-        ),
+        title,
         const SizedBox(width: 12),
         Expanded(
           child: Align(
