@@ -23,11 +23,47 @@ import '../../state/time_setup_scope.dart';
 /// Reuses the wizard's shared [TimeSetupScope] for both reads (week total,
 /// day allocations) and writes (`submit`, back navigation to
 /// [TimeSetupStep.dailyAllocation]).
-class TimeSetupReviewPage extends StatelessWidget {
+class TimeSetupReviewPage extends StatefulWidget {
   const TimeSetupReviewPage({super.key});
 
+  @override
+  State<TimeSetupReviewPage> createState() => _TimeSetupReviewPageState();
+}
+
+class _TimeSetupReviewPageState extends State<TimeSetupReviewPage> {
   static const String _monthLabel = '2월';
   static const double _sectionHeaderGap = 20;
+
+  TimeSetupController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final TimeSetupController next = TimeSetupScope.of(context);
+    if (!identical(_controller, next)) {
+      _controller?.removeListener(_listenForErrors);
+      _controller = next;
+      _controller!.addListener(_listenForErrors);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_listenForErrors);
+    super.dispose();
+  }
+
+  /// Surfaces controller errors as a SnackBar and clears them so the next
+  /// failure can fire again. The `mounted` guard prevents post-dispose
+  /// ScaffoldMessenger lookups when the page is being torn down.
+  void _listenForErrors() {
+    final String? message = _controller?.errorMessage;
+    if (message == null || !mounted) return;
+    _controller!.clearError();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +160,7 @@ class TimeSetupReviewPage extends StatelessWidget {
                 variant: BridgeButtonVariant.primary,
                 size: BridgeButtonSize.large,
                 fullWidth: true,
-                onPressed: controller.submit,
+                onPressed: controller.isSaving ? null : controller.submit,
               ),
               const SizedBox(height: 24),
             ],

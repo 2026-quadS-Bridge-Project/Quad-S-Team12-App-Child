@@ -338,6 +338,13 @@ class TimeSetupController extends ChangeNotifier {
     }
   }
 
+  /// Clears [errorMessage] so the same failure can re-fire on the next submit.
+  void clearError() {
+    if (_errorMessage == null) return;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   /// Mode-aware reset. v2 must preserve [_previousWeek] (immutable historical
   /// record); both flows return to the intro splash so the 3-step explainer
   /// plays again. [_mode] is preserved in both cases — `showPastWeekDim`
