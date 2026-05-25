@@ -44,7 +44,7 @@ class _MyPageState extends State<MyPage> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'delete-account-dialog',
-      barrierColor: const Color.fromRGBO(68, 68, 68, 0.6),
+      barrierColor: AppColors.scrim,
       pageBuilder: (context, animation, secondaryAnimation) {
         return Material(
           type: MaterialType.transparency,
@@ -141,68 +141,19 @@ class _DeleteAccountDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 294.897,
-        height: 189.705,
+        width: 328,
+        height: 211,
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 33, 18, 27),
+          padding: const EdgeInsets.only(top: 37, bottom: 30),
           child: Column(
             children: [
-              Container(
-                width: 28.77,
-                height: 28.77,
-                decoration: const BoxDecoration(
-                  color: AppColors.destructive,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: SizedBox(
-                    width: 8,
-                    height: 16,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned(
-                          top: 1.5,
-                          child: Container(
-                            width: 2.4,
-                            height: 9.6,
-                            decoration: BoxDecoration(
-                              color: AppColors.white,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 0.5,
-                          child: Container(
-                            width: 2.4,
-                            height: 2.4,
-                            decoration: const BoxDecoration(
-                              color: AppColors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '탈퇴하시겠습니까?',
-                style: AppTypography.labelBold.copyWith(
-                  fontSize: 14.39,
-                  height: 1.5,
-                  letterSpacing: 0.082,
-                  color: AppColors.gray800,
-                  decoration: TextDecoration.none,
-                ),
-              ),
+              const _WarningBadge(),
+              const SizedBox(height: 18),
+              const _DeleteDialogTitle(),
               const Spacer(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -212,7 +163,7 @@ class _DeleteAccountDialog extends StatelessWidget {
                     filled: false,
                     onTap: context.pop,
                   ),
-                  const SizedBox(width: 13.486),
+                  const SizedBox(width: 15),
                   _DeleteDialogButton(
                     label: '확인',
                     filled: true,
@@ -228,6 +179,70 @@ class _DeleteAccountDialog extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _WarningBadge extends StatelessWidget {
+  const _WarningBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: const BoxDecoration(
+        color: AppColors.destructive,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: SizedBox(
+          width: 8,
+          height: 16,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                top: 1.33,
+                child: Container(
+                  width: 2.67,
+                  height: 10.67,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 0.67,
+                child: Container(
+                  width: 2.67,
+                  height: 2.67,
+                  decoration: const BoxDecoration(
+                    color: AppColors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeleteDialogTitle extends StatelessWidget {
+  const _DeleteDialogTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '탈퇴하시겠습니까?',
+      style: AppTypography.bodyBold.copyWith(
+        color: AppColors.gray800,
+        decoration: TextDecoration.none,
       ),
     );
   }
@@ -250,22 +265,17 @@ class _DeleteDialogButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 107.889,
-        height: 37.761,
+        width: 120,
+        height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: filled ? AppColors.primary : const Color(0xFFEBF5FE),
+          color: filled ? AppColors.primary : AppColors.primaryLight,
           borderRadius: BorderRadius.circular(8),
-          border: filled
-              ? null
-              : Border.all(color: AppColors.primary, width: 0.899),
+          border: filled ? null : Border.all(color: AppColors.primary),
         ),
         child: Text(
           label,
           style: AppTypography.labelMedium.copyWith(
-            fontSize: 12.59,
-            height: 1.429,
-            letterSpacing: 0.1826,
             color: filled ? AppColors.white : AppColors.primary,
             decoration: TextDecoration.none,
           ),

@@ -173,7 +173,7 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                BridgeAppBar(title: '비밀번호 변경', onBack: context.pop),
+                BridgeAppBar(title: '비밀번호 수정', onBack: context.pop),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(
@@ -345,13 +345,9 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
       children: [
         Text(
           widget.label,
-          style: AppTypography.labelMedium.copyWith(
-            height: 1.5,
-            letterSpacing: 0.082,
-            color: AppColors.gray600,
-          ),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.gray600),
         ),
-        const SizedBox(height: 9),
+        const SizedBox(height: 10),
         Container(
           height: 50,
           decoration: BoxDecoration(
@@ -375,8 +371,6 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
                   ],
                   cursorColor: AppColors.black,
                   style: AppTypography.bodyMedium.copyWith(
-                    height: 1.5,
-                    letterSpacing: 0.082,
                     color: AppColors.inkBlack,
                   ),
                   decoration: InputDecoration(
@@ -392,15 +386,13 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
                     contentPadding: EdgeInsets.zero,
                     hintText: widget.placeholder,
                     hintStyle: AppTypography.bodyMedium.copyWith(
-                      height: 1.5,
-                      letterSpacing: 0.082,
                       color: AppColors.gray300,
                     ),
                   ),
                 ),
               ),
               if (showClearButton) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 3),
                 GestureDetector(
                   onTap: widget.onClear,
                   behavior: HitTestBehavior.opaque,
@@ -414,17 +406,24 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
             ],
           ),
         ),
-        if (widget.helperText != null) ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 2),
-            child: Text(
-              widget.helperText!,
-              style: AppTypography.captionMedium.copyWith(color: helperColor),
-            ),
-          ),
-        ] else
-          const SizedBox(height: 18),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 18,
+          child: widget.helperText == null
+              ? const SizedBox.shrink()
+              : Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      widget.helperText!,
+                      style: AppTypography.captionMedium.copyWith(
+                        color: helperColor,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
       ],
     );
   }
