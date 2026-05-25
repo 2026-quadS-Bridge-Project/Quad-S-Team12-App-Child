@@ -63,7 +63,10 @@ class _NotificationCardState extends State<NotificationCard>
   }
 
   Future<void> _handleDragEnd() async {
-    if (_dragOffset <= -_maxSlide * 0.85) {
+    // Figma 06-notifications.md:175 — dismissThresholds = 0.4. Crossing 40%
+    // of the max slide on release reveals the trailing X and triggers the
+    // confirmation dialog (Figma 773:12903) via `onDeleteIntent`.
+    if (_dragOffset <= -_maxSlide * 0.4) {
       _animateTo(-_maxSlide);
       _isShowingDialog = true;
       await widget.onDeleteIntent(widget.item);
