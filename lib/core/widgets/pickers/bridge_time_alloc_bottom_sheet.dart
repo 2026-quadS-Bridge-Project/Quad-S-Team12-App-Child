@@ -508,7 +508,7 @@ class _TimeRow extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
           child: Opacity(
             opacity: 0.8,
             child: Container(
@@ -516,7 +516,7 @@ class _TimeRow extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: AppColors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
                 border: Border.all(color: AppColors.gray200, width: 2),
               ),
               child: FittedBox(

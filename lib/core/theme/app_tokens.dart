@@ -20,6 +20,9 @@ abstract final class AppTokens {
       16; // from 02-child-home.md, 06-notifications.md, 08b-time-v1-daily.md, 11-mission.md
   static const double dialogRadius =
       12; // from 05-delete.md, 06-notifications.md
+  /// Small surface / input field / tile corner radius. 12px. Distinct from
+  /// [dialogRadius] (also 12 but reserved for modal dialogs).
+  static const double fieldRadius = 12;
   static const double buttonRadius =
       8; // from 00-CATALOG.md §1.4 (대부분 CTA; theme의 16과 별개)
   static const double bottomSheetTopRadius =

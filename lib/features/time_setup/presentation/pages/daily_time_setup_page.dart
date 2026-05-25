@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/services/calendar_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -28,17 +29,15 @@ class DailyTimeSetupPage extends StatelessWidget {
   static const double _pagePadding = 24;
   static const double _sectionGap = 32;
 
-  /// Section label shown above the read-only weekly total card. Per Figma
-  /// 08b 695-9743 / 08c 695:10675 the label is the current 주차 (e.g.
-  /// `2월 1주차`). The wizard has no month/week metadata yet, so fall back
-  /// to the first-week label until a calendar source is wired.
-  // TODO(backend): source month + 주차 from a calendar service.
-  static const String _monthLabel = '2월';
-
   @override
   Widget build(BuildContext context) {
     final controller = TimeSetupScope.of(context);
     final schedule = controller.schedule;
+    // Section label shown above the read-only weekly total card. Per Figma
+    // 08b 695-9743 / 08c 695:10675 the label is the current 주차 (e.g.
+    // `2월 1주차`); the week index still comes from the controller so v2
+    // renders the locked week's number.
+    final String monthLabel = createCalendarService().currentMonthLabel();
 
     final int deltaMin = controller.allocationDeltaMinutes;
     final int absDelta = deltaMin.abs();
@@ -87,7 +86,7 @@ class DailyTimeSetupPage extends StatelessWidget {
                       // The actual week index comes from the controller so
                       // v2 renders `2주차`.
                       Text(
-                        '$_monthLabel ${controller.currentWeekIndex + 1}주차',
+                        '$monthLabel ${controller.currentWeekIndex + 1}주차',
                         style: AppTypography.heading2Bold.copyWith(
                           color: AppColors.gray800,
                         ),
@@ -416,7 +415,7 @@ class _ReferenceMetricTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.primaryLight,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +467,7 @@ class _ReferenceEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.gray100,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
       ),
       child: Text(
         message,
@@ -541,7 +540,7 @@ class _ReferenceTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.gray100,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,

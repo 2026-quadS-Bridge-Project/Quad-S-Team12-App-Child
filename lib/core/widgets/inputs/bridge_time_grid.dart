@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_tokens.dart';
 import '../../theme/app_typography.dart';
 
 /// Weekly hour-slot grid used by the schedule registration screens
@@ -140,7 +141,7 @@ class BridgeTimeGrid extends StatelessWidget {
               height: _headerHeight,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
               ),
               child: Text(
                 weekdays[col],

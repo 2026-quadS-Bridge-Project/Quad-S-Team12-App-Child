@@ -393,7 +393,7 @@ class _PasswordChangeFieldState extends State<_PasswordChangeField> {
         Container(
           height: 50,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
             border: Border.all(color: borderColor, width: 1),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
