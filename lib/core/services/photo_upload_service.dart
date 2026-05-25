@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../config/dio_config.dart';
 import '../config/environment.dart';
 import '../models/result.dart';
+import '../network/api_error.dart';
 
 /// Contract for uploading a locally captured photo to remote storage.
 ///
@@ -42,17 +43,42 @@ class MockPhotoUploadService implements PhotoUploadService {
   }
 }
 
-/// HTTP-backed impl stub. Throws until the upload API contract is
-/// finalised; at that point this will read the file from disk via
-/// `MultipartFile.fromFile(localPath)` and return the remote URL.
+/// HTTP-backed impl. Uploads the file at [localPath] to `/uploads/photo`
+/// via `multipart/form-data` per `docs/api-contract.md` § Photo Upload and
+/// returns the server-assigned remote URL.
 class ApiPhotoUploadService implements PhotoUploadService {
   ApiPhotoUploadService(this._dio);
 
-  // ignore: unused_field
   final Dio _dio;
 
   @override
   Future<Result<String>> uploadPhoto(String localPath) async {
-    throw UnimplementedError('Photo upload API contract pending');
+    try {
+      final String filename = _basename(localPath);
+      final FormData formData = FormData.fromMap(<String, dynamic>{
+        'file': await MultipartFile.fromFile(localPath, filename: filename),
+        'purpose': 'mission',
+      });
+      final Response<dynamic> response = await _dio.post<dynamic>(
+        '/uploads/photo',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      final Map<String, dynamic> body =
+          response.data as Map<String, dynamic>;
+      return Result<String>.success(body['url'] as String);
+    } on DioException catch (e) {
+      return failureFromDioException<String>(e);
+    }
+  }
+
+  /// Extracts the file name (last path segment) from [path]. Handles both
+  /// POSIX (`/`) and Windows (`\`) separators so the multipart `filename`
+  /// field is just the bare name regardless of where the file came from.
+  static String _basename(String path) {
+    final int slash = path.lastIndexOf('/');
+    final int backslash = path.lastIndexOf(r'\');
+    final int sep = slash > backslash ? slash : backslash;
+    return sep == -1 ? path : path.substring(sep + 1);
   }
 }
