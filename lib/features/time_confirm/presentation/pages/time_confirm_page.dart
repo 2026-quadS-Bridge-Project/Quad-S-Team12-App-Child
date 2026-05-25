@@ -36,6 +36,11 @@ class TimeConfirmPage extends StatefulWidget {
 class _TimeConfirmPageState extends State<TimeConfirmPage> {
   late final TimeConfirmController _controller;
 
+  /// Guards the 수정하기 pill against re-entry / rapid double-tap while the
+  /// repository call is in flight. The controller does not toggle `isLoading`
+  /// for [TimeConfirmController.requestModification], so we track it locally.
+  bool _isRequesting = false;
+
   @override
   void initState() {
     super.initState();
@@ -62,14 +67,21 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
   }
 
   Future<void> _showRequestSnack() async {
-    // Fire-and-display: mock repo resolves immediately with Success, so the
-    // SnackBar copy stays unchanged. When the real backend lands, update the
-    // copy to reflect actual request status (e.g. "수정 요청을 보냈어요.").
-    await _controller.requestModification();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('수정 요청 기능은 곧 연결될 예정이에요.')));
+    // Guard against re-entry / rapid double-tap. The controller does not
+    // expose an in-flight flag for [requestModification], so block locally.
+    if (_isRequesting) return;
+    setState(() => _isRequesting = true);
+    try {
+      await _controller.requestModification();
+      if (!mounted) return;
+      final String? error = _controller.errorMessage;
+      final String copy = error ?? '부모님께 수정 요청을 보냈어요.';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(copy)));
+    } finally {
+      if (mounted) setState(() => _isRequesting = false);
+    }
   }
 
   Future<void> _handleConfirm() async {
@@ -94,7 +106,7 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
             return _FilledVariant(
               data: data,
               onConfirm: _handleConfirm,
-              onRequestEdit: _showRequestSnack,
+              onRequestEdit: _isRequesting ? null : _showRequestSnack,
             );
           },
         ),
@@ -147,7 +159,7 @@ class _FilledVariant extends StatelessWidget {
 
   final TimeConfirmData data;
   final VoidCallback onConfirm;
-  final VoidCallback onRequestEdit;
+  final VoidCallback? onRequestEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +230,8 @@ class _FilledVariant extends StatelessWidget {
 class _RequestEditPill extends StatelessWidget {
   const _RequestEditPill({required this.onPressed});
 
-  final VoidCallback onPressed;
+  /// Nullable so the parent can disable the pill while a request is in flight.
+  final VoidCallback? onPressed;
 
   static const double _height = 31;
   static const double _radius = 7;
