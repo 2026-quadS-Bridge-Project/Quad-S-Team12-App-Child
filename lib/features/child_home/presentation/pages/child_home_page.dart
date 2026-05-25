@@ -654,6 +654,14 @@ class _MissionListSectionState extends State<_MissionListSection> {
       setState(() {
         _missions = _mapMissions(fresh);
       });
+    } else {
+      // Keep silent for the user — home is a low-frequency view and a SnackBar
+      // on open would be intrusive. Surface a dev-only warning so stale seed
+      // data from MissionMock isn't mistaken for a successful repo fetch.
+      debugPrint(
+        '[_MissionListSection] listMissions() failed; '
+        'retaining seeded MissionMock list.',
+      );
     }
   }
 
