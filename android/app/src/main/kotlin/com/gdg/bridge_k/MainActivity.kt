@@ -1,4 +1,4 @@
-package com.example.quad_s_team12_app
+package com.gdg.bridge_k
 
 import io.flutter.embedding.android.FlutterActivity
 
