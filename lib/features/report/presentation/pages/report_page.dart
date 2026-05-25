@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -42,10 +43,13 @@ class ReportPage extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: const BridgeAppBar(title: '사용 리포트'),
       body: SafeArea(
+        top: false,
         child: ListView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-            vertical: 16,
+          padding: const EdgeInsets.fromLTRB(
+            AppTokens.pageHorizontal,
+            0,
+            AppTokens.pageHorizontal,
+            16,
           ),
           children: [
             _WeeklyIntroCard(weekLabel: report.weekLabel),
@@ -152,24 +156,15 @@ class _WeeklyIntroCard extends StatelessWidget {
               const _IntroSpeechBubble(lines: _bubbleLines),
             ],
           ),
-          // Cat illustration anchored to the bottom-right per Figma
-          // (spec §"Card 1 — Weekly Intro", 07-report.md:41 — 44×43
-          // `imgCatIllustration`).
-          //
-          // TODO(report): Replace this emoji placeholder with the real
-          // multi-color cat artwork once design exports `imgCatIllustration`
-          // from Figma node `750:11937`. The current `assets/icons/cat.svg`
-          // is a flat single-color blob (audit Issue 2), so we render the
-          // 🐱 glyph at 32 sp inside a 44×43 box to communicate intent.
-          // Tracked in docs/figma-specs/_audit-layout/12-report.md Issue 2.
-          const Positioned(
+          Positioned(
             right: 0,
             bottom: 0,
             child: SizedBox(
               width: 44,
               height: 43,
-              child: Center(
-                child: Text('🐱', style: TextStyle(fontSize: 32, height: 1)),
+              child: SvgPicture.asset(
+                'assets/icons/cat.svg',
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -264,16 +259,14 @@ class _PlanCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '나의 시간 계획',
-            style: AppTypography.headlineBold.copyWith(
-              color: AppColors.textPrimary,
-            ),
+            '2월 1주차 나의 계획은',
+            style: AppTypography.labelMedium.copyWith(color: AppColors.gray400),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             '주 ${plan.totalHours}시간',
-            style: AppTypography.heading1Bold.copyWith(
-              color: AppColors.primary,
+            style: AppTypography.heading2Bold.copyWith(
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 16),
@@ -316,12 +309,7 @@ class _PlanDaySetRow extends StatelessWidget {
             color: AppColors.gray200,
             margin: const EdgeInsets.symmetric(horizontal: 12),
           ),
-          Text(
-            '${daySet.hoursPerDay}시간',
-            style: AppTypography.headlineBold.copyWith(
-              color: AppColors.gray800,
-            ),
-          ),
+          _ReportTimeText(hours: daySet.hoursPerDay),
         ],
       ),
     );
@@ -351,10 +339,20 @@ class _BarChartCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '주간 분석',
-            style: AppTypography.headlineBold.copyWith(
+            '이번주 사용 분석',
+            style: AppTypography.heading2Bold.copyWith(
               color: AppColors.textPrimary,
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '화·토·일에 계획보다 많이 사용했어요.',
+            style: AppTypography.labelMedium.copyWith(color: AppColors.gray400),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '월·금에는 계획보다 적게 사용하는 날이 많았어요.',
+            style: AppTypography.labelMedium.copyWith(color: AppColors.gray400),
           ),
           const SizedBox(height: 16),
           BridgeBarChart(days: chartDays),
@@ -379,8 +377,8 @@ class _BarChartCard extends StatelessWidget {
 ///  - 1×22 gray200 vertical divider between day label and hours.
 ///  - Trailing delta chip:
 ///      over plan  → `Icons.arrow_drop_up`   + `N시간` in [AppColors.destructive]
-///      under plan → `Icons.arrow_drop_down` + `N시간` in [AppColors.primary]
-///      on plan    → no chip rendered (matches `imgLine2` "on plan" treatment).
+///      under plan → `Icons.arrow_drop_down` + `N시간` in [AppColors.positive]
+///      on plan    → short gray line marker (matches `imgLine2` treatment).
 class _DayBreakdownRow extends StatelessWidget {
   const _DayBreakdownRow({required this.row});
 
@@ -414,15 +412,12 @@ class _DayBreakdownRow extends StatelessWidget {
           const SizedBox(width: 12),
           Container(width: 1, height: 22, color: AppColors.gray200),
           const SizedBox(width: 12),
-          Text(
-            '$hours시간 ${minutes.toString().padLeft(2, '0')}분',
-            style: AppTypography.headlineBold.copyWith(
-              color: AppColors.gray800,
-            ),
-          ),
+          _ReportTimeText(hours: hours, minutes: minutes),
           const Spacer(),
-          if (!isOnPlan)
-            _DayDeltaTriangleChip(hours: deltaAbsHours, isOver: isOver),
+          if (isOnPlan)
+            const _OnPlanMarker()
+          else
+            _DeltaTriangleChip(hours: deltaAbsHours, isOver: isOver),
         ],
       ),
     );
@@ -431,18 +426,17 @@ class _DayBreakdownRow extends StatelessWidget {
 
 /// Trailing triangle + `N시간` chip used in the per-day breakdown list.
 ///
-/// Per spec, "on plan" rows render no chip (a `imgLine2` wave/dash line
-/// stands in place of the chip in Figma); we omit the widget entirely
-/// rather than render a dash, since that asset is not exported locally.
-class _DayDeltaTriangleChip extends StatelessWidget {
-  const _DayDeltaTriangleChip({required this.hours, required this.isOver});
+/// Per spec, "on plan" rows render a small `imgLine2` wave/dash line in place
+/// of the chip. We approximate it with a short rounded gray line.
+class _DeltaTriangleChip extends StatelessWidget {
+  const _DeltaTriangleChip({required this.hours, required this.isOver});
 
   final int hours;
   final bool isOver;
 
   @override
   Widget build(BuildContext context) {
-    final Color color = isOver ? AppColors.destructive : AppColors.primary;
+    final Color color = isOver ? AppColors.destructive : AppColors.positive;
     final IconData triangle = isOver
         ? Icons.arrow_drop_up
         : Icons.arrow_drop_down;
@@ -619,8 +613,13 @@ class _SuggestionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
+            '다음주는 이렇게 조정해보자',
+            style: AppTypography.labelMedium.copyWith(color: AppColors.gray400),
+          ),
+          const SizedBox(height: 4),
+          Text(
             'AI 조정 제안',
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.heading2Bold.copyWith(
               color: AppColors.textPrimary,
             ),
           ),
@@ -646,9 +645,6 @@ class _SuggestionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final int hours = suggestion.suggestedHours;
-    // Spec mock uses whole-hour suggestions only; minutes always render as
-    // `00` to preserve the `H시간 MM분` two-token format used in Card 3.
-    const String minutesLabel = '00';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -667,64 +663,82 @@ class _SuggestionRow extends StatelessWidget {
           const SizedBox(width: 12),
           Container(width: 1, height: 22, color: AppColors.gray200),
           const SizedBox(width: 12),
-          Text(
-            '$hours시간 $minutesLabel분',
-            style: AppTypography.headlineBold.copyWith(
-              color: AppColors.gray800,
-            ),
-          ),
+          _ReportTimeText(hours: hours, minutes: 0),
           const Spacer(),
-          _SuggestionDeltaChip(suggestion: suggestion),
+          _SuggestionDeltaIndicator(suggestion: suggestion),
         ],
       ),
     );
   }
 }
 
-/// Tone-colored delta chip used in the AI suggestion rows.
-class _SuggestionDeltaChip extends StatelessWidget {
-  const _SuggestionDeltaChip({required this.suggestion});
+/// Triangle or line marker used in the AI suggestion rows.
+class _SuggestionDeltaIndicator extends StatelessWidget {
+  const _SuggestionDeltaIndicator({required this.suggestion});
 
   final AiSuggestion suggestion;
 
   @override
   Widget build(BuildContext context) {
-    final Color bg;
-    final Color fg;
-    final String label;
-
     switch (suggestion.tone) {
       case AiSuggestionTone.positive:
-        bg = AppColors.primarySoft;
-        fg = AppColors.positive;
-        final String sign = suggestion.deltaHours >= 0 ? '+' : '';
-        label = '$sign${suggestion.deltaHours}시간';
-        break;
+        return _DeltaTriangleChip(
+          hours: suggestion.deltaHours.abs(),
+          isOver: false,
+        );
       case AiSuggestionTone.destructive:
-        bg = AppColors.destructiveSubtle;
-        fg = AppColors.destructive;
-        final String sign = suggestion.deltaHours >= 0 ? '+' : '';
-        label = '$sign${suggestion.deltaHours}시간';
-        break;
+        return _DeltaTriangleChip(
+          hours: suggestion.deltaHours.abs(),
+          isOver: true,
+        );
       case AiSuggestionTone.neutral:
-        bg = AppColors.primarySoft;
-        fg = AppColors.primary;
-        label = '계획대로';
-        break;
+        return const _OnPlanMarker();
     }
+  }
+}
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
+class _ReportTimeText extends StatelessWidget {
+  const _ReportTimeText({required this.hours, this.minutes = 0});
+
+  final int hours;
+  final int minutes;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle numberStyle = AppTypography.headlineBold.copyWith(
+      color: AppColors.gray800,
+    );
+    final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(
+      color: AppColors.gray800,
+    );
+
+    return RichText(
+      text: TextSpan(
+        children: <InlineSpan>[
+          TextSpan(text: '$hours', style: numberStyle),
+          TextSpan(text: ' 시간 ', style: unitStyle),
+          TextSpan(
+            text: minutes.toString().padLeft(2, '0'),
+            style: numberStyle,
+          ),
+          TextSpan(text: ' 분', style: unitStyle),
+        ],
       ),
-      child: Text(
-        label,
-        style: AppTypography.captionMedium.copyWith(
-          color: fg,
-          letterSpacing: 0,
-        ),
+    );
+  }
+}
+
+class _OnPlanMarker extends StatelessWidget {
+  const _OnPlanMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 15,
+      height: 2,
+      decoration: BoxDecoration(
+        color: AppColors.gray300,
+        borderRadius: BorderRadius.circular(2),
       ),
     );
   }
