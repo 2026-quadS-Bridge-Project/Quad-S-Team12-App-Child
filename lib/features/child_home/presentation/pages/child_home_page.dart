@@ -4,11 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../mission/data/mock/mission_mock.dart';
 import '../../../mission/data/models/mission.dart' as mission_model;
+import '../../../mission/data/repositories/mission_repository.dart';
 
 class ChildHomePage extends StatefulWidget {
   const ChildHomePage({
@@ -622,16 +624,44 @@ class _MissionSection extends StatelessWidget {
   }
 }
 
-class _MissionListSection extends StatelessWidget {
+class _MissionListSection extends StatefulWidget {
   const _MissionListSection();
 
   @override
-  Widget build(BuildContext context) {
-    // Single source of truth: MissionMock.all. Mapping happens inline so the
-    // home-card visual shape (_MissionItemData) is preserved while the
-    // titles/statuses stay in sync with the mission detail screen.
-    final List<_MissionItemData> missions = <_MissionItemData>[
-      for (final mission_model.Mission m in MissionMock.all)
+  State<_MissionListSection> createState() => _MissionListSectionState();
+}
+
+class _MissionListSectionState extends State<_MissionListSection> {
+  // Source of truth post-Phase-2B: the repository. We seed synchronously
+  // from MissionMock.all so the first paint matches today's behavior, then
+  // [_loadMissions] hydrates the list from the repo (mock today, HTTP once
+  // useMocks flips off). No loading/error UI by design — the seed bridges
+  // the (currently instant) async window.
+  late final MissionRepository _repository = createMissionRepository();
+  late List<_MissionItemData> _missions = _mapMissions(MissionMock.all);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMissions();
+  }
+
+  Future<void> _loadMissions() async {
+    final Result<List<mission_model.Mission>> result =
+        await _repository.listMissions();
+    if (!mounted) return;
+    if (result case Success<List<mission_model.Mission>>(data: final fresh)) {
+      setState(() {
+        _missions = _mapMissions(fresh);
+      });
+    }
+  }
+
+  static List<_MissionItemData> _mapMissions(
+    List<mission_model.Mission> source,
+  ) {
+    return <_MissionItemData>[
+      for (final mission_model.Mission m in source)
         _MissionItemData(
           id: m.id,
           status: _statusFromModel(m.status),
@@ -640,7 +670,11 @@ class _MissionListSection extends StatelessWidget {
           iconAsset: _iconAssetForCategory(m.category),
         ),
     ];
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final List<_MissionItemData> missions = _missions;
     final int completedCount = missions
         .where((m) => m.status == _MissionStatus.completed)
         .length;
