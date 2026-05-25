@@ -17,6 +17,25 @@ class NotificationItem {
     this.deeplink,
   });
 
+  /// Deserialize from a backend JSON payload. [NotificationType] is matched
+  /// against [NotificationType.values] by `.name`; [createdAt] is parsed as
+  /// ISO-8601 via [DateTime.parse]. [deeplink] is optional.
+  factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    final String typeName = json['type'] as String;
+    final NotificationType type = NotificationType.values.firstWhere(
+      (NotificationType candidate) => candidate.name == typeName,
+    );
+    return NotificationItem(
+      id: json['id'] as String,
+      type: type,
+      title: json['title'] as String,
+      message: json['message'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      actionLabel: json['actionLabel'] as String? ?? '확인하러 가기',
+      deeplink: json['deeplink'] as String?,
+    );
+  }
+
   final String id;
   final NotificationType type;
   final String title;
@@ -28,6 +47,19 @@ class NotificationItem {
   /// back to a type-based default (see `NotificationsPage._defaultRouteFor`).
   /// Backend will populate this once notification deeplinks land.
   final String? deeplink;
+
+  /// Serialize to the wire format the backend expects. Mirrors [fromJson].
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'type': type.name,
+      'title': title,
+      'message': message,
+      'createdAt': createdAt.toIso8601String(),
+      'actionLabel': actionLabel,
+      'deeplink': deeplink,
+    };
+  }
 
   /// Relative Korean time label computed from [createdAt]. The getter defers
   /// to [DateTime.now] so widgets always render fresh values; tests can call

@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/mock/notifications_mock.dart';
 import '../../data/models/notification_item.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../widgets/notification_card.dart';
 
 /// 알림 (Notifications) screen.
@@ -20,8 +24,37 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  late final List<NotificationItem> _notifications =
-      List<NotificationItem>.from(NotificationsMock.filled);
+  late final NotificationRepository _repository = createNotificationRepository();
+
+  // Seed with mock fixtures so the list paints on first frame without a
+  // loading state; `_loadNotifications` then overwrites with the repo result.
+  List<NotificationItem> _notifications = List<NotificationItem>.from(
+    NotificationsMock.filled,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    final Result<List<NotificationItem>> result =
+        await _repository.listNotifications();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Success<List<NotificationItem>>(:final List<NotificationItem> data):
+        setState(() {
+          _notifications = data;
+        });
+      case Failure<List<NotificationItem>>(:final String message):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+    }
+  }
 
   /// Maps a notification to a sensible default route. Used when the item has
   /// no explicit `deeplink` override.
@@ -43,8 +76,31 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   void _handleCardTap(NotificationItem item) {
+    // Fire-and-forget: the route push runs synchronously below, so we don't
+    // await the repository here. Any failure is silent for now; surface via
+    // SnackBar once the backend ships and read-state matters to the user.
+    unawaited(_repository.markAsRead(item.id));
     final String route = item.deeplink ?? _defaultRouteFor(item.type);
     context.push(route);
+  }
+
+  Future<void> _confirmDelete(NotificationItem item) async {
+    final Result<void> result = await _repository.deleteNotification(item.id);
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Success<void>():
+        setState(() {
+          _notifications.removeWhere(
+            (NotificationItem candidate) => candidate.id == item.id,
+          );
+        });
+      case Failure<void>(:final String message):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+    }
   }
 
   Future<void> _showDeleteDialog(NotificationItem item) {
@@ -64,13 +120,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 21),
                   child: _DeleteNotificationDialog(
                     onConfirm: () {
-                      setState(() {
-                        _notifications.removeWhere(
-                          (NotificationItem candidate) =>
-                              candidate.id == item.id,
-                        );
-                      });
                       context.pop();
+                      _confirmDelete(item);
                     },
                   ),
                 ),
