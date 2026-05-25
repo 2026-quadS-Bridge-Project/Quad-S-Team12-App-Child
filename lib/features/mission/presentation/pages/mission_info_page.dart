@@ -484,7 +484,7 @@ class _CameraPromptView extends StatelessWidget {
                 onTap: () async {
                   final String? path = await CameraService.capturePhoto();
                   if (path != null) {
-                    controller.addPhoto(path);
+                    await controller.addCapturedPhoto(path);
                   }
                 },
               ),
@@ -646,7 +646,7 @@ class _PhotoPreviewView extends StatelessWidget {
                             final String? path =
                                 await CameraService.capturePhoto();
                             if (path != null) {
-                              controller.addPhoto(path);
+                              await controller.addCapturedPhoto(path);
                             }
                           },
                         ),

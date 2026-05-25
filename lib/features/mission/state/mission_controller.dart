@@ -5,6 +5,7 @@ import '../data/models/mission.dart';
 import '../data/mock/mission_mock.dart';
 import '../data/repositories/mission_repository.dart';
 import '../../../core/models/result.dart';
+import '../../../core/services/photo_upload_service.dart';
 
 /// Flow steps for the mission detail screen.
 ///
@@ -20,22 +21,28 @@ class MissionController extends ChangeNotifier {
   /// [repository] is injectable for tests; production callers can omit it
   /// and the controller will pick the right impl via
   /// [createMissionRepository] (mock today, HTTP once the backend ships).
+  /// [uploadService] is similarly injectable — defaults to
+  /// [createPhotoUploadService] so production callers get the mock/api
+  /// impl that matches the current environment.
   /// The initial [Mission] is seeded synchronously from [MissionMock] so
   /// the UI has data to render on first frame; [reload] can fetch fresh
   /// data afterwards.
   MissionController({
     required String missionId,
     MissionRepository? repository,
+    PhotoUploadService? uploadService,
   }) : this._(
           MissionMock.byId(missionId),
           repository ?? createMissionRepository(),
+          uploadService ?? createPhotoUploadService(),
         );
 
-  MissionController._(Mission mission, this._repository)
+  MissionController._(Mission mission, this._repository, this._uploadService)
       : _mission = mission,
         _step = _initialStepFor(mission);
 
   final MissionRepository _repository;
+  final PhotoUploadService _uploadService;
   Mission _mission;
   MissionFlowStep _step;
   final List<String> _capturedPhotoPaths = [];
@@ -62,13 +69,30 @@ class MissionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addPhoto(String path) {
+  /// Uploads a freshly captured photo via [_uploadService] and, on success,
+  /// appends the returned URL/path to [_capturedPhotoPaths].
+  ///
+  /// Mock builds resolve immediately (echoing the local path), so the UI
+  /// can `await` this without needing a spinner. Real backend uploads will
+  /// surface failures via [errorMessage] without mutating the photo list.
+  /// The 4-photo cap is enforced before the upload starts to avoid
+  /// pointless network work.
+  Future<void> addCapturedPhoto(String localPath) async {
     if (_capturedPhotoPaths.length >= 4) return;
-    _capturedPhotoPaths.add(path);
-    if (_step == MissionFlowStep.cameraPrompt) {
-      _step = MissionFlowStep.photoPreview;
+    final Result<String> result = await _uploadService.uploadPhoto(localPath);
+    if (_disposed) return;
+    switch (result) {
+      case Success<String>(data: final String remotePathOrUrl):
+        _capturedPhotoPaths.add(remotePathOrUrl);
+        if (_step == MissionFlowStep.cameraPrompt) {
+          _step = MissionFlowStep.photoPreview;
+        }
+        _errorMessage = null;
+        notifyListeners();
+      case Failure<String>(message: final String message):
+        _errorMessage = message;
+        notifyListeners();
     }
-    notifyListeners();
   }
 
   void removePhoto(int index) {
