@@ -667,7 +667,13 @@ class _PhotoPreviewView extends StatelessWidget {
                 variant: BridgeButtonVariant.primary,
                 size: BridgeButtonSize.large,
                 fullWidth: true,
-                onPressed: controller.canSubmit ? controller.submit : null,
+                // submit() is now async; canSubmit also gates on isLoading so
+                // a double-tap can't kick off two in-flight submissions.
+                onPressed: controller.canSubmit
+                    ? () {
+                        controller.submit();
+                      }
+                    : null,
               ),
               const SizedBox(height: 24),
             ],

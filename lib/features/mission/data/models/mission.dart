@@ -35,6 +35,27 @@ enum ConfirmationMethod {
     }
     return null;
   }
+
+  /// Resolve the enum from its [name] (e.g. `'aiAuto'`). Returns
+  /// [ConfirmationMethod.childSelf] when [name] is null/unknown so
+  /// JSON payloads with missing fields land on the safe default.
+  static ConfirmationMethod fromName(String? name) {
+    if (name == null) return ConfirmationMethod.childSelf;
+    for (final ConfirmationMethod m in ConfirmationMethod.values) {
+      if (m.name == name) return m;
+    }
+    return ConfirmationMethod.childSelf;
+  }
+}
+
+/// JSON name lookup for [MissionStatus]; defaults to
+/// [MissionStatus.pendingCheck] when [name] is null or unknown.
+MissionStatus _missionStatusFromName(String? name) {
+  if (name == null) return MissionStatus.pendingCheck;
+  for (final MissionStatus s in MissionStatus.values) {
+    if (s.name == name) return s;
+  }
+  return MissionStatus.pendingCheck;
 }
 
 class Mission {
@@ -119,4 +140,92 @@ class Mission {
     payoutTime: payoutTime,
     captureInstruction: captureInstruction,
   );
+
+  /// Hand-written JSON decoder used by the repository layer.
+  ///
+  /// Sensibly defaults missing fields so partial backend payloads still
+  /// produce a renderable [Mission] for the UI:
+  /// - `status` → [MissionStatus.pendingCheck]
+  /// - `confirmationMethod` → [ConfirmationMethod.childSelf]
+  /// - `photoUrls` → `[]`
+  factory Mission.fromJson(Map<String, dynamic> json) {
+    final dynamic rawPhotoUrls = json['photoUrls'];
+    final List<String> photoUrls = rawPhotoUrls is List
+        ? rawPhotoUrls.map((dynamic e) => e.toString()).toList()
+        : const <String>[];
+
+    final dynamic rawCategoryOptions = json['categoryOptions'];
+    final List<String> categoryOptions = rawCategoryOptions is List
+        ? rawCategoryOptions.map((dynamic e) => e.toString()).toList()
+        : const <String>['루틴', '학습', '운동', '청소', '심부름'];
+
+    final dynamic rawResetCycleOptions = json['resetCycleOptions'];
+    final List<String> resetCycleOptions = rawResetCycleOptions is List
+        ? rawResetCycleOptions.map((dynamic e) => e.toString()).toList()
+        : const <String>['매일', '일주일', '한 달'];
+
+    final dynamic rawConfirmationOptions = json['confirmationMethodOptions'];
+    final List<ConfirmationMethod> confirmationOptions =
+        rawConfirmationOptions is List
+            ? rawConfirmationOptions
+                .map((dynamic e) => ConfirmationMethod.fromName(e?.toString()))
+                .toList()
+            : const <ConfirmationMethod>[
+                ConfirmationMethod.aiAuto,
+                ConfirmationMethod.childSelf,
+                ConfirmationMethod.parentApproval,
+              ];
+
+    final dynamic rawDeadline = json['deadline'];
+    final DateTime? deadline = rawDeadline is String
+        ? DateTime.tryParse(rawDeadline)
+        : null;
+
+    return Mission(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      rewardHours: (json['rewardHours'] as num?)?.toInt() ?? 0,
+      rewardMinutes: (json['rewardMinutes'] as num?)?.toInt() ?? 0,
+      status: _missionStatusFromName(json['status']?.toString()),
+      description: json['description']?.toString(),
+      assignedBy: (json['assignedBy'] ?? 'parent').toString(),
+      photoUrls: photoUrls,
+      deadline: deadline,
+      category: (json['category'] ?? '루틴').toString(),
+      categoryOptions: categoryOptions,
+      resetCycle: (json['resetCycle'] ?? '매일').toString(),
+      resetCycleOptions: resetCycleOptions,
+      confirmationMethod: ConfirmationMethod.fromName(
+        json['confirmationMethod']?.toString(),
+      ),
+      confirmationMethodOptions: confirmationOptions,
+      payoutTime: json['payoutTime']?.toString(),
+      captureInstruction:
+          (json['captureInstruction'] ?? '깨끗해진 방을 찍어서 올려주세요!').toString(),
+    );
+  }
+
+  /// Hand-written JSON encoder. Enums are serialised via [Enum.name] so the
+  /// payload matches what [Mission.fromJson] expects.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'title': title,
+        'rewardHours': rewardHours,
+        'rewardMinutes': rewardMinutes,
+        'status': status.name,
+        'description': description,
+        'assignedBy': assignedBy,
+        'photoUrls': photoUrls,
+        'deadline': deadline?.toIso8601String(),
+        'category': category,
+        'categoryOptions': categoryOptions,
+        'resetCycle': resetCycle,
+        'resetCycleOptions': resetCycleOptions,
+        'confirmationMethod': confirmationMethod.name,
+        'confirmationMethodOptions': <String>[
+          for (final ConfirmationMethod m in confirmationMethodOptions) m.name,
+        ],
+        'payoutTime': payoutTime,
+        'captureInstruction': captureInstruction,
+      };
 }
