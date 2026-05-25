@@ -1,6 +1,6 @@
 # UI Figma Current Audit
 
-작성일: 2026-05-20
+작성일: 2026-05-25
 
 대상: `docs/UI-figma.md`의 Figma 링크 53개와 현재 Flutter 구현.
 
@@ -10,6 +10,50 @@
 - Figma MCP metadata로 대표 노드 재확인: `662:8356`, `426:20978`, `426:21005`, `695:9743`, `695:12742`, `662:11497`, `426:18960`
 - 실제 픽셀 스크린샷 diff는 아직 수행하지 않음. 아래는 Phase 0/1/2/3/4 반영 후 코드/스펙 기반 감사 결과
 
+## 우선순위 이슈 (이번 사이클)
+
+이번 사이클에서 커밋된 변경은 화면 fidelity 정리와 백엔드 통합 준비 scaffolding 두 갈래로 나뉜다. 모두 source 코드 기준이며 별도 screenshot diff는 다음 사이클에서 수행한다.
+
+- Onboarding 제거: `/child-home/onboarding` route, `ChildHomePage`의 onboarding 파라미터/상태/overlay, `BridgeOnboardingTooltip` widget, `TimeConfirm`의 onboarding artifact가 모두 삭제됨. 부모연결 onboarding은 더 이상 코드/route상 존재하지 않음.
+- 미션 단일 mock + rejected gate + enum: `child_home`의 미션 카드 목록이 `MissionMock`을 단일 소스로 사용하도록 정리됨. `rejected` 상태에서는 `수행하기` CTA가 비활성화됨. confirmation method가 `String`에서 `ConfirmationMethod` enum으로 전환됨.
+- 알림 timeAgo + swipe threshold: `NotificationItem`이 `createdAt: DateTime`을 보유하고 `timeAgo`를 파생 계산함. 카드 swipe delete threshold가 spec에 맞춰 0.4로 좁혀짐.
+- 리포트 padding 보정: day row와 speech-bubble padding이 Figma 수치(18h/15v, 16h/15v)로 좁혀짐.
+- Time setup v2 copy/버튼 정리: `WeeklyTimeSetupPage`의 description이 mode(v1/v2)에 따라 분기되고, `DailyTimeSetupPage`의 `스케줄 보기` reference pill은 v2 mode에서만 노출됨.
+- Foundation scaffolding: `lib/core/models/result.dart` (Result<T> sealed type), `lib/core/config/environment.dart` (AppEnvironment), `lib/core/config/dio_config.dart`, `AuthSession` 토큰 메서드가 추가됨.
+- Per-feature repository scaffolding: mission, time_setup, time_confirm, notifications, report, my_page, auth 각각에 추상 `X_repository.dart`, `MockXRepository`, `ApiXRepository`가 들어가고, 모델에 `fromJson/toJson`이 추가됨. controller/page는 `createXRepository()` factory를 통해 데이터에 접근함.
+- Photo upload: `PhotoUploadService` stub이 추가됨. 실제 업로드는 추후 구현.
+
+## 백엔드 통합 준비 상태
+
+이번 사이클에서 추가된 data layer scaffolding은 UI/state는 그대로 두고 데이터 접근을 repository 경계 뒤로 옮기는 것이 목표다. 실제 wire는 아직 진행하지 않았다.
+
+### Foundation
+
+- `lib/core/models/result.dart`: `Result<T>` sealed type (`Ok<T>` / `Err<T>`)으로 API 호출 결과 전달.
+- `lib/core/config/environment.dart`: `AppEnvironment` (`mock`/`staging`/`prod`) + `currentEnvironment` switch. 현재 기본값은 `mock`.
+- `lib/core/config/dio_config.dart`: `Dio` 인스턴스 생성, base URL, 기본 헤더, 토큰 주입 interceptor 자리.
+- `AuthSession`: access/refresh token 저장/조회/clear 메서드가 확장되어 추후 secure storage 연결 준비.
+
+### Per-feature repository
+
+- mission, time_setup, time_confirm, notifications, report, my_page, auth 각각:
+  - 추상 `XRepository` interface (도메인 메서드 단위로 정의).
+  - `MockXRepository`: 기존 `*_mock.dart` fixture를 그대로 위임. 현재 앱은 이 구현으로 동작.
+  - `ApiXRepository`: dio 기반 stub. 메서드는 `UnimplementedError`를 던지며, JSON ↔ 모델 변환만 `fromJson/toJson`으로 준비됨.
+- controller/page는 직접 mock에 접근하지 않고 `createXRepository()` factory를 사용함. factory는 `currentEnvironment`에 따라 mock/api 구현을 선택.
+
+### Photo upload
+
+- `PhotoUploadService` stub: 미션 사진 업로드 진입점. 현재는 placeholder, 추후 multipart upload 로직과 연결.
+
+### 실제 API wiring 단계에서 남은 일
+
+- `ApiXRepository.*` 각 메서드를 dio 호출과 JSON parse로 채우기.
+- `currentEnvironment`를 `staging`/`prod`로 전환하고 빌드 flavor와 연결.
+- `dio_config.dart` interceptor에 refresh-token rotation/401 retry 로직 추가.
+- 미션 auto-approve `Timer` (mock-only)를 실제 polling/websocket 알림 흐름으로 교체.
+- `PhotoUploadService` 실제 구현과 미션 submit flow 연결.
+
 ## Phase 0/1/2/3/4 갱신 요약
 
 현재 문서는 Phase 4 미션 정리 후 worktree 기준이다. 실제 픽셀 스크린샷 diff는 아직 수행하지 않았다.
@@ -17,7 +61,11 @@
 ### 고정됨
 
 - 공통: `BridgeAppBar` title weight가 `headlineMedium`으로 변경됨. 시작 화면 Bridge 아이콘은 90x90으로 조정됨.
-- 레거시 route: `/child-home/onboarding` 직접 접근 후 dismiss 시 `/child-home`으로 route가 정리됨.
+- 레거시 route 정리: `/child-home/onboarding` route, `ChildHomePage`의 onboarding 파라미터/상태/overlay, `BridgeOnboardingTooltip` widget, `TimeConfirm`의 onboarding artifact가 전부 제거됨. 부모연결 onboarding은 더 이상 존재하지 않음.
+- 미션 데이터 소스: `child_home` 미션 카드 목록이 `MissionMock`을 단일 소스로 사용함. `rejected` 상태에서는 `수행하기` CTA가 비활성화됨. confirmation method는 `ConfirmationMethod` enum으로 전환됨.
+- 알림 timeAgo/swipe: `NotificationItem`이 `createdAt: DateTime`을 보유하고 `timeAgo`를 파생함. swipe delete threshold가 0.4로 좁혀짐.
+- 리포트 padding: day row 18h/15v, speech-bubble 16h/15v로 Figma 수치 반영.
+- Time setup v2 분기: `WeeklyTimeSetupPage` description이 mode 분기, `DailyTimeSetupPage`의 `스케줄 보기` reference pill은 v2 mode에서만 노출.
 - 시간 설정 진입: v1/v2 모두 `TimeSetupIntroPage`를 거치며, v2 intro와 schedule step copy가 Figma v2 문구로 분기됨.
 - 시간 설정 Step 1: grid label이 `7..12, 1..11` 계열로 바뀌고 empty/selected cell color가 Figma 방향으로 정리됨.
 - 시간 설정 Step 2: `BridgeTotalTimeCard.compact` 50px bordered box와 50px/radius 12 `BridgeWeekRow`가 적용됨. v2는 1주차를 dim/locked 처리하고 2-4주차만 편집함.
@@ -36,26 +84,27 @@
 - v2 weekly 화면은 remaining budget/auto-calc 상태와 2-4주차 합계 validation을 실제 walkthrough로 확인해야 함.
 - daily/reference sheets는 placeholder에서 실제 preview sheet로 개선됐지만 Figma 원본과 동일한 modal인지 별도 확인 필요.
 - review 화면은 compact card/header 구조가 반영됐지만 `스케줄 보기` pill action과 exact read-only layout은 후속 점검 필요.
-- 알림은 6종 mock/copy와 delete confirm secondary-yellow warning icon이 맞춰졌지만 list start y, card height/gap은 screenshot diff 필요.
-- 리포트는 첫 card y offset과 주요 copy가 보정됐지만 card heights, chart/list pixel parity, `cat.svg`가 Figma multi-color illustration과 같은지 screenshot diff가 필요.
+- 알림은 6종 mock/copy, delete confirm secondary-yellow warning icon, swipe threshold 0.4, `createdAt` 기반 `timeAgo`가 반영됐지만 list start y, card height/gap은 screenshot diff 필요.
+- 리포트는 첫 card y offset, day row/speech bubble padding(18h/15v, 16h/15v), 주요 copy가 보정됐지만 card heights, chart/list pixel parity, `cat.svg`가 Figma multi-color illustration과 같은지 screenshot diff가 필요.
 - 시간 설정 confirm empty/onboarding variant는 시각 구조가 개선됐지만 여전히 query/test constructor 중심 접근이다. tooltip 위치/크기와 `수정하기` pill token은 screenshot diff 필요.
 - 미션 camera/photo/submitted flow는 코드/스펙 기준 대부분 맞춰졌지만 native camera permission/device walkthrough, captured image rendering, submitted icon/text exact y/order는 screenshot diff 필요.
 
 ### 후속 Phase 미해결
 
 - 리포트: card/chart/list pixel diff, cat illustration asset fidelity.
-- 알림: list/card exact pixel diff와 swipe threshold 정책.
-- 시간 확인: empty/onboarding 자연 진입 정책, tooltip/pill exact pixel diff.
+- 알림: list/card exact pixel diff (swipe threshold 0.4는 이번 사이클에 반영됨).
+- 시간 확인: empty 자연 진입 정책, pill exact pixel diff (onboarding variant는 이번 사이클에 제거됨).
 - 미션: rejected detail 디자인 부재. 반려 사유/재시도 UX는 Figma node가 없는 제품/디자인 gap.
-- Auth/account: 실제 login/signup form은 Figma 문서에 없고, 비밀번호 변경 title copy(`수정` vs `변경`) 판단 필요.
+- Auth/account: 실제 login/signup form은 Figma 문서에 없음. 비밀번호 변경 title은 코드상 이미 `비밀번호 수정`으로 Figma copy를 따름.
 - 통합: 53개 route walkthrough, analyzer/test, screenshot diff 후보 재감사.
+- 백엔드: `ApiXRepository` 메서드 구현, refresh-token rotation, mock auto-approve Timer 교체, `PhotoUploadService` 실 구현.
 
 ## 우선순위 이슈
 
 | 상태 | 우선순위 | 이슈 | 메모 |
 |---|---|---|---|
 | 고정 | P0 | 시간 설정 v1 인트로 미노출 | v1 기본 step이 `intro`로 바뀌고 root에서 intro를 렌더링함. |
-| 고정 | P0 | `/child-home/onboarding` dismiss 후 route 미전환 | dismiss callback으로 `/child-home` 전환. 호출 경로 부재는 legacy 판단으로 남음. |
+| 고정 | P0 | `/child-home/onboarding` legacy route | 이번 사이클에 route, ChildHomePage onboarding 파라미터/상태/overlay, `BridgeOnboardingTooltip` widget이 모두 제거됨. |
 | 고정 | P0 | `BridgeTotalTimeCard`가 Figma time box와 다름 | compact variant가 주별/일별/확인 화면에 적용됨. |
 | 고정 | P0 | 주별 row 높이/radius가 Figma보다 큼 | 50px/radius 12 row로 변경됨. |
 | 부분 고정 | P0 | 일간 시간 설정 header/pill/rows frame 구조 | header/action/frame은 반영. exact spacing과 reference modal parity는 재검증 필요. |
@@ -81,12 +130,12 @@
 | `/login` | 실제 로그인 폼 | 없음 | Figma 문서에 실제 로그인 form 화면이 없음. 현재 구현은 별도 앱 전용 화면이라 parity 판단 불가. |
 | `/signup` | 실제 회원가입 폼 | 없음 | Figma 문서에 회원가입 form 화면이 없음. 현재 구현은 별도 앱 전용 화면이라 parity 판단 불가. |
 | `/mypage` | 마이페이지 | `773:11103` | 매핑됨. |
-| `/mypage/password` | 비밀번호 변경 form states | `773:11124`, `773:11134`, `773:12009`, `773:11733`, `773:11519`, `773:11626` | 매핑됨. 단 Figma copy는 `비밀번호 수정`, 현재 copy는 `비밀번호 변경`. |
+| `/mypage/password` | 비밀번호 변경 form states | `773:11124`, `773:11134`, `773:12009`, `773:11733`, `773:11519`, `773:11626` | 매핑됨. 코드상 title이 `비밀번호 수정`으로 Figma copy와 일치. |
 | `/mypage/delete-complete` | 탈퇴 완료 | `773:11070` | 매핑됨. |
 | `/child-home` | 홈 기본 route | `426:20978`, `426:21005` | 부분 매핑. 현재 기본값은 `showContent=true`, `_hasSchedule=false`라 Figma home2의 donut 화면은 debug long-press 전에는 바로 보이지 않음. |
-| `/child-home/onboarding` | 홈 + 부모 연결 guide overlay | 명확한 개별 노드 없음 | 부분 고정. overlay 전용 Figma는 없지만, 직접 접근 후 dismiss 시 `/child-home`으로 route가 정리됨. |
+| `/child-home/onboarding` | (제거됨) | 명확한 개별 노드 없음 | 고정. 이번 사이클에 route, ChildHomePage onboarding 파라미터/상태/overlay, `BridgeOnboardingTooltip` widget이 모두 삭제됨. |
 | `/child-home/report` | 사용 리포트 | `662:11497` | 부분 고정. first card y offset, header copy, cat SVG 렌더링이 개선됨. card/chart/list pixel diff와 cat asset fidelity는 남음. |
-| `/child-home/notifications` | 알림 filled/empty/delete | `426:19287`, `426:19293`, `773:12916`, `773:12903` | 부분 고정. Figma 6종 mock/copy, type color, delete confirm warning color는 반영됨. list exact spacing과 swipe threshold 정책은 남음. |
+| `/child-home/notifications` | 알림 filled/empty/delete | `426:19287`, `426:19293`, `773:12916`, `773:12903` | 부분 고정. Figma 6종 mock/copy, type color, delete confirm warning color, swipe threshold 0.4, `createdAt`-기반 `timeAgo`가 반영됨. list exact spacing은 screenshot diff 필요. |
 | `/child-home/time-setup` | v1 시간 설정 wizard | `695:*` v1 그룹 | 부분 고정. v1 intro, grid, weekly, daily 구조가 반영됨. pixel diff는 남음. |
 | `/child-home/time-setup/v2` | v2 시간 설정 wizard | `750:*` v2 그룹 | 부분 고정. v2 copy, locked past week, editable weeks, reference actions가 반영됨. walkthrough 필요. |
 | `/child-home/time-setup/confirm` | 시간 설정 확인 | `744:11326`, `662:11322`, `662:11249` | 부분 고정. empty CTA/divider/title/dark tooltip이 개선됨. empty/onboarding은 여전히 `?variant=empty|onboarding` query로만 접근 가능. |
@@ -98,7 +147,7 @@
 |---|---|---|
 | 실제 로그인 form + 로그인 error toast | `lib/features/login/presentation/pages/login_page.dart` | `UI-figma.md`의 `로그인` 노드는 실제 로그인 form이 아니라 start 화면이다. 별도 Figma 필요. |
 | 실제 회원가입 form + validation states | `lib/features/signup/presentation/pages/signup_page.dart` | 회원가입 CTA는 Figma start 화면에 있지만 회원가입 form node는 문서에 없다. 별도 Figma 필요. |
-| 홈 onboarding overlay | `lib/features/child_home/presentation/pages/child_home_page.dart` | 부모 연결 guide bubble 상태가 route로 존재하지만 `UI-figma.md`에 개별 링크가 없다. dismiss route는 Phase 0에서 정리됨. |
+| 홈 onboarding overlay | (제거됨) | 이번 사이클에 route/widget/state가 모두 제거되어 더 이상 존재하지 않음. |
 | 시간 설정 `review` step | `lib/features/time_setup/presentation/pages/time_setup_review_page.dart` | v1의 `695:11487`과 매핑할 수는 있지만, Figma상 "valid filled state"인지 "별도 review step"인지 애매하다. 현재 앱은 별도 step으로 분리됨. |
 | 시간 설정 확인 query variants | `lib/features/time_confirm/presentation/pages/time_confirm_page.dart:49` | Figma 3개 상태가 구현되어 있고 Phase 3에서 empty/onboarding visual이 개선됨. 다만 앱 내 버튼으로 empty/onboarding variant에 들어가는 경로는 없음. |
 | 미션 rejected detail | `lib/features/mission/data/mock/mission_mock.dart:16` | home/mock에는 rejected 상태가 있는데 `UI-figma.md`와 `11-mission.md`에는 rejected detail node가 없다. 현재 별도 반려 사유/재시도 화면은 없으므로 제품/디자인 gap. |
@@ -125,7 +174,7 @@
 
 | 대상 | 현재 상태 | 판단 | 권장 정리 |
 |---|---|---|---|
-| 홈 부모연결 onboarding | `/child-home/onboarding`이 `ChildHomePage(showOnboarding:true, showContent:false)`로 남아 있음. 현재 생산 코드에서 이 route로 `go/push`하는 call site는 없음. | route 자체는 legacy/dead 가능성이 높지만, 직접 접근 dismiss 후 `/child-home` 전환은 고정됨. | 첫 부모연결 튜토리얼이 필요하면 auth/onboarding gate에서 명시적으로 진입. 필요 없으면 route 제거. |
+| 홈 부모연결 onboarding | 이번 사이클에 route, ChildHomePage onboarding 파라미터/상태/overlay, `BridgeOnboardingTooltip` widget이 모두 제거됨. | 고정. 더 이상 코드/route상 존재하지 않음. | 추후 첫 부모연결 튜토리얼이 필요하면 별도 Figma node 확보 후 새로운 entry point로 설계. |
 | 시간 설정 v1 intro | Figma `695:8850`은 3단계 안내 + `시작` CTA. | 고정됨. v1 controller 기본 step이 `intro`이고 root에서 `TimeSetupIntroPage`를 렌더링함. | exact spacing만 screenshot diff로 확인. |
 | 시간 설정 v2 intro | `/child-home/time-setup/v2`는 `TimeSetupController.v2NextWeek`로 `intro`에 진입하고, `시작` 버튼이 `scheduleRegister`로 이동함. | 고정됨. mode별 v2 subtitle copy가 적용됨. | exact spacing만 screenshot diff로 확인. |
 
@@ -146,18 +195,18 @@
 | 2 | 홈 | `426:20978` | `ChildHomePage(showContent:false/onboarding)` 계열 | 대체로 양호 | topbar y=56, 컨테이너 y=108 계열은 현재 구조와 근접. 단 empty state plus와 settings/report affordance는 현재 상태 분기와 실제 진입 경로 재확인 필요. |
 | 3 | 홈 2 | `426:21005` | `ChildHomePage(showContent:true)` | 부분 고정 | Figma 컨테이너 y=118에 맞춰 content gap이 30px로 조정됨. donut 상태는 `_hasSchedule=false` 기본값 때문에 일반 사용자에게 바로 노출되지 않음. |
 | 4 | 마이페이지 | `773:11103` | `MyPage` | 양호 | 로그아웃 버튼은 현재 제거되어 Figma와 맞음. AppBar title weight도 공통 수정 반영. |
-| 5 | 비밀번호 변경 empty | `773:11124` | `PasswordChangePage` | 부분 불일치 | Figma title은 `비밀번호 수정`, 현재 `비밀번호 변경`. field top/gap은 실제 화면에서 확인 필요. |
-| 6 | 비밀번호 변경 typing | `773:11134` | `PasswordChangePage` | 부분 불일치 | neutral helper 처리 로직은 현재 개선되어 있으나 copy/title 차이와 helper reserved height를 실제 화면에서 확인 필요. |
-| 7 | 비밀번호 변경 완료 | `773:12009` | `PasswordChangePage` | 부분 불일치 | 버튼 enabled/field neutral 상태는 구조상 가능. title copy 차이 유지. |
-| 8 | 비밀번호 변경 기존 비밀번호 error | `773:11733` | `PasswordChangePage` | 부분 불일치 | error helper/border는 구현됨. Figma variant의 placeholder-only error와 현재 입력값 유지 정책이 다를 수 있음. |
-| 9 | 비밀번호 변경 새 비밀번호 error | `773:11519` | `PasswordChangePage` | 부분 불일치 | same-as-current error 로직 구현됨. title copy 차이. |
-| 10 | 비밀번호 변경 확인 error | `773:11626` | `PasswordChangePage` | 부분 불일치 | mismatch error 구현됨. title copy 차이. |
-| 11 | 탈퇴 dialog | `773:11838` | `_DeleteAccountDialog` | 대체로 양호 | dialog 크기는 Figma fractional 값을 따름. warning icon이 Figma yellow 계열인지 현재 destructive red 계열인지 재확인 필요. |
+| 5 | 비밀번호 변경 empty | `773:11124` | `PasswordChangePage` | 고정 | 코드상 title이 `비밀번호 수정`으로 Figma copy를 이미 따름. field top/gap은 screenshot diff 시 확인. |
+| 6 | 비밀번호 변경 typing | `773:11134` | `PasswordChangePage` | 고정 | title `비밀번호 수정` 일치, neutral helper 처리 로직 반영. helper reserved height만 screenshot diff. |
+| 7 | 비밀번호 변경 완료 | `773:12009` | `PasswordChangePage` | 고정 | 버튼 enabled/field neutral 상태 구현, title copy 일치. |
+| 8 | 비밀번호 변경 기존 비밀번호 error | `773:11733` | `PasswordChangePage` | 고정 | error helper/border 구현. title copy 일치. Figma variant placeholder-only error와 현재 입력값 유지 정책 차이는 운영 정책으로 남김. |
+| 9 | 비밀번호 변경 새 비밀번호 error | `773:11519` | `PasswordChangePage` | 고정 | same-as-current error 로직 구현, title copy 일치. |
+| 10 | 비밀번호 변경 확인 error | `773:11626` | `PasswordChangePage` | 고정 | mismatch error 구현, title copy 일치. |
+| 11 | 탈퇴 dialog | `773:11838` | `_DeleteAccountDialog` | 고정 | dialog 크기는 Figma fractional 값을 따름. warning icon color는 spec(secondary-yellow)으로 확정됨. |
 | 12 | 탈퇴 완료 | `773:11070` | `DeleteAccountCompletePage` | 대체로 양호 | centered text/redirect 구현. weight와 exact y는 screenshot diff 필요. |
 | 13 | 알림 empty | `426:19287` | `NotificationsPage` empty state | 양호 | empty copy/text-only 구조 일치. 현재 mock 기본은 filled라 empty state는 삭제 후 접근. |
-| 14 | 알림 filled | `426:19293` | `NotificationsPage` + `NotificationCard` | 부분 고정 | Figma 6종 mock/copy, `weeklyReport`/`missionRejected` type color, report/time deeplink가 반영됨. list start y/card gap은 screenshot diff 필요. |
-| 15 | 알림 swipe delete | `773:12916` | `NotificationCard` drag state | 양호 | custom horizontal drag + reveal 구현. max slide는 Figma scale 값을 따름. |
-| 16 | 알림 delete confirm | `773:12903` | `_DeleteNotificationDialog` | 대체로 양호 | dialog 구조, scrim token, secondary-yellow warning icon이 구현됨. fractional sizing은 screenshot diff 필요. |
+| 14 | 알림 filled | `426:19293` | `NotificationsPage` + `NotificationCard` | 부분 고정 | Figma 6종 mock/copy, `weeklyReport`/`missionRejected` type color, `createdAt`-기반 `timeAgo`, report/time deeplink가 반영됨. list start y/card gap은 screenshot diff 필요. |
+| 15 | 알림 swipe delete | `773:12916` | `NotificationCard` drag state | 고정 | custom horizontal drag + reveal 구현, swipe delete threshold가 spec(0.4)으로 좁혀짐. |
+| 16 | 알림 delete confirm | `773:12903` | `_DeleteNotificationDialog` | 고정 | dialog 구조, scrim token, secondary-yellow warning icon이 구현됨. fractional sizing은 screenshot diff 시 확인. |
 | 17 | 사용 리포트 | `662:11497` | `ReportPage` | 부분 고정 | Side Panel y offset은 `SafeArea(top:false)`와 top padding 0으로 개선됨. cat은 `assets/icons/cat.svg`로 렌더링되고 주요 card caption/summary copy, row time text, on-plan marker가 보강됨. card heights/chart/list/cat fidelity는 screenshot diff 필요. |
 | 18 | 시간 설정 intro v1 | `695:8850` | `TimeSetupIntroPage` | 고정 | `/child-home/time-setup` 기본 flow가 intro에서 시작하고 `시작` CTA로 schedule register에 진입함. |
 | 19 | 스케줄 등록 empty | `695:8924` | `ScheduleRegisterPage` | 부분 고정 | Grid label/color/hatch가 Figma 방향으로 수정됨. 전체 frame 높이와 scroll 처리만 screenshot diff 필요. |
@@ -212,17 +261,19 @@ Phase 4에서는 미션 수행 flow가 `11-mission.md`의 camera/photo/submitted
 
 1. 시간 설정 v1/v2 route walkthrough: intro -> schedule -> weekly -> daily -> review -> complete, v2 auto-calc/remaining budget 포함.
 2. 시간 설정 screenshot diff: grid height, weekly row gaps, daily y offset, review read-only layout, confirm variants.
-3. Phase 3 잔여: 리포트 cat asset fidelity/card-chart-list diff, notification swipe threshold, time confirm empty/onboarding 접근 정책과 tooltip/pill diff.
+3. Phase 3 잔여: 리포트 cat asset fidelity/card-chart-list diff, time confirm empty 접근 정책과 pill diff (notification swipe threshold와 onboarding variant 제거는 이번 사이클에 반영됨).
 4. Phase 4 잔여: 미션 native camera device walkthrough/screenshot diff, rejected detail 디자인 결정.
 5. Phase 5: 전체 53개 route 재감사, analyzer/test, 문서 최종 갱신.
+6. Phase 6 후속: `Api*Repository` 메서드 dio 구현, refresh-token rotation/401 retry interceptor, mission auto-approve Timer를 실제 알림 흐름으로 교체, `PhotoUploadService` 실제 multipart 업로드 연결.
 
 ## Phase 작업 상태
 
 | Phase | 범위 | 상태 |
 |---|---|---|
-| 0. 공통 기반/레거시 | AppBar, intro icon, onboarding dismiss, 시간 설정 공통 컴포넌트 기반 | 완료 / screenshot 재확인 필요 |
-| 1. 홈/Auth/계정 | #1-12 | 완료 반영. Figma에 없는 login/signup과 password copy 결정은 후속 판단 |
+| 0. 공통 기반/레거시 | AppBar, intro icon, onboarding 제거(이번 사이클), 시간 설정 공통 컴포넌트 기반 | 완료 / screenshot 재확인 필요 |
+| 1. 홈/Auth/계정 | #1-12 | 완료 반영. Figma에 없는 login/signup은 별도 디자인 필요. 비밀번호 변경 title은 `비밀번호 수정`으로 Figma copy 따름 |
 | 2. 시간 설정 v1/v2 | #18-42 | 완료 반영. walkthrough와 pixel diff는 남음 |
 | 3. 알림/리포트/시간확인 | #13-17, #43-45 | 완료 반영. 알림 6종/delete icon, 리포트 y/copy/cat SVG/row indicator, 시간확인 empty/divider/tooltip 개선 완료. cat fidelity, 접근 정책, screenshot diff 남음 |
 | 4. 미션 | #46-53 | 대부분 반영. camera/photo/submitted/completed flow는 코드/스펙 기준 고정 또는 대체로 고정. rejected detail은 Figma/product design gap으로 미해결 |
 | 5. 통합 검증 | 전체 53개 | 대기 |
+| 6. 백엔드 통합 준비 | data layer scaffolding (Result/Env/Dio/Repository/PhotoUploadService) | 완료. 실제 API 와이어링은 `Api*Repository` 메서드 구현 시작 시 진행 |
