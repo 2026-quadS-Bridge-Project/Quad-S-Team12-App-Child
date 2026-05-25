@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
-import '../../../../core/widgets/buttons/bridge_pill_icon_button.dart';
-import '../../../../core/widgets/feedback/bridge_empty_state.dart';
 import '../../../../core/widgets/feedback/bridge_onboarding_tooltip.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../../../core/widgets/layout/bridge_day_row.dart';
@@ -17,7 +15,7 @@ import '../../state/time_confirm_controller.dart';
 /// Read-only review of the parent-set time schedule.
 ///
 /// Three visual variants are driven by [TimeConfirmController.data]:
-///   * empty   — no schedule set by parent → centered [BridgeEmptyState]
+///   * empty   — no schedule set by parent → centered text-only empty state
 ///   * filled  — weekly total + per-day allocation rows
 ///   * onboarding — filled + onboarding tooltip anchored to 수정하기 pill
 ///
@@ -70,9 +68,9 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
   void _showRequestSnack() {
     _controller.requestModification();
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('부모님께 수정 요청을 보냈어요.')));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('수정 요청 기능은 곧 연결될 예정이에요.')));
   }
 
   @override
@@ -113,9 +111,17 @@ class _EmptyVariant extends StatelessWidget {
       child: Column(
         children: <Widget>[
           const Expanded(
-            child: BridgeEmptyState(
-              message: '이번달 시간규칙이\n설정되지 않았습니다.',
-              icon: Icons.event_busy_outlined,
+            child: Center(
+              child: Text(
+                '이번달 시간규칙이 설정되지 않았습니다.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  height: 1.445,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.gray300,
+                ),
+              ),
             ),
           ),
           Padding(
@@ -145,108 +151,168 @@ class _FilledVariant extends StatelessWidget {
   Widget build(BuildContext context) {
     // schedule is non-null here — `isEmpty` short-circuits in the parent.
     final schedule = data.schedule!;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          const SizedBox(height: 16),
-          BridgeTotalTimeCard(
-            title: '2월 1주 사용 시간',
-            hours: schedule.weeklyTotalHours,
-            minutes: schedule.weeklyTotalMinutes,
-          ),
-          const SizedBox(height: 16),
-          Container(height: 7, color: AppColors.gray150),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                '일간 사용 계획',
-                style: AppTypography.heading2Bold.copyWith(
-                  color: AppColors.gray800,
-                ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: BridgeTotalTimeCard(
+                variant: BridgeTotalTimeCardVariant.compact,
+                title: '2월 1주 사용 시간',
+                hours: schedule.weeklyHoursAt(0),
+                minutes: schedule.weeklyMinutesAt(0),
               ),
-              Stack(
-                clipBehavior: Clip.none,
+            ),
+            const SizedBox(height: 28),
+            Container(height: 7, color: AppColors.gray150),
+            const SizedBox(height: 38),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
-                  BridgePillIconButton(
-                    label: '수정하기',
-                    icon: Icons.edit_outlined,
-                    variant: BridgePillVariant.ghost,
-                    onPressed: onRequestEdit,
-                  ),
-                  if (data.showOnboarding)
-                    Positioned(
-                      // Body sits below the pill; arrow (topCenter) points up
-                      // at the pill. 36px ≈ pill bottom + spec ~8px gap, so
-                      // the notch tip lands near the pill's bottom edge per
-                      // Figma 662-11249 (y ≈ 323).
-                      top: 36,
-                      right: 0,
-                      child: BridgeOnboardingTooltip(
-                        title: '시간 계획 수정은 어떻게 하나요?',
-                        bullets: const <TextSpan>[
-                          TextSpan(
-                            children: <TextSpan>[
-                              TextSpan(text: '시간 설정은 '),
-                              TextSpan(
-                                text: '주 1회',
-                                style: TextStyle(
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                              TextSpan(
-                                text: ' 진행돼요. 이번주 시간계획이 미흡했다면 다음주에 반영해서 수정해봐요!',
-                              ),
-                            ],
-                          ),
-                          TextSpan(
-                            children: <TextSpan>[
-                              TextSpan(text: '꼭 필요한 경우에 부모님의 '),
-                              TextSpan(
-                                text: '시간 설정 탭',
-                                style: TextStyle(
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                              TextSpan(text: '에서 허락을 받아, 수정할 수 있어요.'),
-                            ],
-                          ),
-                        ],
-                        arrowAlignment: TooltipArrowAlignment.topCenter,
-                        onDismiss: onDismissOnboarding,
-                      ),
+                  Text(
+                    '일간 사용 계획',
+                    style: AppTypography.heading2Bold.copyWith(
+                      color: AppColors.gray800,
                     ),
+                  ),
+                  _RequestEditPill(onPressed: onRequestEdit),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.separated(
-              padding: EdgeInsets.zero,
-              itemCount: schedule.dayAllocations.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final alloc = schedule.dayAllocations[index];
-                return BridgeDayRow(
-                  daysLabel: alloc.daysLabel,
-                  hours: alloc.hours,
-                  minutes: alloc.minutes,
-                  onEdit: null,
-                  showPencil: false,
-                );
-              },
+            ),
+            const SizedBox(height: 15),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: ListView.separated(
+                  padding: EdgeInsets.zero,
+                  itemCount: schedule.dayAllocations.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 15),
+                  itemBuilder: (context, index) {
+                    final alloc = schedule.dayAllocations[index];
+                    return BridgeDayRow(
+                      daysLabel: alloc.daysLabel,
+                      hours: alloc.hours,
+                      minutes: alloc.minutes,
+                      onEdit: null,
+                      showPencil: false,
+                    );
+                  },
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              child: BridgeButton(label: '확인', onPressed: onConfirm),
+            ),
+          ],
+        ),
+        if (data.showOnboarding)
+          Positioned(
+            // Body sits below the pill; arrow (topCenter) points up at the
+            // pill per Figma 662-11249. Kept as a top-level overlay so it
+            // paints above the plan cards.
+            top: 207,
+            right: 24,
+            child: _TimeConfirmOnboardingTooltip(
+              onDismiss: onDismissOnboarding,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 24),
-            child: BridgeButton(label: '확인', onPressed: onConfirm),
+      ],
+    );
+  }
+}
+
+class _TimeConfirmOnboardingTooltip extends StatelessWidget {
+  const _TimeConfirmOnboardingTooltip({required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return BridgeOnboardingTooltip(
+      title: '시간 계획 수정은 어떻게 하나요?',
+      maxWidth: 255,
+      bullets: const <TextSpan>[
+        TextSpan(
+          children: <TextSpan>[
+            TextSpan(text: '시간 설정은 '),
+            TextSpan(
+              text: '주 1회',
+              style: TextStyle(decoration: TextDecoration.underline),
+            ),
+            TextSpan(text: ' 진행돼요. 이번주 시간계획이 미흡했다면 다음주에 반영해서 수정해봐요!'),
+          ],
+        ),
+        TextSpan(
+          children: <TextSpan>[
+            TextSpan(text: '꼭 필요한 경우에 부모님의 '),
+            TextSpan(
+              text: '시간 설정 탭',
+              style: TextStyle(decoration: TextDecoration.underline),
+            ),
+            TextSpan(text: '에서 허락을 받아, 수정할 수 있어요.'),
+          ],
+        ),
+      ],
+      arrowAlignment: TooltipArrowAlignment.topCenter,
+      onDismiss: onDismiss,
+    );
+  }
+}
+
+class _RequestEditPill extends StatelessWidget {
+  const _RequestEditPill({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  static const double _height = 31;
+  static const double _radius = 7;
+  static const double _iconSize = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final BorderRadius borderRadius = BorderRadius.circular(_radius);
+    final TextStyle textStyle = AppTypography.labelMedium.copyWith(
+      color: AppColors.gray300,
+    );
+
+    return Semantics(
+      button: true,
+      label: '수정하기',
+      hint: '부모님께 수정 요청을 보냅니다.',
+      child: Material(
+        color: AppColors.gray150,
+        borderRadius: borderRadius,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: borderRadius,
+          splashColor: AppColors.gray300.withValues(alpha: 0.12),
+          highlightColor: AppColors.gray300.withValues(alpha: 0.06),
+          child: Container(
+            height: _height,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  Icons.edit_outlined,
+                  size: _iconSize,
+                  color: AppColors.gray300,
+                ),
+                const SizedBox(width: 4),
+                Text('수정하기', style: textStyle),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
