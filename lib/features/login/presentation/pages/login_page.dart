@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
+import '../../../../features/auth/data/models/auth_token.dart';
+import '../../../../features/auth/data/repositories/auth_repository.dart';
 
 enum _LoginErrorType { missingUser, wrongPassword }
 
@@ -18,17 +21,18 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  static const Set<String> _mockUsernames = <String>{'gdg12', 'abcd00'};
-  static const String _mockPassword = 'Gdg123456789!';
+  late final AuthRepository _repository = createAuthRepository();
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   _LoginErrorType? _activeError;
+  bool _isSubmitting = false;
 
   String get _username => _usernameController.text;
   String get _password => _passwordController.text;
-  bool get _canSubmit => _username.isNotEmpty && _password.isNotEmpty;
+  bool get _canSubmit =>
+      _username.isNotEmpty && _password.isNotEmpty && !_isSubmitting;
 
   String? get _errorMessage {
     switch (_activeError) {
@@ -60,31 +64,50 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
-    if (!_mockUsernames.contains(_username)) {
-      setState(() {
-        _activeError = _LoginErrorType.missingUser;
-      });
-      return;
-    }
-
-    if (_password != _mockPassword) {
-      setState(() {
-        _activeError = _LoginErrorType.wrongPassword;
-      });
-      return;
-    }
-
     setState(() {
-      _activeError = null;
+      _isSubmitting = true;
     });
 
-    await AuthSession.saveLogin(username: _username);
+    final Result<AuthToken> result = await _repository.login(
+      username: _username,
+      password: _password,
+    );
+
     if (!mounted) {
       return;
     }
-    // Land on the actual home (donut/empty + missions). `/child-home/onboarding`
-    // is reserved for the first-time parent-connect overlay, not every login.
-    context.go('/child-home');
+
+    switch (result) {
+      case Success<AuthToken>(:final AuthToken data):
+        setState(() {
+          _activeError = null;
+        });
+        await AuthSession.saveLogin(username: data.username);
+        await AuthSession.saveTokens(
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        );
+        if (!mounted) {
+          return;
+        }
+        // Land on the actual home (donut/empty + missions). `/child-home/onboarding`
+        // is reserved for the first-time parent-connect overlay, not every login.
+        context.go('/child-home');
+      case Failure<AuthToken>(:final String message):
+        setState(() {
+          _activeError = _errorTypeFor(message);
+          _isSubmitting = false;
+        });
+    }
+  }
+
+  /// Maps a repository failure [message] back into the local error enum so
+  /// the existing border-color + toast UI keeps working unchanged.
+  _LoginErrorType _errorTypeFor(String message) {
+    if (message == AuthFailureMessages.wrongPassword) {
+      return _LoginErrorType.wrongPassword;
+    }
+    return _LoginErrorType.missingUser;
   }
 
   @override

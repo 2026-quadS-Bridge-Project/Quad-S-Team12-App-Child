@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
+import '../../../../features/auth/data/models/auth_token.dart';
+import '../../../../features/auth/data/repositories/auth_repository.dart';
 
 enum _SignupErrorType {
   invalidUsername,
@@ -32,8 +35,8 @@ class _SignupPageState extends State<SignupPage> {
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])[^\s]{12,15}$',
   );
 
-  // Temporary duplicate-check stub until API wiring is added.
-  static const Set<String> _takenUsernames = <String>{'gdg12'};
+  late final AuthRepository _repository = createAuthRepository();
+  bool _isSubmitting = false;
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -47,8 +50,11 @@ class _SignupPageState extends State<SignupPage> {
   String get _passwordConfirm => _passwordConfirmController.text;
 
   bool get _isUsernameFormatValid => _usernamePattern.hasMatch(_username);
+  // Inline duplicate-detection happens server-side now; the live helper text
+  // only flips after a failed signup attempt surfaces a duplicate failure.
+  bool _serverReportedDuplicate = false;
   bool get _isUsernameDuplicate =>
-      _username.isNotEmpty && _takenUsernames.contains(_username);
+      _username.isNotEmpty && _serverReportedDuplicate;
   bool get _isPasswordValid => _passwordPattern.hasMatch(_password);
   bool get _isPasswordMatched =>
       _password.isNotEmpty &&
@@ -71,7 +77,8 @@ class _SignupPageState extends State<SignupPage> {
       _isUsernameFormatValid &&
       !_isUsernameDuplicate &&
       _isPasswordValid &&
-      _isPasswordMatched;
+      _isPasswordMatched &&
+      !_isSubmitting;
 
   String? get _usernameInlineMessage {
     if (_username.isEmpty) {
@@ -145,6 +152,10 @@ class _SignupPageState extends State<SignupPage> {
           _activeError == _SignupErrorType.duplicatedUsername) {
         _activeError = null;
       }
+      // Re-typing the username clears the stale server-side duplicate flag so
+      // the user can retry with the same (corrected) value without a phantom
+      // helper message stuck on screen.
+      _serverReportedDuplicate = false;
     });
   }
 
@@ -175,13 +186,6 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
-    if (_isUsernameDuplicate) {
-      setState(() {
-        _activeError = _SignupErrorType.duplicatedUsername;
-      });
-      return;
-    }
-
     if (!_isPasswordValid) {
       setState(() {
         _activeError = _SignupErrorType.invalidPassword;
@@ -198,12 +202,42 @@ class _SignupPageState extends State<SignupPage> {
 
     setState(() {
       _activeError = null;
+      _isSubmitting = true;
     });
 
-    // TODO(api): replace stub success with real signup call before saveLogin.
-    await AuthSession.saveLogin(username: _usernameController.text);
-    if (!mounted) return;
-    context.go('/child-home');
+    final Result<AuthToken> result = await _repository.signup(
+      username: _username,
+      password: _password,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (result) {
+      case Success<AuthToken>(:final AuthToken data):
+        await AuthSession.saveLogin(username: data.username);
+        await AuthSession.saveTokens(
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        );
+        if (!mounted) {
+          return;
+        }
+        context.go('/child-home');
+      case Failure<AuthToken>(:final String message):
+        setState(() {
+          _isSubmitting = false;
+          if (message == AuthFailureMessages.duplicatedUsername) {
+            _activeError = _SignupErrorType.duplicatedUsername;
+            _serverReportedDuplicate = true;
+          } else {
+            // Defensive fallback — Mock impl only emits the duplicate failure,
+            // but Api impl may surface additional server-side rule violations.
+            _activeError = _SignupErrorType.invalidUsername;
+          }
+        });
+    }
   }
 
   @override
