@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
+import '../data/listeners/mission_approval_listener.dart';
 import '../data/models/mission.dart';
 import '../data/mock/mission_mock.dart';
 import '../data/repositories/mission_repository.dart';
@@ -31,22 +30,29 @@ class MissionController extends ChangeNotifier {
     required String missionId,
     MissionRepository? repository,
     PhotoUploadService? uploadService,
+    MissionApprovalListener? approvalListener,
   }) : this._(
           MissionMock.byId(missionId),
           repository ?? createMissionRepository(),
           uploadService ?? createPhotoUploadService(),
+          approvalListener ?? createMissionApprovalListener(),
         );
 
-  MissionController._(Mission mission, this._repository, this._uploadService)
-      : _mission = mission,
+  MissionController._(
+    Mission mission,
+    this._repository,
+    this._uploadService,
+    this._approvalListener,
+  )   : _mission = mission,
         _step = _initialStepFor(mission);
 
   final MissionRepository _repository;
   final PhotoUploadService _uploadService;
+  final MissionApprovalListener _approvalListener;
   Mission _mission;
   MissionFlowStep _step;
   final List<String> _capturedPhotoPaths = [];
-  Timer? _autoApproveTimer;
+  MissionApprovalSubscription? _approvalSubscription;
   bool _disposed = false;
   bool _isLoading = false;
   String? _errorMessage;
@@ -106,7 +112,8 @@ class MissionController extends ChangeNotifier {
   /// Mock repo resolves immediately; api repo will hit the network. On
   /// success the controller applies the same self-confirm vs. AI-auto-approve
   /// transitions the pre-refactor implementation used. The auto-approve
-  /// [Timer] remains mock-UX-only and is cancelled in [dispose].
+  /// channel is delegated to [_approvalListener] (mock fires after 2s; the
+  /// api impl will wire WebSocket/SSE later) and is cancelled in [dispose].
   Future<void> submit({bool? aiAutoApprove}) async {
     _isLoading = true;
     _errorMessage = null;
@@ -130,20 +137,24 @@ class MissionController extends ChangeNotifier {
           );
           _step = MissionFlowStep.submitted;
 
-          // Simulate async review for mock UX. Cancellable via [dispose] so we
-          // never call notifyListeners() on a disposed ChangeNotifier.
-          _autoApproveTimer?.cancel();
+          // Delegate the auto-approve transition to the listener. Mock impl
+          // fires after 2s for aiAuto and stays silent otherwise, preserving
+          // the original inline-Timer behavior verbatim.
+          _approvalSubscription?.cancel();
           final bool shouldAutoApprove = aiAutoApprove ??
               (_mission.confirmationMethod == ConfirmationMethod.aiAuto);
           if (!completesImmediately && shouldAutoApprove) {
-            _autoApproveTimer = Timer(const Duration(seconds: 2), () {
-              if (_disposed) return;
-              if (_step == MissionFlowStep.submitted &&
-                  _mission.status == MissionStatus.reviewing) {
-                _mission = _mission.copyWith(status: MissionStatus.completed);
+            _approvalSubscription = _approvalListener.subscribe(
+              missionId: _mission.id,
+              confirmationMethod: _mission.confirmationMethod,
+              onApproval: (MissionStatus status) {
+                if (_disposed) return;
+                if (_step != MissionFlowStep.submitted) return;
+                if (_mission.status != MissionStatus.reviewing) return;
+                _mission = _mission.copyWith(status: status);
                 notifyListeners();
-              }
-            });
+              },
+            );
           }
         case Failure<Mission>(message: final String message):
           _errorMessage = message;
@@ -169,6 +180,15 @@ class MissionController extends ChangeNotifier {
     }
   }
 
+  /// Clears the current [errorMessage] so re-entry into an error-bearing
+  /// state can surface a fresh failure (e.g. after a SnackBar has been
+  /// shown). No-op when there is no active error.
+  void clearError() {
+    if (_errorMessage == null) return;
+    _errorMessage = null;
+    if (!_disposed) notifyListeners();
+  }
+
   void goBack() {
     switch (_step) {
       case MissionFlowStep.cameraPrompt:
@@ -187,8 +207,8 @@ class MissionController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _autoApproveTimer?.cancel();
-    _autoApproveTimer = null;
+    _approvalSubscription?.cancel();
+    _approvalSubscription = null;
     super.dispose();
   }
 

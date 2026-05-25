@@ -39,12 +39,26 @@ class _MissionInfoPageState extends State<MissionInfoPage> {
   void initState() {
     super.initState();
     _controller = MissionController(missionId: widget.missionId);
+    _controller.addListener(_listenForErrors);
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_listenForErrors);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Surfaces controller errors as a SnackBar and clears them so the next
+  /// failure can fire again. The `mounted` guard prevents post-dispose
+  /// ScaffoldMessenger lookups when the page is being torn down.
+  void _listenForErrors() {
+    final String? message = _controller.errorMessage;
+    if (message == null || !mounted) return;
+    _controller.clearError();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -239,9 +253,11 @@ class _MissionPerformInfoTab extends StatelessWidget {
             fullWidth: true,
             // No rejected-detail node exists in Figma — disable the CTA so
             // rejected missions can't enter the perform flow until a retry
-            // design is supplied.
+            // design is supplied. Also disabled while the controller is
+            // mid-async (e.g. submit in flight) to prevent re-entry.
             onPressed:
-                controller.mission.status == MissionStatus.rejected
+                controller.mission.status == MissionStatus.rejected ||
+                        controller.isLoading
                 ? null
                 : controller.goToCameraPrompt,
           ),
