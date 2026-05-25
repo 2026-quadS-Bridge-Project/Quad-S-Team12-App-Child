@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -11,6 +12,7 @@ import '../../../../core/widgets/charts/bridge_pie_chart.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../data/mock/usage_report_mock.dart';
 import '../../data/models/usage_report.dart';
+import '../../data/repositories/usage_report_repository.dart';
 
 /// Weekly usage report screen.
 ///
@@ -32,12 +34,49 @@ import '../../data/models/usage_report.dart';
 /// (the bottom-nav shell has been removed), so it owns a [BridgeAppBar]
 /// with a back button that pops via `context.pop()`. The in-body weekly
 /// period header (`_WeeklyIntroCard`) is retained per Figma `662:11497`.
-class ReportPage extends StatelessWidget {
+///
+/// Phase 2A: the page now consults [UsageReportRepository] via
+/// [createUsageReportRepository] so backend wiring can be swapped in
+/// without touching the widget tree. The state seed is the synchronous
+/// [UsageReportMock.currentWeek] fixture to avoid a cold-open flicker;
+/// [initState] then dispatches `_load()` which calls the repository and
+/// `setState`s on Success. Failure outcomes silently retain the seed
+/// data until error-surface design lands.
+class ReportPage extends StatefulWidget {
   const ReportPage({super.key});
 
   @override
+  State<ReportPage> createState() => _ReportPageState();
+}
+
+class _ReportPageState extends State<ReportPage> {
+  late final UsageReportRepository _repository = createUsageReportRepository();
+
+  /// Synchronous seed avoids a one-frame empty state on cold open.
+  /// `_load()` overwrites this with whatever the repository returns.
+  late UsageReport _report = UsageReportMock.currentWeek;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final result = await _repository.fetchCurrentWeekReport();
+    if (!mounted) return;
+    switch (result) {
+      case Success<UsageReport>(:final data):
+        setState(() => _report = data);
+      case Failure<UsageReport>():
+        // Retain the seed fixture until an error surface is designed.
+        break;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const UsageReport report = UsageReportMock.currentWeek;
+    final UsageReport report = _report;
 
     return Scaffold(
       backgroundColor: AppColors.background,
