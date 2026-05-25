@@ -1,6 +1,8 @@
 # Bridge-K Child App — API Contract (Draft)
 
-작성일: 2026-05-25
+작성일: 2026-05-25 (refreshed)
+
+> 본 명세는 클라이언트의 `Api*Repository` 구현과 cross-reference로 검증됨. endpoint/path/body/response shape은 코드와 100% 일치. 백엔드 명세 합의 후 변경되는 경우 코드와 본 문서를 동시 업데이트한다.
 
 이 문서는 클라이언트(자녀 앱)가 가정한 백엔드 API 명세 초안이다. 실제 백엔드 명세와는 추후 조율한다. 클라이언트의 `Api*Repository` 구현은 이 문서를 따른다.
 
@@ -244,3 +246,214 @@
 - 페이지네이션이 필요한 endpoint(`/notifications`, `/missions`)는 추후 cursor 기반(`?cursor=...&limit=20`)으로 확장.
 - 실시간 미션 승인 통지는 WebSocket 또는 SSE로 분리. 본 contract는 풀(`GET /missions/:id`) 기반.
 - Refresh token 회전(rotation) 정책: 새 access token 발급 시 refresh token도 새로 발급.
+- `/auth/logout` 클라이언트 호출처는 현재 코드에 없음 (서버 token blocklist 운영 결정 후 추가).
+
+---
+
+## Appendix A: 모델 JSON shape
+
+클라이언트의 `fromJson` / `toJson`이 받아들이는 정확한 wire format. 백엔드가 응답 정의 시 이 shape을 따른다.
+
+### `AuthToken` — Auth login/signup/refresh 응답
+
+```json
+{
+  "accessToken": "eyJhbGciOi...",
+  "refreshToken": "eyJhbGciOi...",
+  "username": "gdg12"
+}
+```
+- `refreshToken`은 선택 (null 허용). `/auth/refresh`도 같은 shape.
+
+### `UserProfile` — GET /user/profile
+
+```json
+{
+  "username": "gdg12",
+  "accountType": "자녀회원",
+  "childCode": "XY785eZ"
+}
+```
+- `accountType` 누락 시 클라이언트는 `'자녀회원'`로 폴백.
+
+### `Mission` — GET /missions/:id, list 응답의 각 row, submit 응답
+
+```json
+{
+  "id": "1",
+  "title": "방청소 하기",
+  "rewardHours": 0,
+  "rewardMinutes": 30,
+  "status": "pendingCheck",
+  "description": "방청소하고 깨끗하진 방 사진 찍기",
+  "assignedBy": "parent",
+  "photoUrls": ["https://cdn.../1.jpg"],
+  "deadline": null,
+  "category": "청소",
+  "categoryOptions": ["루틴", "학습", "운동", "청소", "심부름"],
+  "resetCycle": "매일",
+  "resetCycleOptions": ["매일", "일주일", "한 달"],
+  "confirmationMethod": "childSelf",
+  "confirmationMethodOptions": ["aiAuto", "childSelf", "parentApproval"],
+  "payoutTime": null,
+  "captureInstruction": "깨끗해진 방을 찍어서 올려주세요!"
+}
+```
+- `status` enum: `pendingCheck` / `reviewing` / `completed` / `rejected`. 누락 또는 알 수 없는 값 → `pendingCheck`.
+- `confirmationMethod` enum: `aiAuto` / `childSelf` / `parentApproval`. 누락 → `childSelf`.
+- `*Options` 배열은 미션 편집 UI의 chip row 옵션 — 백엔드가 미션마다 동일한 기본값을 보내거나 아예 안 보내도 됨 (클라이언트가 기본값 가짐).
+- `deadline`은 ISO-8601 또는 null.
+
+### `TimeSchedule` — GET/POST /time-setup, GET /time-confirm/current.schedule
+
+```json
+{
+  "allowedHours": [
+    { "weekday": 0, "hour": 7 },
+    { "weekday": 0, "hour": 8 }
+  ],
+  "weeklyTotals": [
+    { "weekIndex": 0, "hours": 15, "minutes": 0 },
+    { "weekIndex": 1, "hours": 15, "minutes": 0 },
+    { "weekIndex": 2, "hours": 15, "minutes": 0 },
+    { "weekIndex": 3, "hours": 15, "minutes": 30 }
+  ],
+  "dayAllocations": [
+    {
+      "daysLabel": "월,수,금",
+      "weekdayIndices": [0, 2, 4],
+      "hours": 3,
+      "minutes": 0
+    }
+  ]
+}
+```
+- `weekday`/`weekdayIndices`: `0..6` (월=0 ... 일=6).
+- `hour`: `0..23` (UI는 7..23만 노출).
+- `weekIndex`: `0..3` (이번 달의 1~4주차).
+- `daysLabel`: 표시용 — 백엔드는 `weekdayIndices`만 채워줘도 클라이언트가 `'월,수,금'` 형태로 조립 가능 (현재는 둘 다 받음).
+
+### `TimeConfirmData` — GET /time-confirm/current
+
+```json
+{ "schedule": null | TimeSchedule }
+```
+- `null`이면 empty 상태 (부모가 아직 미설정).
+
+### `NotificationItem` — GET /notifications row
+
+```json
+{
+  "id": "weekly-report-20260520",
+  "type": "weeklyReport",
+  "title": "위클리 사용 리포트",
+  "message": "2월 1주차 사용 분석이 담긴 리포트가 도착했어요!\n리포트를 통해 더 나은 계획을 세워봐요.",
+  "createdAt": "2026-05-25T14:30:00Z",
+  "actionLabel": "확인하러 가기",
+  "deeplink": "/child-home/report"
+}
+```
+- `type` enum: `weeklyReport` / `timeConfigured` / `missionCompleted` / `missionConfirmationRequested` / `missionRejected`.
+- `actionLabel` 누락 시 클라이언트 폴백 `'확인하러 가기'`.
+- `deeplink` 누락 시 클라이언트가 `type` 기반 fallback route 사용.
+- `createdAt`은 ISO-8601 UTC (`Z` 또는 `+00:00`).
+
+### `UsageReport` — GET /reports/weekly
+
+```json
+{
+  "weekLabel": "2월 1주차 사용리포트",
+  "plan": {
+    "totalHours": 21,
+    "daySets": [
+      { "daysLabel": "월,수,금", "hoursPerDay": 7 },
+      { "daysLabel": "화,목",   "hoursPerDay": 7 },
+      { "daysLabel": "토,일",   "hoursPerDay": 7 }
+    ]
+  },
+  "dailyRows": [
+    { "dayKor": "월", "plannedMinutes": 420, "actualMinutes": 300 }
+  ],
+  "compliance": {
+    "onPlanPct": 20.0,
+    "overPct":   50.0,
+    "underPct":  30.0
+  },
+  "suggestions": [
+    {
+      "daysLabel": "월,수,금",
+      "suggestedHours": 7,
+      "deltaHours": -1,
+      "tone": "positive"
+    }
+  ]
+}
+```
+- `dailyRows`: 7개 entry (월~일). `deltaMinutes`는 클라이언트가 `actualMinutes - plannedMinutes`로 계산.
+- `compliance.overPct`: 클라이언트가 "계획 이행률 NN%" 표시에 사용 (over-plan slice = 이행률 정의).
+- `suggestions.tone` enum: `positive` / `neutral` / `destructive`. 누락 → `neutral`.
+
+---
+
+## Appendix B: 에러 코드 매핑
+
+클라이언트가 분기 로직에 사용하는 `error.code` 목록. 백엔드는 동일 코드 + 한국어 메시지를 발급해야 함 (메시지는 그대로 사용자에게 노출됨).
+
+| code | endpoint | message | 클라이언트 동작 |
+|---|---|---|---|
+| `INVALID_CREDENTIALS` | POST /auth/login | 비밀번호가 일치하지 않아요. | 비밀번호 필드 red border + 토스트 |
+| `USER_NOT_FOUND` | POST /auth/login | 아이디를 다시 확인해 주세요. | 아이디 필드 red border + 토스트 |
+| `INVALID_REFRESH_TOKEN` | POST /auth/refresh | (메시지 무관) | 강제 로그아웃 → 시작 화면 |
+| `DUPLICATE_USERNAME` | POST /auth/signup | 이미 사용 중인 아이디예요. | 아이디 필드 헬퍼 텍스트 + 토스트 |
+| `INVALID_FORMAT` | POST /auth/signup, PATCH /user/password | 아이디/비밀번호 형식이 올바르지 않아요. | 토스트 (클라이언트도 regex로 1차 차단) |
+| `WRONG_CURRENT_PASSWORD` | PATCH /user/password | 현재 비밀번호가 일치하지 않아요. | "현재 비밀번호" 필드 헬퍼 텍스트 (메시지 substring 매칭) |
+| `SAME_AS_CURRENT` | PATCH /user/password | 기존 비밀번호와 다르게 설정해 주세요. | "새 비밀번호" 필드 헬퍼 텍스트 (TODO: 클라이언트 매핑 추가 예정) |
+| `MISSION_NOT_FOUND` | GET /missions/:id | 미션을 찾을 수 없어요. | 토스트 + 이전 화면 유지 |
+| `NO_PHOTOS` | POST /missions/:id/submit | 사진을 한 장 이상 첨부해 주세요. | 토스트 (클라이언트도 빈 리스트 제출 막음) |
+| `INVALID_SCHEDULE` | POST /time-setup | 주별 합이 월 한도와 맞지 않아요. | 토스트 + review 화면 유지 |
+| `ALREADY_REQUESTED` | POST /time-confirm/request-modification | 이미 수정 요청 중이에요. | 수정하기 pill SnackBar |
+| `REPORT_NOT_READY` | GET /reports/weekly | 아직 이번 주 리포트가 준비되지 않았어요. | 토스트 + seed 데이터 유지 |
+| `NOTIFICATION_NOT_FOUND` | DELETE/PATCH /notifications/:id | (메시지 무관) | 토스트 + 로컬 목록 새로고침 |
+| `ALREADY_REGISTERED` | POST /devices | (메시지 무관) | 응답 body에서 새 device id 추출 후 성공 처리 (transfer case) |
+| `PAYLOAD_TOO_LARGE` | POST /uploads/photo | 사진 용량이 너무 커요. | 토스트 + 사진 추가 막음 |
+| `UNSUPPORTED_MEDIA` | POST /uploads/photo | 지원하지 않는 사진 형식이에요. | 토스트 + 사진 추가 막음 |
+
+**기본 폴백** (위 코드에 매칭 안 되는 모든 4xx/5xx):
+- 401 (refresh 후에도 실패) → `'로그인이 만료되었어요. 다시 로그인해 주세요.'`
+- 403 → `'권한이 없어요.'`
+- 404 (위 매핑 외) → `'찾을 수 없어요.'`
+- 5xx → `'잠시 후 다시 시도해 주세요.'`
+- 네트워크/타임아웃 → `'네트워크 연결을 확인해 주세요.'`
+
+---
+
+## Appendix C: 클라이언트 endpoint 호출 매트릭스
+
+각 ApiX*Repository가 호출하는 endpoint 일람 — 코드 grep으로 자동 검증 가능.
+
+| Repository | Method | Endpoint | Body |
+|---|---|---|---|
+| ApiAuthRepository | POST | /auth/login | `{username, password}` |
+| ApiAuthRepository | POST | /auth/signup | `{username, password}` |
+| ApiAuthRepository | POST | /auth/refresh | `{refreshToken}` |
+| ApiMissionRepository | GET | /missions | — |
+| ApiMissionRepository | GET | /missions/:id | — |
+| ApiMissionRepository | POST | /missions/:id/submit | `{photoUrls: [...]}` |
+| ApiTimeSetupRepository | GET | /time-setup/previous-week | — |
+| ApiTimeSetupRepository | GET | /time-setup/current | — |
+| ApiTimeSetupRepository | POST | /time-setup | `TimeSchedule` |
+| ApiTimeConfirmRepository | GET | /time-confirm/current | — |
+| ApiTimeConfirmRepository | POST | /time-confirm/request-modification | `{}` |
+| ApiTimeConfirmRepository | POST | /time-confirm/acknowledge | `{}` |
+| ApiNotificationRepository | GET | /notifications | — |
+| ApiNotificationRepository | DELETE | /notifications/:id | — |
+| ApiNotificationRepository | PATCH | /notifications/:id/read | — |
+| ApiUsageReportRepository | GET | /reports/weekly | — |
+| ApiMyPageRepository | GET | /user/profile | — |
+| ApiMyPageRepository | PATCH | /user/password | `{currentPassword, newPassword}` |
+| ApiMyPageRepository | DELETE | /user/account | — |
+| ApiDeviceRepository | POST | /devices | `{fcmToken, platform}` |
+| ApiDeviceRepository | DELETE | /devices/:id | — |
+| ApiPhotoUploadService | POST | /uploads/photo | multipart `{file, purpose}` |
+
+총 21 endpoint. `dio_config.dart`의 Bearer interceptor가 모든 호출에 토큰을 자동 첨부 (`/auth/*`은 토큰 없어도 동작).
