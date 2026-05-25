@@ -26,6 +26,11 @@ class _MyPageState extends State<MyPage> {
   String _accountType = '자녀회원';
   String _childCode = 'XY785eZ';
 
+  // Guards against double-confirm on the delete-account dialog. The dialog
+  // is dismissed immediately on the first confirm tap, but a same-frame
+  // second tap could still re-enter before the pop animation completes.
+  bool _deletingAccount = false;
+
   @override
   void initState() {
     super.initState();
@@ -93,26 +98,39 @@ class _MyPageState extends State<MyPage> {
   }
 
   Future<void> _handleDeleteAccount() async {
+    // Re-entry guard: a fast double-tap on 확인 could fire before the dialog
+    // pop animation registers. Bail out on the second invocation.
+    if (_deletingAccount) {
+      return;
+    }
+    _deletingAccount = true;
+
     final GoRouter router = GoRouter.of(context);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     // Dismiss the dialog before awaiting the network call so the user sees
     // immediate feedback regardless of which branch we land on.
     context.pop();
 
-    final Result<void> result = await _repository.deleteAccount();
-    if (!mounted) {
-      return;
-    }
-    switch (result) {
-      case Success<void>():
-        await AuthSession.clearLogin();
-        await AuthSession.clearTokens();
-        if (!mounted) {
-          return;
-        }
-        router.push('/mypage/delete-complete');
-      case Failure<void>(:final String message):
-        messenger.showSnackBar(SnackBar(content: Text(message)));
+    try {
+      final Result<void> result = await _repository.deleteAccount();
+      if (!mounted) {
+        return;
+      }
+      switch (result) {
+        case Success<void>():
+          await AuthSession.clearLogin();
+          await AuthSession.clearTokens();
+          if (!mounted) {
+            return;
+          }
+          router.push('/mypage/delete-complete');
+        case Failure<void>(:final String message):
+          messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) {
+        _deletingAccount = false;
+      }
     }
   }
 
