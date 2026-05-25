@@ -82,7 +82,7 @@ class BridgeWeekRow extends StatelessWidget {
                   width: _labelWidth,
                   child: Text(
                     weekLabel,
-                    style: AppTypography.headlineBold.copyWith(
+                    style: AppTypography.headlineSemiBold.copyWith(
                       color: AppColors.inkBlack,
                     ),
                   ),
@@ -138,7 +138,7 @@ class _TimeInline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle valueStyle = AppTypography.headlineBold.copyWith(
+    final TextStyle valueStyle = AppTypography.headlineSemiBold.copyWith(
       color: valueColor,
     );
     final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(

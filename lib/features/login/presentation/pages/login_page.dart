@@ -354,7 +354,7 @@ class _LoginToastWarningIcon extends StatelessWidget {
       child: Center(
         child: Text(
           '!',
-          style: AppTypography.captionBold.copyWith(
+          style: AppTypography.captionSemiBold.copyWith(
             fontSize: 12,
             height: 1,
             letterSpacing: 0,

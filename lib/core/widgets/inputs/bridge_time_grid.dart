@@ -93,7 +93,7 @@ class BridgeTimeGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headerStyle = AppTypography.bodyBold.copyWith(
+    final headerStyle = AppTypography.bodySemiBold.copyWith(
       color: AppColors.gray400,
     );
 

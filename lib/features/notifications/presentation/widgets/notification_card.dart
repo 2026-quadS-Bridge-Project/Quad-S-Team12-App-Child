@@ -151,7 +151,7 @@ class _NotificationCardState extends State<NotificationCard>
                             child: Text(
                               widget.item.title,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.captionBold.copyWith(
+                              style: AppTypography.captionSemiBold.copyWith(
                                 color: style.accentColor,
                                 decoration: TextDecoration.none,
                               ),

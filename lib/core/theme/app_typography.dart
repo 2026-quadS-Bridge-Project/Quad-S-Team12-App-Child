@@ -5,7 +5,7 @@ import 'app_colors.dart';
 abstract final class AppTypography {
   static const String fontFamily = 'Pretendard';
 
-  static const TextStyle heading1Bold = TextStyle(
+  static const TextStyle heading1SemiBold = TextStyle(
     fontFamily: fontFamily,
     fontSize: 24,
     fontWeight: FontWeight.w600,
@@ -59,7 +59,7 @@ abstract final class AppTypography {
     color: AppColors.labelStrong,
   );
 
-  static const TextStyle headlineBold = TextStyle(
+  static const TextStyle headlineSemiBold = TextStyle(
     fontFamily: fontFamily,
     fontSize: 18,
     fontWeight: FontWeight.w600,
@@ -86,7 +86,7 @@ abstract final class AppTypography {
     color: AppColors.labelStrong,
   );
 
-  static const TextStyle bodyBold = TextStyle(
+  static const TextStyle bodySemiBold = TextStyle(
     fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w600,
@@ -113,7 +113,7 @@ abstract final class AppTypography {
     color: AppColors.labelStrong,
   );
 
-  static const TextStyle labelBold = TextStyle(
+  static const TextStyle labelSemiBold = TextStyle(
     fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w600,
@@ -140,7 +140,7 @@ abstract final class AppTypography {
     color: AppColors.labelStrong,
   );
 
-  static const TextStyle captionBold = TextStyle(
+  static const TextStyle captionSemiBold = TextStyle(
     fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w600,
@@ -168,19 +168,19 @@ abstract final class AppTypography {
   );
 
   static const TextTheme theme = TextTheme(
-    displayLarge: heading1Bold,
+    displayLarge: heading1SemiBold,
     displayMedium: heading1Medium,
     displaySmall: heading1Regular,
     headlineLarge: heading2Bold,
     headlineMedium: heading2Medium,
     headlineSmall: heading2Regular,
-    titleLarge: headlineBold,
+    titleLarge: headlineSemiBold,
     titleMedium: headlineMedium,
     titleSmall: headlineRegular,
     bodyLarge: bodyRegular,
     bodyMedium: bodyMedium,
     bodySmall: captionRegular,
-    labelLarge: labelBold,
+    labelLarge: labelSemiBold,
     labelMedium: labelMedium,
     labelSmall: captionMedium,
   );

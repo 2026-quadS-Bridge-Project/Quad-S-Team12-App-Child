@@ -38,7 +38,7 @@ class TimeSetupCompletePage extends StatelessWidget {
               const Spacer(),
               Text(
                 title,
-                style: AppTypography.heading1Bold.copyWith(
+                style: AppTypography.heading1SemiBold.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,
@@ -68,7 +68,7 @@ class TimeSetupCompletePage extends StatelessWidget {
               const SizedBox(height: 40),
               Text(
                 body,
-                style: AppTypography.bodyBold.copyWith(
+                style: AppTypography.bodySemiBold.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,

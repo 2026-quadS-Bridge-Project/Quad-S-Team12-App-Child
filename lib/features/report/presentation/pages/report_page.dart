@@ -348,7 +348,7 @@ class _PlanDaySetRow extends StatelessWidget {
           Expanded(
             child: Text(
               daySet.daysLabel,
-              style: AppTypography.headlineBold.copyWith(
+              style: AppTypography.headlineSemiBold.copyWith(
                 color: AppColors.gray800,
               ),
             ),
@@ -455,7 +455,7 @@ class _DayBreakdownRow extends StatelessWidget {
         children: [
           Text(
             row.dayKor,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -552,7 +552,7 @@ class _PieChartCard extends StatelessWidget {
               ),
               Text(
                 '${compliance.overallCompliancePct.toInt()}%',
-                style: AppTypography.headlineBold.copyWith(
+                style: AppTypography.headlineSemiBold.copyWith(
                   color: AppColors.primary,
                 ),
               ),
@@ -706,7 +706,7 @@ class _SuggestionRow extends StatelessWidget {
         children: [
           Text(
             suggestion.daysLabel,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -755,7 +755,7 @@ class _ReportTimeText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle numberStyle = AppTypography.headlineBold.copyWith(
+    final TextStyle numberStyle = AppTypography.headlineSemiBold.copyWith(
       color: AppColors.gray800,
     );
     final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(

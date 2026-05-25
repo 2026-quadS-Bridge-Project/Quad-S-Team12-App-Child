@@ -302,7 +302,7 @@ class _DeleteDialogTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       '탈퇴하시겠습니까?',
-      style: AppTypography.bodyBold.copyWith(
+      style: AppTypography.bodySemiBold.copyWith(
         color: AppColors.gray800,
         decoration: TextDecoration.none,
       ),

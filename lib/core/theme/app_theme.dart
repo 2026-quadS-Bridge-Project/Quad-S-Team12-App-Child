@@ -43,7 +43,7 @@ abstract final class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.surface,
-          textStyle: AppTypography.labelBold,
+          textStyle: AppTypography.labelSemiBold,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
@@ -58,7 +58,7 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
           ),
-          textStyle: AppTypography.labelBold,
+          textStyle: AppTypography.labelSemiBold,
         ),
       ),
       textButtonTheme: TextButtonThemeData(

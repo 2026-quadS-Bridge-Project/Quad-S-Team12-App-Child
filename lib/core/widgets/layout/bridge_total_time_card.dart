@@ -92,7 +92,7 @@ class BridgeTotalTimeCard extends StatelessWidget {
                   children: [
                     Text(
                       '$hours',
-                      style: AppTypography.heading1Bold.copyWith(
+                      style: AppTypography.heading1SemiBold.copyWith(
                         color: AppColors.primary,
                       ),
                     ),
@@ -106,7 +106,7 @@ class BridgeTotalTimeCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       '$minutes',
-                      style: AppTypography.heading1Bold.copyWith(
+                      style: AppTypography.heading1SemiBold.copyWith(
                         color: AppColors.primary,
                       ),
                     ),
@@ -147,7 +147,7 @@ class BridgeTotalTimeCard extends StatelessWidget {
             children: [
               Text(
                 _compactHourText(hours),
-                style: AppTypography.headlineBold.copyWith(
+                style: AppTypography.headlineSemiBold.copyWith(
                   color: AppColors.inkBlack,
                 ),
               ),
@@ -161,7 +161,7 @@ class BridgeTotalTimeCard extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 _twoDigits(minutes),
-                style: AppTypography.headlineBold.copyWith(
+                style: AppTypography.headlineSemiBold.copyWith(
                   color: AppColors.inkBlack,
                 ),
               ),

@@ -309,7 +309,7 @@ class _TodayTimeSection extends StatelessWidget {
                   const Spacer(),
                   Text(
                     '사용 리포트',
-                    style: AppTypography.labelBold.copyWith(
+                    style: AppTypography.labelSemiBold.copyWith(
                       color: AppColors.gray400,
                       fontSize: 14,
                       height: 1.429,
@@ -542,7 +542,7 @@ class _TimeDetailGroup extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
-            style: AppTypography.heading1Bold.copyWith(
+            style: AppTypography.heading1SemiBold.copyWith(
               color: color,
               fontSize: 24,
               height: 1.364,
@@ -584,7 +584,7 @@ class _MissionSection extends StatelessWidget {
               const Spacer(),
               Text(
                 '0개 완료',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray700,
                   fontSize: 14,
                   height: 1.429,
@@ -596,7 +596,7 @@ class _MissionSection extends StatelessWidget {
               const SizedBox(width: AppTokens.smallGap),
               Text(
                 '0',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray200,
                   fontSize: 14,
                   height: 1.429,
@@ -707,7 +707,7 @@ class _MissionListSectionState extends State<_MissionListSection> {
               const Spacer(),
               Text(
                 '$completedCount개 완료',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray700,
                   fontSize: 14,
                   height: 1.429,
@@ -719,7 +719,7 @@ class _MissionListSectionState extends State<_MissionListSection> {
               const SizedBox(width: AppTokens.smallGap),
               Text(
                 '$totalCount',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray200,
                   fontSize: 14,
                   height: 1.429,

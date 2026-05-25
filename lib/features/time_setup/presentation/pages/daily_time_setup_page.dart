@@ -432,7 +432,7 @@ class _ReferenceMetricTile extends StatelessWidget {
             metric.value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -451,7 +451,7 @@ class _ReferenceSectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: AppTypography.headlineBold.copyWith(color: AppColors.gray800),
+      style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
     );
   }
 }
@@ -551,7 +551,7 @@ class _ReferenceTile extends StatelessWidget {
               leading,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.headlineBold.copyWith(color: contentColor),
+              style: AppTypography.headlineSemiBold.copyWith(color: contentColor),
             ),
           ),
           const SizedBox(width: 10),
@@ -566,7 +566,7 @@ class _ReferenceTile extends StatelessWidget {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelBold.copyWith(color: contentColor),
+                  style: AppTypography.labelSemiBold.copyWith(color: contentColor),
                 ),
                 const SizedBox(height: 2),
                 Text(

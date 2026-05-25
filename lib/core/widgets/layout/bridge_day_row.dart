@@ -72,7 +72,7 @@ class BridgeDayRow extends StatelessWidget {
               daysLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.headlineBold.copyWith(
+              style: AppTypography.headlineSemiBold.copyWith(
                 color: AppColors.gray800,
               ),
             ),
@@ -156,7 +156,7 @@ class _TimeInline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle valueStyle = AppTypography.headlineBold.copyWith(
+    final TextStyle valueStyle = AppTypography.headlineSemiBold.copyWith(
       color: valueColor,
     );
     final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(

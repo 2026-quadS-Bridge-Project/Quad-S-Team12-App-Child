@@ -284,7 +284,7 @@ class _DeleteNotificationDialog extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 '알림을 삭제하시겠습니까?',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   fontSize: 14.39,
                   height: 1.5,
                   letterSpacing: 0.082,

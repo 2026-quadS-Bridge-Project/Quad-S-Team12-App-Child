@@ -48,7 +48,7 @@ class TimeSetupIntroPage extends StatelessWidget {
               const SizedBox(height: 109),
               Text(
                 '사용시간 설정',
-                style: AppTypography.heading1Bold.copyWith(
+                style: AppTypography.heading1SemiBold.copyWith(
                   color: AppColors.inkBlack,
                 ),
                 textAlign: TextAlign.center,
@@ -110,7 +110,7 @@ class _StepRow extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           label,
-          style: AppTypography.headlineBold.copyWith(color: AppColors.gray500),
+          style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray500),
         ),
       ],
     );

@@ -55,7 +55,7 @@ class BridgePillIconButton extends StatelessWidget {
     final _PillPalette palette = _resolvePalette();
     final BorderRadius borderRadius = BorderRadius.circular(_radius);
 
-    final TextStyle textStyle = AppTypography.captionBold.copyWith(
+    final TextStyle textStyle = AppTypography.captionSemiBold.copyWith(
       color: palette.foreground,
     );
 

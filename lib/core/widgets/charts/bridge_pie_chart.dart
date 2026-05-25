@@ -100,7 +100,7 @@ class BridgePieChart extends StatelessWidget {
               ),
               Text(
                 '${complianceRatePct!.toInt()}%',
-                style: AppTypography.headlineBold.copyWith(
+                style: AppTypography.headlineSemiBold.copyWith(
                   color: AppColors.primary,
                 ),
               ),
@@ -184,7 +184,7 @@ class BridgePieChart extends StatelessWidget {
             child: Text(
               '${slice.percent.toInt()}%',
               textAlign: TextAlign.center,
-              style: AppTypography.captionBold.copyWith(color: slice.color),
+              style: AppTypography.captionSemiBold.copyWith(color: slice.color),
             ),
           ),
         ),

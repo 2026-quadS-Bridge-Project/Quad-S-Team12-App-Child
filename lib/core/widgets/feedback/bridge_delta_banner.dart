@@ -115,7 +115,7 @@ class BridgeDeltaBanner extends StatelessWidget {
           '$prefix$hours시간 $minutes분 $suffix',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: AppTypography.bodyBold.copyWith(color: textColor),
+          style: AppTypography.bodySemiBold.copyWith(color: textColor),
         ),
       ),
     );
