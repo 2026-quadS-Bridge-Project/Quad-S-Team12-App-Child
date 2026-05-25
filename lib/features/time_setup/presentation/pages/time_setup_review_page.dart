@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/services/calendar_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -31,7 +32,6 @@ class TimeSetupReviewPage extends StatefulWidget {
 }
 
 class _TimeSetupReviewPageState extends State<TimeSetupReviewPage> {
-  static const String _monthLabel = '2월';
   static const double _sectionHeaderGap = 20;
 
   TimeSetupController? _controller;
@@ -69,6 +69,7 @@ class _TimeSetupReviewPageState extends State<TimeSetupReviewPage> {
   Widget build(BuildContext context) {
     final controller = TimeSetupScope.of(context);
     final schedule = controller.schedule;
+    final String monthLabel = createCalendarService().currentMonthLabel();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -106,7 +107,7 @@ class _TimeSetupReviewPageState extends State<TimeSetupReviewPage> {
                       BridgeTotalTimeCard(
                         variant: BridgeTotalTimeCardVariant.compact,
                         title:
-                            '$_monthLabel ${controller.currentWeekIndex + 1}주차',
+                            '$monthLabel ${controller.currentWeekIndex + 1}주차',
                         hours: controller.currentWeekTotalHours,
                         minutes: controller.currentWeekTotalRemainderMinutes,
                       ),

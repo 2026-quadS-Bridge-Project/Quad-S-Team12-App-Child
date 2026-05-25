@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/services/calendar_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
@@ -165,6 +166,7 @@ class _FilledVariant extends StatelessWidget {
   Widget build(BuildContext context) {
     // schedule is non-null here — `isEmpty` short-circuits in the parent.
     final schedule = data.schedule!;
+    final CalendarService calendar = createCalendarService();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -173,7 +175,8 @@ class _FilledVariant extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: BridgeTotalTimeCard(
             variant: BridgeTotalTimeCardVariant.compact,
-            title: '2월 1주 사용 시간',
+            title:
+                '${calendar.currentMonthLabel()} ${calendar.currentWeekIndex()}주 사용 시간',
             hours: schedule.weeklyHoursAt(0),
             minutes: schedule.weeklyMinutesAt(0),
           ),

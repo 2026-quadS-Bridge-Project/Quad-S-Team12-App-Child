@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:bridge_k/core/services/calendar_service.dart';
 import 'package:bridge_k/core/theme/app_colors.dart';
 import 'package:bridge_k/core/theme/app_typography.dart';
 import 'package:bridge_k/core/widgets/buttons/bridge_button.dart';
@@ -33,14 +34,13 @@ class WeeklyTimeSetupPage extends StatelessWidget {
   static const double _bottomPadding = 24;
   static const double _sectionGap = 24;
   static const double _weekRowGap = 8;
-  // TODO(calendar-service): replace hardcoded '2월' with current-month label
-  // from a shared calendar/locale service. Also applies to the inline '2월
-  // 1주차…' string inside [headerDescription] below.
-  static const String _monthLabel = '2월';
 
   @override
   Widget build(BuildContext context) {
     final TimeSetupController controller = TimeSetupScope.of(context);
+    final CalendarService calendar = createCalendarService();
+    final String monthLabel = calendar.currentMonthLabel();
+    final String weekLabel = calendar.currentWeekLabel();
     final bool canProceed = controller.canProceedToStep3;
     final int totalTimeMinutes = _displayedTotalMinutes(controller);
     final _TimeParts totalTime = _TimeParts.fromMinutes(totalTimeMinutes);
@@ -49,11 +49,11 @@ class WeeklyTimeSetupPage extends StatelessWidget {
       totalMinutes: totalTimeMinutes,
     );
     final String totalTimeTitle = controller.showPastWeekDim
-        ? '$_monthLabel 잔여 시간'
-        : '$_monthLabel 총 사용 시간';
+        ? '$monthLabel 잔여 시간'
+        : '$monthLabel 총 사용 시간';
     final String headerDescription = switch (controller.mode) {
       TimeSetupMode.v2NextWeek =>
-        '2월 1주차에 사용하고 남은 시간으로\n주별 시간 분배를 다시 설정해요!',
+        '$weekLabel에 사용하고 남은 시간으로\n주별 시간 분배를 다시 설정해요!',
       TimeSetupMode.v1Initial => '부모님이 부여한 이번 달 총 사용 시간을\n주별로 분배해요!',
     };
 

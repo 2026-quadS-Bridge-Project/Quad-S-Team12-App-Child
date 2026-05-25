@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/models/result.dart';
+import '../../../../core/services/calendar_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -308,7 +309,7 @@ class _PlanCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '2월 1주차 나의 계획은',
+            '${createCalendarService().currentWeekLabel()} 나의 계획은',
             style: AppTypography.labelMedium.copyWith(color: AppColors.gray400),
           ),
           const SizedBox(height: 4),
