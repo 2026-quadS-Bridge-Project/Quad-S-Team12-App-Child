@@ -23,6 +23,7 @@ class DayAllocation {
   final int minutes;
 
   int get totalMinutes => hours * 60 + minutes;
+  int get totalAllocatedMinutes => totalMinutes * weekdayIndices.length;
 }
 
 /// Per-week total cap. One row per 주차 in the 4-week plan.
@@ -53,6 +54,18 @@ class TimeSchedule {
   int get weeklyTotalCapMinutes =>
       weeklyTotals.fold(0, (sum, w) => sum + w.totalMinutes);
 
+  int weeklyTotalMinutesAt(int weekIndex) {
+    for (final WeeklyTotal total in weeklyTotals) {
+      if (total.weekIndex == weekIndex) {
+        return total.totalMinutes;
+      }
+    }
+    return 0;
+  }
+
+  int weeklyHoursAt(int weekIndex) => weeklyTotalMinutesAt(weekIndex) ~/ 60;
+  int weeklyMinutesAt(int weekIndex) => weeklyTotalMinutesAt(weekIndex) % 60;
+
   /// Aggregate hours portion of all weeks combined.
   /// Kept for backward compatibility with consumers that read a single pair.
   int get totalWeeklyHours => weeklyTotalCapMinutes ~/ 60;
@@ -68,8 +81,11 @@ class TimeSchedule {
   int get weeklyTotalMinutes => totalWeeklyMinutes;
 
   int get allocatedMinutes =>
-      dayAllocations.fold(0, (sum, a) => sum + a.totalMinutes);
-  int get deltaMinutes =>
+      dayAllocations.fold(0, (sum, a) => sum + a.totalAllocatedMinutes);
+
+  int deltaMinutesForWeek(int weekIndex) =>
       allocatedMinutes -
-      weeklyTotalCapMinutes; // over = positive, under = negative
+      weeklyTotalMinutesAt(weekIndex); // over = positive, under = negative
+
+  int get deltaMinutes => deltaMinutesForWeek(0);
 }

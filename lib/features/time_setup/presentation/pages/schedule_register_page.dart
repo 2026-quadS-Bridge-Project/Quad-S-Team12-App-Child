@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
@@ -25,11 +24,38 @@ import '../../state/time_setup_scope.dart';
 class ScheduleRegisterPage extends StatelessWidget {
   const ScheduleRegisterPage({super.key});
 
+  static const String _v1Description =
+      '학교, 학원처럼 휴대폰을 거의 못 쓰는 시간을 등록해서\n사용가능한 시간을 편하게 확인해요';
+  static const String _v2Description =
+      '이전에 등록한 스케줄과 동일하다면 다음을 클릭하고,\n스케줄에 변동이 생겼다면 수정해요!';
+
   /// First hour-of-day represented by row 0 of [BridgeTimeGrid]. Cells
   /// stored on the controller use the literal hour (e.g. 7 for the first
   /// row), while the grid reports `hour` as a 0-based row index. This
   /// constant is the single source of truth for the mapping.
   static const int _visibleHourBase = 7;
+
+  /// 12-hour display labels for model hours 7..23. Row 16 is 23:00, shown
+  /// as `11` to keep the controller's 17-row mapping intact.
+  static const List<String> _visibleHourLabels = [
+    '7',
+    '8',
+    '9',
+    '10',
+    '11',
+    '12',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    '10',
+    '11',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -38,15 +64,11 @@ class ScheduleRegisterPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: BridgeAppBar(
-        title: '시간 설정',
-        // Per Figma 08a 695:8924 Interactions: back chevron pops to entry
-        // (`695:8850`). In v1 the controller never reaches `intro` (the
-        // root page maps the intro step to this same ScheduleRegisterPage
-        // as a defensive fallback), so there is no in-wizard predecessor.
-        // Pop the route to exit the wizard back to the parent (child home).
-        // The root-level `PopScope` mirrors this on Android system back
-        // from the first real step.
-        onBack: () => context.pop(),
+        title: '',
+        // Per Figma 08a 695:8924 Interactions: back chevron pops to the
+        // entry explainer (`695:8850`). The root-level `PopScope` mirrors
+        // this on Android system back from step 1.
+        onBack: () => controller.goToStep(TimeSetupStep.intro),
       ),
       body: SafeArea(
         child: AnimatedBuilder(
@@ -58,6 +80,11 @@ class ScheduleRegisterPage extends StatelessWidget {
   }
 
   Widget _buildBody(BuildContext context, TimeSetupController controller) {
+    final String description = switch (controller.mode) {
+      TimeSetupMode.v1Initial => _v1Description,
+      TimeSetupMode.v2NextWeek => _v2Description,
+    };
+
     final selectedCells = controller.schedule.allowedHours
         .map(
           (cell) => (weekday: cell.weekday, hour: cell.hour - _visibleHourBase),
@@ -76,18 +103,16 @@ class ScheduleRegisterPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          // Title + description verbatim per Figma 08a 695:8924 nodes
-          // 695:8932 (title) and 695:8935 (2-line description).
-          const BridgeStepHeader(
-            step: 1,
-            title: '스케줄 등록',
-            description: '학교, 학원처럼 휴대폰을 거의 못 쓰는 시간을 등록해서\n사용가능한 시간을 편하게 확인해요',
-          ),
+          // Title and mode-aware description per Figma 08a 695:8924 and
+          // 09-time-v2.md §v2-2.
+          BridgeStepHeader(step: 1, title: '스케줄 등록', description: description),
           const SizedBox(height: 24),
           Expanded(
             child: SingleChildScrollView(
               child: BridgeTimeGrid(
                 selected: selectedCells,
+                hours: _visibleHourLabels,
+                startHourOfDay: _visibleHourBase,
                 onToggle: (weekday, hourIndex) => controller.toggleHour(
                   weekday,
                   hourIndex + _visibleHourBase,

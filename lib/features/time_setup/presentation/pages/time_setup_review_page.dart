@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
+import '../../../../core/widgets/buttons/bridge_pill_icon_button.dart';
 import '../../../../core/widgets/icons/bridge_stepper_pills.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../../../core/widgets/layout/bridge_day_row.dart';
 import '../../../../core/widgets/layout/bridge_step_header.dart';
 import '../../../../core/widgets/layout/bridge_total_time_card.dart';
+import '../../data/models/time_schedule.dart';
 import '../../state/time_setup_controller.dart';
 import '../../state/time_setup_scope.dart';
 
@@ -23,19 +26,21 @@ import '../../state/time_setup_scope.dart';
 class TimeSetupReviewPage extends StatelessWidget {
   const TimeSetupReviewPage({super.key});
 
+  static const String _monthLabel = '2월';
+  static const double _sectionHeaderGap = 20;
+
   @override
   Widget build(BuildContext context) {
     final controller = TimeSetupScope.of(context);
     final schedule = controller.schedule;
 
     return Scaffold(
-      backgroundColor: AppColors.gray050,
+      backgroundColor: AppColors.background,
       appBar: BridgeAppBar(
         title: '시간 설정',
         onBack: () => controller.goToStep(TimeSetupStep.dailyAllocation),
       ),
       body: SafeArea(
-        top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppTokens.pageHorizontal,
@@ -43,48 +48,77 @@ class TimeSetupReviewPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 16),
-              // All three pills primary — Figma "완성" frame renders the
-              // reviewed step 3 as fully active.
-              const Center(
-                child: BridgeStepperPills(currentStep: 3, totalSteps: 3),
-              ),
-              const SizedBox(height: 28),
-              // Title + description verbatim per Figma 08c 695:11487 (review
-              // state shares the same titleset as Step 3 — see spec §"Texts
-              // (verbatim)": "Same as the error frames minus the banner").
-              const BridgeStepHeader(
-                step: 3,
-                title: '이번주 일간 시간 설정',
-                description: '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
-              ),
-              const SizedBox(height: AppTokens.sectionGap),
-              BridgeTotalTimeCard(
-                title: '주별 총 사용시간',
-                hours: schedule.weeklyTotalHours,
-                minutes: schedule.weeklyTotalMinutes,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
               Expanded(
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: schedule.dayAllocations.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppTokens.mediumGap),
-                  itemBuilder: (context, index) {
-                    final alloc = schedule.dayAllocations[index];
-                    return BridgeDayRow(
-                      daysLabel: alloc.daysLabel,
-                      hours: alloc.hours,
-                      minutes: alloc.minutes,
-                      // Read-only review: no edit handler, no pencil.
-                      // Banner omitted because state is balanced.
-                      showPencil: false,
-                    );
-                  },
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 16),
+                      Center(
+                        child: BridgeStepperPills(
+                          currentStep: controller.stepIndex,
+                          totalSteps: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const BridgeStepHeader(
+                        step: 3,
+                        title: '이번주 일간 시간 설정',
+                        description: '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
+                      ),
+                      const SizedBox(height: AppTokens.itemGap),
+                      BridgeTotalTimeCard(
+                        variant: BridgeTotalTimeCardVariant.compact,
+                        title:
+                            '$_monthLabel ${controller.currentWeekIndex + 1}주차',
+                        hours: controller.currentWeekTotalHours,
+                        minutes: controller.currentWeekTotalRemainderMinutes,
+                      ),
+                      const SizedBox(height: AppTokens.sectionGap),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            '일별 시간 분배',
+                            style: AppTypography.heading2Bold.copyWith(
+                              color: AppColors.gray800,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: BridgePillIconButton(
+                                label: '스케줄 보기',
+                                trailingIcon: Icons.arrow_forward,
+                                variant: BridgePillVariant.tonal,
+                                onPressed: () =>
+                                    _openSchedulePreview(context, schedule),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: _sectionHeaderGap),
+                      for (
+                        int index = 0;
+                        index < schedule.dayAllocations.length;
+                        index++
+                      ) ...[
+                        BridgeDayRow(
+                          daysLabel: schedule.dayAllocations[index].daysLabel,
+                          hours: schedule.dayAllocations[index].hours,
+                          minutes: schedule.dayAllocations[index].minutes,
+                          showPencil: false,
+                        ),
+                        if (index < schedule.dayAllocations.length - 1)
+                          const SizedBox(height: AppTokens.mediumGap),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: AppTokens.itemGap),
               BridgeButton(
                 label: '다음',
                 variant: BridgeButtonVariant.primary,
@@ -95,6 +129,112 @@ class TimeSetupReviewPage extends StatelessWidget {
               const SizedBox(height: 24),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSchedulePreview(
+    BuildContext context,
+    TimeSchedule schedule,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.gray200,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  '스케줄 보기',
+                  style: AppTypography.heading2Bold.copyWith(
+                    color: AppColors.gray800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '등록한 사용 가능 시간을 다시 확인해요.',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.gray500,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                for (int weekday = 0; weekday < _weekdayNames.length; weekday++)
+                  _ScheduleSummaryRow(
+                    dayLabel: _weekdayNames[weekday],
+                    selectedHours: schedule.allowedHours
+                        .where((HourCell cell) => cell.weekday == weekday)
+                        .length,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+const List<String> _weekdayNames = <String>['월', '화', '수', '목', '금', '토', '일'];
+
+class _ScheduleSummaryRow extends StatelessWidget {
+  const _ScheduleSummaryRow({
+    required this.dayLabel,
+    required this.selectedHours,
+  });
+
+  final String dayLabel;
+  final int selectedHours;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasHours = selectedHours > 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.gray100,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: <Widget>[
+            Text(
+              dayLabel,
+              style: AppTypography.headlineBold.copyWith(
+                color: hasHours ? AppColors.gray800 : AppColors.gray400,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(width: 1, height: 22, color: AppColors.gray200),
+            const SizedBox(width: 10),
+            Text(
+              hasHours
+                  ? '${selectedHours.toString().padLeft(2, '0')}시간'
+                  : '등록 없음',
+              style: AppTypography.labelBold.copyWith(
+                color: hasHours ? AppColors.gray800 : AppColors.gray400,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -31,11 +31,23 @@ class WeeklyTimeSetupPage extends StatelessWidget {
   static const double _horizontalPadding = 24;
   static const double _topPadding = 16;
   static const double _bottomPadding = 24;
+  static const double _sectionGap = 24;
+  static const double _weekRowGap = 8;
+  static const String _monthLabel = '2월';
 
   @override
   Widget build(BuildContext context) {
     final TimeSetupController controller = TimeSetupScope.of(context);
     final bool canProceed = controller.canProceedToStep3;
+    final int totalTimeMinutes = _displayedTotalMinutes(controller);
+    final _TimeParts totalTime = _TimeParts.fromMinutes(totalTimeMinutes);
+    final bool canAutoCalculate = _canAutoCalculate(
+      controller,
+      totalMinutes: totalTimeMinutes,
+    );
+    final String totalTimeTitle = controller.showPastWeekDim
+        ? '$_monthLabel 잔여 시간'
+        : '$_monthLabel 총 사용 시간';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -67,31 +79,30 @@ class WeeklyTimeSetupPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               BridgeTotalTimeCard(
-                title: '주별 총 사용시간',
-                hours: controller.schedule.totalWeeklyHours,
-                minutes: controller.schedule.totalWeeklyMinutes,
-                // 자동계산 is a Figma-spec'd affordance (Button/Blue/Light
-                // chip that splits the monthly cap evenly across the 4
-                // weekly totals — see 08a §"자동계산 icon button"). The
-                // distribution logic is not yet wired, so render as a
-                // disabled button with a Tooltip explaining unavailability
-                // instead of a misleading enabled affordance.
-                // TODO(backend): implement auto-distribute (split
-                // totalWeeklyCapMinutes / 4 into the 4 weeklyTotals).
-                trailing: Tooltip(
-                  message: '곧 사용 가능한 기능이에요',
-                  child: TextButton(
-                    onPressed: null,
-                    child: Text(
-                      '자동계산',
-                      style: AppTypography.labelBold.copyWith(
-                        color: AppColors.gray300,
-                      ),
+                variant: BridgeTotalTimeCardVariant.compact,
+                title: totalTimeTitle,
+                hours: totalTime.hours,
+                minutes: totalTime.minutes,
+              ),
+              const SizedBox(height: _sectionGap),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    '주별 시간 분배',
+                    style: AppTypography.heading2Bold.copyWith(
+                      color: AppColors.gray800,
                     ),
                   ),
-                ),
+                  _AutoCalculateButton(
+                    onPressed: canAutoCalculate
+                        ? () => _handleAutoCalculate(controller)
+                        : null,
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               // v2 (next-week edit): row 1 is the locked historical `1주차`
               // sourced from `controller.previousWeek` (opacity 0.2, not
               // tappable). Rows 2/3/4 are editable. v1 (initial setup):
@@ -99,33 +110,32 @@ class WeeklyTimeSetupPage extends StatelessWidget {
               if (controller.showPastWeekDim) ...<Widget>[
                 BridgeWeekRow(
                   weekLabel: '1주차',
-                  hours: controller.previousWeek?.weeklyTotals[0].hours ?? 0,
-                  minutes:
-                      controller.previousWeek?.weeklyTotals[0].minutes ?? 0,
+                  hours: _pastWeekTime(controller).hours,
+                  minutes: _pastWeekTime(controller).minutes,
                   onTap: null,
                   isPast: true,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: _weekRowGap),
                 for (int i = 1; i < 4; i++) ...<Widget>[
                   BridgeWeekRow(
                     weekLabel: '${i + 1}주차',
-                    hours: controller.schedule.weeklyTotals[i].hours,
-                    minutes: controller.schedule.weeklyTotals[i].minutes,
+                    hours: _weekTime(controller, i).hours,
+                    minutes: _weekTime(controller, i).minutes,
                     onTap: () =>
                         _openTimeSheet(context, controller, weekIndex: i),
                   ),
-                  if (i < 3) const SizedBox(height: 12),
+                  if (i < 3) const SizedBox(height: _weekRowGap),
                 ],
               ] else
                 for (int i = 0; i < 4; i++) ...<Widget>[
                   BridgeWeekRow(
                     weekLabel: '${i + 1}주차',
-                    hours: controller.schedule.weeklyTotals[i].hours,
-                    minutes: controller.schedule.weeklyTotals[i].minutes,
+                    hours: _weekTime(controller, i).hours,
+                    minutes: _weekTime(controller, i).minutes,
                     onTap: () =>
                         _openTimeSheet(context, controller, weekIndex: i),
                   ),
-                  if (i < 3) const SizedBox(height: 12),
+                  if (i < 3) const SizedBox(height: _weekRowGap),
                 ],
               const Spacer(),
               BridgeButton(
@@ -151,17 +161,14 @@ class WeeklyTimeSetupPage extends StatelessWidget {
   }) async {
     // Seed the bottom sheet with the targeted week's current value when a
     // specific index is supplied; otherwise fall back to the aggregate.
-    final int initialHours = weekIndex != null
-        ? controller.schedule.weeklyTotals[weekIndex].hours
-        : controller.schedule.totalWeeklyHours;
-    final int initialMinutes = weekIndex != null
-        ? controller.schedule.weeklyTotals[weekIndex].minutes
-        : controller.schedule.totalWeeklyMinutes;
+    final _TimeParts initialTime = weekIndex != null
+        ? _weekTime(controller, weekIndex)
+        : _TimeParts.fromMinutes(_displayedTotalMinutes(controller));
 
     final TimeOfDayPick? pick = await BridgeTimeBottomSheet.show(
       context,
-      initialHours: initialHours,
-      initialMinutes: initialMinutes,
+      initialHours: initialTime.hours,
+      initialMinutes: initialTime.minutes,
       // Weekly totals can exceed a single day, so widen the hour wheel.
       maxHours: 168,
     );
@@ -172,4 +179,129 @@ class WeeklyTimeSetupPage extends StatelessWidget {
       weekIndex: weekIndex,
     );
   }
+
+  static const List<int> _v2EditableWeekIndices = <int>[1, 2, 3];
+
+  int _displayedTotalMinutes(TimeSetupController controller) {
+    if (!controller.showPastWeekDim) {
+      return controller.schedule.weeklyTotalCapMinutes;
+    }
+
+    return controller.weeklyDistributionCapMinutes;
+  }
+
+  _TimeParts _pastWeekTime(TimeSetupController controller) {
+    final int minutes =
+        controller.previousWeek?.weeklyTotalMinutesAt(0) ??
+        controller.schedule.weeklyTotalMinutesAt(0);
+    return _TimeParts.fromMinutes(minutes);
+  }
+
+  _TimeParts _weekTime(TimeSetupController controller, int weekIndex) {
+    return _TimeParts.fromMinutes(
+      controller.schedule.weeklyTotalMinutesAt(weekIndex),
+    );
+  }
+
+  bool _canAutoCalculate(
+    TimeSetupController controller, {
+    required int totalMinutes,
+  }) {
+    if (!controller.showPastWeekDim || totalMinutes <= 0) {
+      return false;
+    }
+
+    final List<int> distributedMinutes = _distributedEditableWeekMinutes(
+      totalMinutes,
+      _v2EditableWeekIndices.length,
+    );
+
+    for (int i = 0; i < _v2EditableWeekIndices.length; i++) {
+      final int weekIndex = _v2EditableWeekIndices[i];
+      if (controller.schedule.weeklyTotalMinutesAt(weekIndex) !=
+          distributedMinutes[i]) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _handleAutoCalculate(TimeSetupController controller) {
+    controller.autoDistributeWeeklyTotals();
+  }
+
+  List<int> _distributedEditableWeekMinutes(int totalMinutes, int weekCount) {
+    if (weekCount <= 0) {
+      return const <int>[];
+    }
+
+    final int baseMinutes = ((totalMinutes ~/ weekCount) ~/ 60) * 60;
+    final int remainingMinutes = totalMinutes - (baseMinutes * weekCount);
+
+    return <int>[
+      for (int i = 0; i < weekCount; i++)
+        i == weekCount - 1 ? baseMinutes + remainingMinutes : baseMinutes,
+    ];
+  }
+}
+
+class _AutoCalculateButton extends StatelessWidget {
+  const _AutoCalculateButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  bool get _enabled => onPressed != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color background = _enabled
+        ? AppColors.primaryLight
+        : AppColors.gray150;
+    final Color foreground = _enabled ? AppColors.primary : AppColors.gray300;
+    final BorderRadius borderRadius = BorderRadius.circular(7);
+
+    return Semantics(
+      button: true,
+      enabled: _enabled,
+      label: '자동계산',
+      child: Material(
+        color: background,
+        borderRadius: borderRadius,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: borderRadius,
+          splashColor: AppColors.primary.withValues(alpha: 0.12),
+          highlightColor: AppColors.primary.withValues(alpha: 0.06),
+          child: Container(
+            height: 31,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.calculate_outlined, size: 16, color: foreground),
+                const SizedBox(width: 5),
+                Text(
+                  '자동계산',
+                  style: AppTypography.labelMedium.copyWith(color: foreground),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimeParts {
+  const _TimeParts({required this.hours, required this.minutes});
+
+  factory _TimeParts.fromMinutes(int totalMinutes) {
+    final int clamped = totalMinutes.clamp(0, 1 << 31);
+    return _TimeParts(hours: clamped ~/ 60, minutes: clamped % 60);
+  }
+
+  final int hours;
+  final int minutes;
 }

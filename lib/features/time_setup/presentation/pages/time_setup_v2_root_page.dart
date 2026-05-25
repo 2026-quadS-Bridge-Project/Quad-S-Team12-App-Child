@@ -35,7 +35,7 @@ class _TimeSetupV2RootPageState extends State<TimeSetupV2RootPage> {
   void initState() {
     super.initState();
     _controller = TimeSetupController.v2NextWeek(
-      previousWeek: TimeScheduleMock.sampleFilled,
+      previousWeek: TimeScheduleMock.sampleV2PreviousWeek,
     );
   }
 
@@ -45,6 +45,17 @@ class _TimeSetupV2RootPageState extends State<TimeSetupV2RootPage> {
     super.dispose();
   }
 
+  TimeSetupStep? _previousStep(TimeSetupStep current) {
+    return switch (current) {
+      TimeSetupStep.intro => null,
+      TimeSetupStep.scheduleRegister => TimeSetupStep.intro,
+      TimeSetupStep.weeklyTotal => TimeSetupStep.scheduleRegister,
+      TimeSetupStep.dailyAllocation => TimeSetupStep.weeklyTotal,
+      TimeSetupStep.review => TimeSetupStep.dailyAllocation,
+      TimeSetupStep.complete => null,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return TimeSetupScope(
@@ -52,14 +63,24 @@ class _TimeSetupV2RootPageState extends State<TimeSetupV2RootPage> {
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          return switch (_controller.step) {
-            TimeSetupStep.intro => const TimeSetupIntroPage(),
-            TimeSetupStep.scheduleRegister => const ScheduleRegisterPage(),
-            TimeSetupStep.weeklyTotal => const WeeklyTimeSetupPage(),
-            TimeSetupStep.dailyAllocation => const DailyTimeSetupPage(),
-            TimeSetupStep.review => const TimeSetupReviewPage(),
-            TimeSetupStep.complete => const TimeSetupCompletePage(),
-          };
+          final TimeSetupStep? previous = _previousStep(_controller.step);
+          return PopScope(
+            canPop: previous == null,
+            onPopInvokedWithResult: (bool didPop, Object? _) {
+              if (didPop) return;
+              if (previous != null) {
+                _controller.goToStep(previous);
+              }
+            },
+            child: switch (_controller.step) {
+              TimeSetupStep.intro => const TimeSetupIntroPage(),
+              TimeSetupStep.scheduleRegister => const ScheduleRegisterPage(),
+              TimeSetupStep.weeklyTotal => const WeeklyTimeSetupPage(),
+              TimeSetupStep.dailyAllocation => const DailyTimeSetupPage(),
+              TimeSetupStep.review => const TimeSetupReviewPage(),
+              TimeSetupStep.complete => const TimeSetupCompletePage(),
+            },
+          );
         },
       ),
     );

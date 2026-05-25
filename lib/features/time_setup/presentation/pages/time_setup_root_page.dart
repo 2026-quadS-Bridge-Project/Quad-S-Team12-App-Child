@@ -6,6 +6,7 @@ import '../../state/time_setup_scope.dart';
 import 'daily_time_setup_page.dart';
 import 'schedule_register_page.dart';
 import 'time_setup_complete_page.dart';
+import 'time_setup_intro_page.dart';
 import 'time_setup_review_page.dart';
 import 'weekly_time_setup_page.dart';
 
@@ -36,13 +37,13 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
   }
 
   /// Maps the current wizard step to the previous step for the in-wizard
-  /// back gesture. Returns null when the user is already at the first real
-  /// step (`scheduleRegister`) or has finished (`complete`) — in those cases
-  /// the system back gesture is allowed to pop the wizard route.
+  /// back gesture. Returns null when the user is already at the entry
+  /// explainer (`intro`) or has finished (`complete`) — in those cases the
+  /// system back gesture is allowed to pop the wizard route.
   TimeSetupStep? _previousStep(TimeSetupStep current) {
     return switch (current) {
       TimeSetupStep.intro => null,
-      TimeSetupStep.scheduleRegister => null,
+      TimeSetupStep.scheduleRegister => TimeSetupStep.intro,
       TimeSetupStep.weeklyTotal => TimeSetupStep.scheduleRegister,
       TimeSetupStep.dailyAllocation => TimeSetupStep.weeklyTotal,
       TimeSetupStep.review => TimeSetupStep.dailyAllocation,
@@ -61,7 +62,7 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
           return PopScope(
             // Intercept Android system back so back gesture rewinds the
             // wizard one step instead of popping the entire route. When
-            // [_previousStep] returns null (first step / completion) we let
+            // [_previousStep] returns null (entry / completion) we let
             // the route pop normally.
             canPop: previous == null,
             onPopInvokedWithResult: (bool didPop, Object? _) {
@@ -71,10 +72,7 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
               }
             },
             child: switch (_controller.step) {
-              // v1 never constructs into `intro` (that's a v2-only splash) but
-              // the switch must be exhaustive over the enum. If the state ever
-              // appears here it falls back to the first real step.
-              TimeSetupStep.intro => const ScheduleRegisterPage(),
+              TimeSetupStep.intro => const TimeSetupIntroPage(),
               TimeSetupStep.scheduleRegister => const ScheduleRegisterPage(),
               TimeSetupStep.weeklyTotal => const WeeklyTimeSetupPage(),
               TimeSetupStep.dailyAllocation => const DailyTimeSetupPage(),

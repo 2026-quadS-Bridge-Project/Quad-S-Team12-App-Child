@@ -27,7 +27,7 @@ class TimeScheduleMock {
   );
 
   /// Sample filled state matching Figma 08c completion screens
-  /// (21h per week across all 4 weeks, 3 day-sets at 7h each).
+  /// (21h per week across all 4 weeks, 3h per day across 7 weekdays).
   static TimeSchedule get sampleFilled => TimeSchedule(
     allowedHours: {
       // 07~22 every weekday (mon-fri)
@@ -42,26 +42,58 @@ class TimeScheduleMock {
       DayAllocation(
         daysLabel: '월,수,금',
         weekdayIndices: [0, 2, 4],
-        hours: 7,
+        hours: 3,
         minutes: 0,
       ),
       DayAllocation(
         daysLabel: '화,목',
         weekdayIndices: [1, 3],
-        hours: 7,
+        hours: 3,
         minutes: 0,
       ),
       DayAllocation(
         daysLabel: '토,일',
         weekdayIndices: [5, 6],
-        hours: 7,
+        hours: 3,
         minutes: 0,
       ),
     ],
   );
 
+  /// v2 previous-week snapshot: week 1 is already spent (15h) and the full
+  /// month budget totals 60h30m, leaving 45h30m to distribute across weeks 2-4.
+  static TimeSchedule get sampleV2PreviousWeek => TimeSchedule(
+    allowedHours: sampleFilled.allowedHours,
+    weeklyTotals: const <WeeklyTotal>[
+      WeeklyTotal(weekIndex: 0, hours: 15, minutes: 0),
+      WeeklyTotal(weekIndex: 1, hours: 15, minutes: 0),
+      WeeklyTotal(weekIndex: 2, hours: 15, minutes: 0),
+      WeeklyTotal(weekIndex: 3, hours: 15, minutes: 30),
+    ],
+    dayAllocations: const <DayAllocation>[
+      DayAllocation(
+        daysLabel: '월,수,금',
+        weekdayIndices: <int>[0, 2, 4],
+        hours: 2,
+        minutes: 0,
+      ),
+      DayAllocation(
+        daysLabel: '화,목',
+        weekdayIndices: <int>[1, 3],
+        hours: 2,
+        minutes: 0,
+      ),
+      DayAllocation(
+        daysLabel: '토,일',
+        weekdayIndices: <int>[5, 6],
+        hours: 2,
+        minutes: 30,
+      ),
+    ],
+  );
+
   /// Over-budget example for error banner testing
-  /// (allocated 23h/wk vs 21h/wk cap, 4 weeks).
+  /// (allocated 23h/wk vs 21h/wk cap).
   static TimeSchedule get sampleOverBudget => TimeSchedule(
     allowedHours: sampleFilled.allowedHours,
     weeklyTotals: _uniformWeeks(21, 0),
@@ -69,19 +101,19 @@ class TimeScheduleMock {
       DayAllocation(
         daysLabel: '월,수,금',
         weekdayIndices: [0, 2, 4],
-        hours: 8,
+        hours: 3,
         minutes: 0,
       ),
       DayAllocation(
         daysLabel: '화,목',
         weekdayIndices: [1, 3],
-        hours: 7,
+        hours: 3,
         minutes: 0,
       ),
       DayAllocation(
         daysLabel: '토,일',
         weekdayIndices: [5, 6],
-        hours: 8,
+        hours: 4,
         minutes: 0,
       ),
     ],

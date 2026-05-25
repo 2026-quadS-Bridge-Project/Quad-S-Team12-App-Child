@@ -4,9 +4,8 @@ import '../data/mock/time_schedule_mock.dart';
 import '../data/models/time_schedule.dart';
 
 enum TimeSetupStep {
-  /// Pre-step splash. v2-only entry that shows the 3-step description list
-  /// and a `시작` CTA before entering [scheduleRegister]. v1 never enters
-  /// this state — it constructs straight into [scheduleRegister].
+  /// Pre-step splash that shows the 3-step description list and a `시작` CTA
+  /// before entering [scheduleRegister].
   intro,
   scheduleRegister,
   weeklyTotal,
@@ -26,27 +25,67 @@ class TimeSetupController extends ChangeNotifier {
        _previousWeek = null;
 
   /// v2 entry: keeps the immutable [previousWeek] snapshot for the dimmed
-  /// `1주차` row and seeds [_schedule] with the same data so the user starts
-  /// editing from the prior week's plan. Mutations (setWeeklyTotal /
-  /// upsertAllocation / removeAllocation / toggleHour) only touch [_schedule]
-  /// — [_previousWeek] remains untouched so the historical reference can
-  /// always be re-read.
+  /// `1주차` row, while the editable draft keeps weeks 2-4 empty until the
+  /// child manually distributes the remaining monthly budget. Mutations
+  /// (setWeeklyTotal / upsertAllocation / removeAllocation / toggleHour) only
+  /// touch [_schedule] — [_previousWeek] remains untouched so the historical
+  /// reference can always be re-read.
   TimeSetupController.v2NextWeek({required TimeSchedule previousWeek})
-    : _schedule = previousWeek,
+    : _schedule = _draftFromPreviousWeek(previousWeek),
       _previousWeek = previousWeek,
       _mode = TimeSetupMode.v2NextWeek,
       _step = TimeSetupStep.intro;
 
   TimeSchedule _schedule;
   final TimeSchedule? _previousWeek;
-  TimeSetupStep _step = TimeSetupStep.scheduleRegister;
+  TimeSetupStep _step = TimeSetupStep.intro;
   final TimeSetupMode _mode;
+  static const List<int> _allWeekIndices = <int>[0, 1, 2, 3];
+  static const List<int> _v2EditableWeekIndices = <int>[1, 2, 3];
+  static const List<String> _weekdayLabels = <String>[
+    '월',
+    '화',
+    '수',
+    '목',
+    '금',
+    '토',
+    '일',
+  ];
 
   TimeSchedule get schedule => _schedule;
   TimeSchedule? get previousWeek => _previousWeek;
   TimeSetupStep get step => _step;
   TimeSetupMode get mode => _mode;
   bool get showPastWeekDim => _mode == TimeSetupMode.v2NextWeek;
+  int get currentWeekIndex => showPastWeekDim ? 1 : 0;
+  int get currentWeekTotalMinutes =>
+      _schedule.weeklyTotalMinutesAt(currentWeekIndex);
+  int get currentWeekTotalHours => currentWeekTotalMinutes ~/ 60;
+  int get currentWeekTotalRemainderMinutes => currentWeekTotalMinutes % 60;
+  List<int> get editableWeekIndices =>
+      showPastWeekDim ? _v2EditableWeekIndices : _allWeekIndices;
+  int get lockedPastWeekMinutes =>
+      showPastWeekDim ? _previousWeek?.weeklyTotalMinutesAt(0) ?? 0 : 0;
+  int get weeklyDistributionCapMinutes {
+    if (!showPastWeekDim) {
+      return _schedule.weeklyTotalCapMinutes;
+    }
+
+    final int previousMonthCap =
+        _previousWeek?.weeklyTotalCapMinutes ?? _schedule.weeklyTotalCapMinutes;
+    final int remaining = previousMonthCap - lockedPastWeekMinutes;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  int get weeklyDistributionCapHours => weeklyDistributionCapMinutes ~/ 60;
+  int get weeklyDistributionCapRemainderMinutes =>
+      weeklyDistributionCapMinutes % 60;
+  int get editableWeeklyTotalMinutes =>
+      editableWeekIndices.fold<int>(0, _sumWeekMinutesAt);
+  int get editableWeeklyRemainingMinutes =>
+      weeklyDistributionCapMinutes - editableWeeklyTotalMinutes;
+  int get allocationDeltaMinutes =>
+      _schedule.allocatedMinutes - currentWeekTotalMinutes;
   int get stepIndex => switch (_step) {
     // intro is a pre-step splash; the 3-pill stepper still highlights
     // step 1 so the upcoming destination is visually anticipated.
@@ -79,15 +118,23 @@ class TimeSetupController extends ChangeNotifier {
 
   /// Step 2: set the weekly total for one 주차 (or all weeks if [weekIndex]
   /// is null — legacy "set them all to the same value" behaviour, used by
-  /// callers that haven't migrated to per-week input yet).
+  /// callers that haven't migrated to per-week input yet). In v2, the locked
+  /// `1주차` row is never edited; null applies only to the future weeks.
   void setWeeklyTotal({
     required int hours,
     required int minutes,
     int? weekIndex,
   }) {
+    final Set<int> targetWeekIndices = weekIndex == null
+        ? editableWeekIndices.toSet()
+        : <int>{if (_isEditableWeekIndex(weekIndex)) weekIndex};
+    if (targetWeekIndices.isEmpty) {
+      return;
+    }
+
     final List<WeeklyTotal> next = <WeeklyTotal>[
       for (final WeeklyTotal w in _schedule.weeklyTotals)
-        if (weekIndex == null || w.weekIndex == weekIndex)
+        if (targetWeekIndices.contains(w.weekIndex))
           WeeklyTotal(weekIndex: w.weekIndex, hours: hours, minutes: minutes)
         else
           w,
@@ -100,25 +147,133 @@ class TimeSetupController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// All 4 weeks must have a non-zero total before proceeding to allocation.
-  bool get canProceedToStep3 =>
-      _schedule.weeklyTotals.isNotEmpty &&
-      _schedule.weeklyTotals.every((WeeklyTotal w) => w.totalMinutes > 0);
+  /// v1 requires all four weeks to be populated. v2 validates only editable
+  /// weeks 2-4, and their sum must match the remaining cap after locked week 1.
+  bool get canProceedToStep3 {
+    if (_schedule.weeklyTotals.isEmpty) {
+      return false;
+    }
+    if (!showPastWeekDim) {
+      return _schedule.weeklyTotals.every(
+        (WeeklyTotal w) => w.totalMinutes > 0,
+      );
+    }
+
+    final bool allEditableWeeksFilled = editableWeekIndices.every(
+      (int weekIndex) => _schedule.weeklyTotalMinutesAt(weekIndex) > 0,
+    );
+    return weeklyDistributionCapMinutes > 0 &&
+        allEditableWeeksFilled &&
+        editableWeeklyTotalMinutes == weeklyDistributionCapMinutes;
+  }
+
+  void autoDistributeWeeklyTotals() {
+    final List<int> indices = editableWeekIndices;
+    if (indices.isEmpty || weeklyDistributionCapMinutes <= 0) {
+      return;
+    }
+
+    // Figma v2-5 keeps the first future weeks at whole-hour values and puts
+    // the leftover minutes on the final editable week: 45h30m -> 15h / 15h /
+    // 15h30m.
+    final int baseMinutes =
+        ((weeklyDistributionCapMinutes ~/ indices.length) ~/ 60) * 60;
+    final int remainderMinutes =
+        weeklyDistributionCapMinutes - (baseMinutes * indices.length);
+    final Map<int, int> minutesByWeek = <int, int>{
+      for (int i = 0; i < indices.length; i++)
+        indices[i]:
+            baseMinutes + (i == indices.length - 1 ? remainderMinutes : 0),
+    };
+
+    final List<WeeklyTotal> next = <WeeklyTotal>[
+      for (final WeeklyTotal w in _schedule.weeklyTotals)
+        if (minutesByWeek.containsKey(w.weekIndex))
+          _weeklyTotalFromMinutes(w.weekIndex, minutesByWeek[w.weekIndex]!)
+        else
+          w,
+    ];
+    _schedule = TimeSchedule(
+      allowedHours: _schedule.allowedHours,
+      weeklyTotals: next,
+      dayAllocations: _schedule.dayAllocations,
+    );
+    notifyListeners();
+  }
 
   // Step 3: daily allocations
-  void upsertAllocation(DayAllocation alloc) {
-    // Replace allocation with same daysLabel, or append.
-    final list = List<DayAllocation>.from(_schedule.dayAllocations);
-    final idx = list.indexWhere((a) => a.daysLabel == alloc.daysLabel);
-    if (idx >= 0) {
-      list[idx] = alloc;
-    } else {
-      list.add(alloc);
+  void addDailyAllocation(DayAllocation allocation) {
+    final Map<int, int> minutesByDay = _minutesByDay();
+    for (final int weekday in allocation.weekdayIndices) {
+      minutesByDay[weekday] =
+          (minutesByDay[weekday] ?? 0) + allocation.totalMinutes;
     }
+    _setDayAllocationsFrom(minutesByDay);
+  }
+
+  void replaceDailyAllocation({
+    required DayAllocation original,
+    required DayAllocation replacement,
+  }) {
+    final Map<int, int> minutesByDay = _minutesByDay();
+    for (final int weekday in original.weekdayIndices) {
+      final int next = (minutesByDay[weekday] ?? 0) - original.totalMinutes;
+      if (next > 0) {
+        minutesByDay[weekday] = next;
+      } else {
+        minutesByDay.remove(weekday);
+      }
+    }
+    for (final int weekday in replacement.weekdayIndices) {
+      minutesByDay[weekday] = replacement.totalMinutes;
+    }
+    _setDayAllocationsFrom(minutesByDay);
+  }
+
+  void upsertAllocation(DayAllocation alloc) {
+    addDailyAllocation(alloc);
+  }
+
+  Map<int, int> _minutesByDay() {
+    final Map<int, int> minutesByDay = <int, int>{};
+    for (final DayAllocation allocation in _schedule.dayAllocations) {
+      for (final int weekday in allocation.weekdayIndices) {
+        minutesByDay[weekday] =
+            (minutesByDay[weekday] ?? 0) + allocation.totalMinutes;
+      }
+    }
+    return minutesByDay;
+  }
+
+  void _setDayAllocationsFrom(Map<int, int> minutesByDay) {
+    final Map<int, List<int>> daysByMinutes = <int, List<int>>{};
+    for (int weekday = 0; weekday < _weekdayLabels.length; weekday++) {
+      final int minutes = minutesByDay[weekday] ?? 0;
+      if (minutes <= 0) {
+        continue;
+      }
+      daysByMinutes.putIfAbsent(minutes, () => <int>[]).add(weekday);
+    }
+
+    final List<DayAllocation> allocations =
+        daysByMinutes.entries.map((MapEntry<int, List<int>> entry) {
+          final List<int> weekdays = entry.value..sort();
+          final int totalMinutes = entry.key;
+          return DayAllocation(
+            daysLabel: weekdays.map((int i) => _weekdayLabels[i]).join(','),
+            weekdayIndices: List<int>.unmodifiable(weekdays),
+            hours: totalMinutes ~/ 60,
+            minutes: totalMinutes % 60,
+          );
+        }).toList()..sort(
+          (DayAllocation a, DayAllocation b) =>
+              a.weekdayIndices.first.compareTo(b.weekdayIndices.first),
+        );
+
     _schedule = TimeSchedule(
       allowedHours: _schedule.allowedHours,
       weeklyTotals: _schedule.weeklyTotals,
-      dayAllocations: list,
+      dayAllocations: allocations,
     );
     notifyListeners();
   }
@@ -136,9 +291,9 @@ class TimeSetupController extends ChangeNotifier {
   }
 
   bool get isAllocationBalanced =>
-      _schedule.deltaMinutes == 0 && _schedule.dayAllocations.isNotEmpty;
-  bool get isOverBudget => _schedule.deltaMinutes > 0;
-  bool get isUnderBudget => _schedule.deltaMinutes < 0;
+      allocationDeltaMinutes == 0 && _schedule.dayAllocations.isNotEmpty;
+  bool get isOverBudget => allocationDeltaMinutes > 0;
+  bool get isUnderBudget => allocationDeltaMinutes < 0;
 
   // Navigation
   void goToStep(TimeSetupStep next) {
@@ -153,18 +308,45 @@ class TimeSetupController extends ChangeNotifier {
   }
 
   /// Mode-aware reset. v2 must preserve [_previousWeek] (immutable historical
-  /// record) and return to the intro splash so the 3-step explainer plays
-  /// again; v1 has no intro step so it returns straight to [scheduleRegister].
-  /// [_mode] is preserved in both cases — `showPastWeekDim` therefore stays
-  /// consistent with how the controller was constructed.
+  /// record); both flows return to the intro splash so the 3-step explainer
+  /// plays again. [_mode] is preserved in both cases — `showPastWeekDim`
+  /// therefore stays consistent with how the controller was constructed.
   void reset() {
     if (_mode == TimeSetupMode.v2NextWeek) {
-      _schedule = _previousWeek ?? TimeScheduleMock.empty;
+      _schedule = _previousWeek == null
+          ? TimeScheduleMock.empty
+          : _draftFromPreviousWeek(_previousWeek);
       _step = TimeSetupStep.intro;
     } else {
       _schedule = TimeScheduleMock.empty;
-      _step = TimeSetupStep.scheduleRegister;
+      _step = TimeSetupStep.intro;
     }
     notifyListeners();
+  }
+
+  int _sumWeekMinutesAt(int sum, int weekIndex) =>
+      sum + _schedule.weeklyTotalMinutesAt(weekIndex);
+
+  bool _isEditableWeekIndex(int weekIndex) =>
+      editableWeekIndices.contains(weekIndex);
+
+  static TimeSchedule _draftFromPreviousWeek(TimeSchedule previousWeek) {
+    return TimeSchedule(
+      allowedHours: previousWeek.allowedHours,
+      weeklyTotals: <WeeklyTotal>[
+        _weeklyTotalFromMinutes(0, previousWeek.weeklyTotalMinutesAt(0)),
+        for (final int weekIndex in _v2EditableWeekIndices)
+          WeeklyTotal(weekIndex: weekIndex, hours: 0, minutes: 0),
+      ],
+      dayAllocations: previousWeek.dayAllocations,
+    );
+  }
+
+  static WeeklyTotal _weeklyTotalFromMinutes(int weekIndex, int totalMinutes) {
+    return WeeklyTotal(
+      weekIndex: weekIndex,
+      hours: totalMinutes ~/ 60,
+      minutes: totalMinutes % 60,
+    );
   }
 }
