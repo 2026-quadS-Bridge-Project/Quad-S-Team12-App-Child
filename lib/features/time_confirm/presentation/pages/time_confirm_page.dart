@@ -61,12 +61,21 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
     super.dispose();
   }
 
-  void _showRequestSnack() {
-    _controller.requestModification();
+  Future<void> _showRequestSnack() async {
+    // Fire-and-display: mock repo resolves immediately with Success, so the
+    // SnackBar copy stays unchanged. When the real backend lands, update the
+    // copy to reflect actual request status (e.g. "수정 요청을 보냈어요.").
+    await _controller.requestModification();
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('수정 요청 기능은 곧 연결될 예정이에요.')));
+  }
+
+  Future<void> _handleConfirm() async {
+    await _controller.acknowledge();
+    if (!mounted) return;
+    context.pop();
   }
 
   @override
@@ -80,11 +89,11 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
           builder: (context, _) {
             final TimeConfirmData data = _controller.data;
             if (data.isEmpty) {
-              return _EmptyVariant(onClose: () => context.pop());
+              return _EmptyVariant(onClose: _handleConfirm);
             }
             return _FilledVariant(
               data: data,
-              onConfirm: () => context.pop(),
+              onConfirm: _handleConfirm,
               onRequestEdit: _showRequestSnack,
             );
           },
