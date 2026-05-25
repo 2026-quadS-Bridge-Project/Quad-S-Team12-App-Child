@@ -40,8 +40,9 @@ import '../../data/repositories/usage_report_repository.dart';
 /// without touching the widget tree. The state seed is the synchronous
 /// [UsageReportMock.currentWeek] fixture to avoid a cold-open flicker;
 /// [initState] then dispatches `_load()` which calls the repository and
-/// `setState`s on Success. Failure outcomes silently retain the seed
-/// data until error-surface design lands.
+/// `setState`s on Success. Failure outcomes retain the seed data and
+/// surface a one-time SnackBar so the user knows the refresh failed
+/// (no auto-retry).
 class ReportPage extends StatefulWidget {
   const ReportPage({super.key});
 
@@ -56,6 +57,10 @@ class _ReportPageState extends State<ReportPage> {
   /// `_load()` overwrites this with whatever the repository returns.
   late UsageReport _report = UsageReportMock.currentWeek;
 
+  /// Guards the failure SnackBar so we surface it at most once per page
+  /// lifetime (no auto-retry; user can navigate back/in to re-fetch).
+  bool _didNotifyLoadFailure = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,8 +74,13 @@ class _ReportPageState extends State<ReportPage> {
       case Success<UsageReport>(:final data):
         setState(() => _report = data);
       case Failure<UsageReport>():
-        // Retain the seed fixture until an error surface is designed.
-        break;
+        // Retain the seed fixture and notify the user once.
+        if (!_didNotifyLoadFailure) {
+          _didNotifyLoadFailure = true;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('리포트를 새로고침하지 못했어요.')),
+          );
+        }
     }
   }
 
