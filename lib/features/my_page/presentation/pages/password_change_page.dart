@@ -205,7 +205,9 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 375),
+            constraints: const BoxConstraints(
+              maxWidth: AppTokens.mobileFrameWidth,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -285,7 +287,9 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
         child: Align(
           alignment: Alignment.bottomCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 375),
+            constraints: const BoxConstraints(
+              maxWidth: AppTokens.mobileFrameWidth,
+            ),
             child: Padding(
               padding: EdgeInsets.only(
                 left: AppTokens.pageHorizontal,

@@ -178,7 +178,9 @@ class _TimeSetupReviewPageState extends State<TimeSetupReviewPage> {
       context: context,
       backgroundColor: AppColors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTokens.bottomSheetTopRadius),
+        ),
       ),
       builder: (BuildContext sheetContext) {
         return SafeArea(
@@ -249,7 +251,7 @@ class _ScheduleSummaryRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.gray100,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
         ),
         child: Row(
           children: <Widget>[

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/mock/notifications_mock.dart';
 import '../../data/models/notification_item.dart';
@@ -117,7 +118,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
           child: SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 375),
+                constraints: const BoxConstraints(
+                  maxWidth: AppTokens.mobileFrameWidth,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 21),
                   child: _DeleteNotificationDialog(
@@ -161,9 +164,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 375),
+            constraints: const BoxConstraints(
+              maxWidth: AppTokens.mobileFrameWidth,
+            ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTokens.mobileHorizontalPadding,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -227,7 +234,7 @@ class _DeleteNotificationDialog extends StatelessWidget {
         height: 189.705,
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 33, 18, 27),
@@ -332,7 +339,7 @@ class _DeleteDialogButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: filled ? AppColors.primary : AppColors.primaryLight,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
           border: filled
               ? null
               : Border.all(color: AppColors.primary, width: 0.899),
@@ -360,7 +367,7 @@ class _NotificationsTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 52,
+      height: AppTokens.topBarHeight,
       child: Stack(
         children: <Widget>[
           Positioned(

@@ -320,7 +320,7 @@ class _SelectableChip extends StatelessWidget {
 
     return Container(
       height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: AppTokens.mediumGap),
       decoration: BoxDecoration(
         color: bg,
         border: selected ? null : Border.all(color: AppColors.gray200),
@@ -382,7 +382,10 @@ class _DescriptionSection extends StatelessWidget {
         const SizedBox(height: AppTokens.smallGap),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: AppTokens.mediumGap,
+          ),
           decoration: BoxDecoration(
             color: AppColors.gray050,
             border: Border.all(color: AppColors.gray200),
@@ -427,7 +430,9 @@ class _RewardChip extends StatelessWidget {
     }
     if (minutes > 0) {
       if (spans.isNotEmpty) {
-        spans.add(const WidgetSpan(child: SizedBox(width: 8)));
+        spans.add(
+          const WidgetSpan(child: SizedBox(width: AppTokens.smallGap)),
+        );
       }
       spans.add(
         TextSpan(text: minutes.toString().padLeft(2, '0'), style: numberStyle),
@@ -512,7 +517,7 @@ class _CameraPromptView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppTokens.mediumGap),
               // Disabled until at least one photo is captured. Once
               // [addPhoto] runs, the controller auto-transitions to
               // photoPreview so this view won't typically re-render
@@ -677,7 +682,7 @@ class _PhotoPreviewView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppTokens.mediumGap),
               BridgeButton(
                 label: '제출',
                 variant: BridgeButtonVariant.primary,
@@ -749,7 +754,7 @@ class _SubmittedView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppTokens.itemGap),
               Text(
                 subtitle,
                 style: AppTypography.bodyMedium.copyWith(
@@ -767,7 +772,7 @@ class _SubmittedView extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
-                    child: Icon(Icons.check, color: Colors.white, size: 20),
+                    child: Icon(Icons.check, color: AppColors.white, size: 20),
                   ),
                 ),
               ),

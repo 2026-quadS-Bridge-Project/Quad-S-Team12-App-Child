@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/models/notification_item.dart';
 
@@ -133,7 +134,7 @@ class _NotificationCardState extends State<NotificationCard>
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,

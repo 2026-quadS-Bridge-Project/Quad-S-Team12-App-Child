@@ -92,11 +92,13 @@ class _ChildHomeContent extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: visibleHeight),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.pageHorizontal,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
+              const SizedBox(height: AppTokens.mediumGap),
               _TopBar(hasNotification: hasContent),
               // Figma: topbar bottom y=88, content y=108 (empty) / 118 (v2).
               SizedBox(
@@ -111,7 +113,7 @@ class _ChildHomeContent extends StatelessWidget {
               ),
               const SizedBox(height: 50),
               _MissionSection(hasContent: hasContent),
-              if (hasContent) const SizedBox(height: 32),
+              if (hasContent) const SizedBox(height: AppTokens.sectionGap),
             ],
           ),
         ),
@@ -235,7 +237,7 @@ class _TodayTimeSection extends StatelessWidget {
                     letterSpacing: -0.24,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppTokens.smallGap),
                 // Per audit Issue 4 / fix-request #3: the bar-chart "사용 리포트"
                 // entry point must render whenever the user has app content,
                 // regardless of whether a schedule is registered yet.
@@ -269,7 +271,7 @@ class _TodayTimeSection extends StatelessWidget {
                         onPressed: () => context.push('/child-home/report'),
                       ),
                       if (showDonut) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppTokens.smallGap),
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
@@ -331,7 +333,7 @@ class _TodayTimeSection extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
                   boxShadow: const [
                     BoxShadow(
                       color: AppTokens.cardShadowColor,
@@ -370,7 +372,7 @@ class _ScheduleEmptyState extends StatelessWidget {
             '아직 등록된 시간 계획이 없어요.',
             style: AppTypography.bodyMedium.copyWith(color: AppColors.gray500),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppTokens.itemGap),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => context.push('/child-home/time-setup'),
@@ -589,9 +591,9 @@ class _MissionSection extends StatelessWidget {
                   letterSpacing: 0.203,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppTokens.smallGap),
               Container(width: 1, height: 14, color: AppColors.gray200),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppTokens.smallGap),
               Text(
                 '0',
                 style: AppTypography.labelBold.copyWith(
@@ -712,9 +714,9 @@ class _MissionListSectionState extends State<_MissionListSection> {
                   letterSpacing: 0.203,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppTokens.smallGap),
               Container(width: 1, height: 14, color: AppColors.gray200),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppTokens.smallGap),
               Text(
                 '$totalCount',
                 style: AppTypography.labelBold.copyWith(
@@ -729,7 +731,8 @@ class _MissionListSectionState extends State<_MissionListSection> {
           const SizedBox(height: 19),
           for (int index = 0; index < missions.length; index++) ...[
             _MissionCard(data: missions[index]),
-            if (index != missions.length - 1) const SizedBox(height: 12),
+            if (index != missions.length - 1)
+              const SizedBox(height: AppTokens.mediumGap),
           ],
         ],
       ),
@@ -807,7 +810,7 @@ class _MissionCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
         decoration: BoxDecoration(
           color: _isCompleted ? AppColors.gray150 : AppColors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
         ),
         child: Row(
           children: [

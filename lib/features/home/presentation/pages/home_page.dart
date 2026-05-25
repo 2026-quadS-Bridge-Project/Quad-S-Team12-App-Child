@@ -149,7 +149,7 @@ class _BottomActions extends StatelessWidget {
           label: '자녀 회원가입',
           onPressed: () => context.push('/signup'),
         ),
-        SizedBox(height: isCompact ? 14 : 16),
+        SizedBox(height: isCompact ? 14 : AppTokens.itemGap),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -160,7 +160,7 @@ class _BottomActions extends StatelessWidget {
                 letterSpacing: 0.09,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppTokens.smallGap),
             BridgeButton(
               label: '로그인',
               variant: BridgeButtonVariant.textLink,

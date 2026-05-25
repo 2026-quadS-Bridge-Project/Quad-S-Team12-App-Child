@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/buttons/bridge_pill_icon_button.dart';
@@ -225,7 +226,9 @@ class DailyTimeSetupPage extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: AppColors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTokens.bottomSheetTopRadius),
+        ),
       ),
       builder: (BuildContext sheetContext) {
         final double maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.84;
@@ -744,7 +747,7 @@ class _DayRowsFrame extends StatelessWidget {
         : AppColors.primary;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppTokens.errorBannerRadius),
         border: Border.all(color: borderColor, width: 1.2),
       ),
       padding: const EdgeInsets.all(8),

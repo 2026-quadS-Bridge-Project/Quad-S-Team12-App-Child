@@ -33,6 +33,9 @@ class WeeklyTimeSetupPage extends StatelessWidget {
   static const double _bottomPadding = 24;
   static const double _sectionGap = 24;
   static const double _weekRowGap = 8;
+  // TODO(calendar-service): replace hardcoded '2월' with current-month label
+  // from a shared calendar/locale service. Also applies to the inline '2월
+  // 1주차…' string inside [headerDescription] below.
   static const String _monthLabel = '2월';
 
   @override

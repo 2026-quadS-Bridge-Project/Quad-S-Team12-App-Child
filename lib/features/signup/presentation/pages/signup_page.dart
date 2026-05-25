@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
@@ -273,7 +274,9 @@ class _SignupPageState extends State<SignupPage> {
             builder: (BuildContext context, BoxConstraints constraints) {
               return Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 375),
+                  constraints: const BoxConstraints(
+                    maxWidth: AppTokens.mobileFrameWidth,
+                  ),
                   child: SingleChildScrollView(
                     padding: EdgeInsets.zero,
                     child: ConstrainedBox(
@@ -282,7 +285,9 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       child: IntrinsicHeight(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTokens.pageHorizontal,
+                          ),
                           child: Column(
                             children: [
                               BridgeAppBar(
@@ -522,7 +527,7 @@ class _SignupToast extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.gray500,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppTokens.errorBannerRadius),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(

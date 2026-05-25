@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_tokens.dart';
 import '../../theme/app_typography.dart';
 import '../buttons/bridge_button.dart';
 import '../inputs/bridge_weekday_selector.dart';
@@ -137,8 +138,8 @@ class _BridgeTimeAllocBottomSheetState
   static const double _wheelTotalHeight = _wheelItemHeight * _visibleItems;
 
   // Sheet chrome — derived from Figma frame 695-12148.
-  static const double _sheetHeight = 397;
-  static const double _sheetRadius = 24;
+  static const double _sheetHeight = AppTokens.bottomSheetHeight;
+  static const double _sheetRadius = AppTokens.bottomSheetTopRadius;
   static const double _handleTop = 8;
   static const double _handleWidth = 40;
   static const double _handleHeight = 4;

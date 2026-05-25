@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
@@ -209,7 +210,7 @@ class _DeleteAccountDialog extends StatelessWidget {
         height: 211,
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
         ),
         child: Padding(
           padding: const EdgeInsets.only(top: 37, bottom: 30),
@@ -331,7 +332,7 @@ class _DeleteDialogButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: filled ? AppColors.primary : AppColors.primaryLight,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
           border: filled ? null : Border.all(color: AppColors.primary),
         ),
         child: Text(
@@ -409,7 +410,7 @@ class _PasswordRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: AppColors.gray600,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
               ),
               alignment: Alignment.center,
               child: Text(

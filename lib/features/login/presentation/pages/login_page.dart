@@ -257,12 +257,7 @@ class _LoginField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTypography.bodyMedium.copyWith(
-            fontSize: 16,
-            height: 1.5,
-            letterSpacing: 0.0912,
-            color: AppColors.gray600,
-          ),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.gray600),
         ),
         SizedBox(height: labelBottomSpacing),
         Container(
@@ -285,12 +280,7 @@ class _LoginField extends StatelessWidget {
               textCapitalization: TextCapitalization.none,
               inputFormatters: inputFormatters,
               cursorColor: AppColors.black,
-              style: AppTypography.bodyMedium.copyWith(
-                fontSize: 16,
-                height: 1.5,
-                letterSpacing: 0.0912,
-                color: AppColors.black,
-              ),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.black),
               decoration: const InputDecoration(
                 isDense: true,
                 filled: false,
@@ -332,12 +322,7 @@ class _LoginToast extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: AppTypography.labelMedium.copyWith(
-                fontSize: 14,
-                height: 1.429,
-                letterSpacing: 0.203,
-                color: AppColors.white,
-              ),
+              style: AppTypography.labelMedium.copyWith(color: AppColors.white),
             ),
           ),
         ],

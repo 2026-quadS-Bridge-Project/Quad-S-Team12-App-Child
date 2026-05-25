@@ -59,7 +59,7 @@ class TimeSetupCompletePage extends StatelessWidget {
                   child: const Center(
                     child: Icon(
                       Icons.check,
-                      color: Colors.white,
+                      color: AppColors.white,
                       size: _checkIconSize,
                     ),
                   ),
