@@ -5,6 +5,7 @@ import '../data/mock/mission_mock.dart';
 import '../data/repositories/mission_repository.dart';
 import '../../../core/models/result.dart';
 import '../../../core/services/photo_upload_service.dart';
+import '../../../core/widgets/mixins/async_error_listener.dart';
 
 /// Flow steps for the mission detail screen.
 ///
@@ -14,7 +15,8 @@ import '../../../core/services/photo_upload_service.dart';
 /// tab active).
 enum MissionFlowStep { info, cameraPrompt, photoPreview, submitted }
 
-class MissionController extends ChangeNotifier {
+class MissionController extends ChangeNotifier
+    implements AsyncErrorController {
   /// Public constructor.
   ///
   /// [repository] is injectable for tests; production callers can omit it
@@ -63,6 +65,7 @@ class MissionController extends ChangeNotifier {
   bool get canSubmit => _capturedPhotoPaths.isNotEmpty && !_isLoading;
   bool get hasMaxPhotos => _capturedPhotoPaths.length >= 4;
   bool get isLoading => _isLoading;
+  @override
   String? get errorMessage => _errorMessage;
 
   void goToCameraPrompt() {
@@ -183,6 +186,7 @@ class MissionController extends ChangeNotifier {
   /// Clears the current [errorMessage] so re-entry into an error-bearing
   /// state can surface a fresh failure (e.g. after a SnackBar has been
   /// shown). No-op when there is no active error.
+  @override
   void clearError() {
     if (_errorMessage == null) return;
     _errorMessage = null;

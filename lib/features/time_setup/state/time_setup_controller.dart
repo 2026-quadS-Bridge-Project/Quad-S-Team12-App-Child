@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/models/result.dart';
+import '../../../core/widgets/mixins/async_error_listener.dart';
 import '../data/mock/time_schedule_mock.dart';
 import '../data/models/time_schedule.dart';
 import '../data/repositories/time_setup_repository.dart';
@@ -18,7 +19,8 @@ enum TimeSetupStep {
 
 enum TimeSetupMode { v1Initial, v2NextWeek }
 
-class TimeSetupController extends ChangeNotifier {
+class TimeSetupController extends ChangeNotifier
+    implements AsyncErrorController {
   TimeSetupController({
     TimeSchedule? initial,
     TimeSetupMode mode = TimeSetupMode.v1Initial,
@@ -67,6 +69,7 @@ class TimeSetupController extends ChangeNotifier {
   TimeSetupStep get step => _step;
   TimeSetupMode get mode => _mode;
   bool get isSaving => _isSaving;
+  @override
   String? get errorMessage => _errorMessage;
   bool get showPastWeekDim => _mode == TimeSetupMode.v2NextWeek;
   int get currentWeekIndex => showPastWeekDim ? 1 : 0;
@@ -339,6 +342,7 @@ class TimeSetupController extends ChangeNotifier {
   }
 
   /// Clears [errorMessage] so the same failure can re-fire on the next submit.
+  @override
   void clearError() {
     if (_errorMessage == null) return;
     _errorMessage = null;

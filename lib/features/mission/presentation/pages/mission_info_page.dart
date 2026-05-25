@@ -9,6 +9,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/inputs/bridge_photo_tile.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
+import '../../../../core/widgets/mixins/async_error_listener.dart';
 import '../../data/models/mission.dart';
 import '../../state/mission_controller.dart';
 import '../../state/mission_scope.dart';
@@ -32,33 +33,21 @@ class MissionInfoPage extends StatefulWidget {
   State<MissionInfoPage> createState() => _MissionInfoPageState();
 }
 
-class _MissionInfoPageState extends State<MissionInfoPage> {
+class _MissionInfoPageState extends State<MissionInfoPage>
+    with AsyncErrorListenerMixin<MissionInfoPage> {
   late final MissionController _controller;
 
   @override
   void initState() {
     super.initState();
     _controller = MissionController(missionId: widget.missionId);
-    _controller.addListener(_listenForErrors);
+    bindAsyncErrorListener(_controller);
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_listenForErrors);
     _controller.dispose();
     super.dispose();
-  }
-
-  /// Surfaces controller errors as a SnackBar and clears them so the next
-  /// failure can fire again. The `mounted` guard prevents post-dispose
-  /// ScaffoldMessenger lookups when the page is being torn down.
-  void _listenForErrors() {
-    final String? message = _controller.errorMessage;
-    if (message == null || !mounted) return;
-    _controller.clearError();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
@@ -145,7 +134,7 @@ class _InfoTabsBar extends StatelessWidget {
         child: TabBar(
           labelColor: AppColors.textPrimary,
           unselectedLabelColor: AppColors.gray400,
-          labelStyle: AppTypography.bodyBold,
+          labelStyle: AppTypography.bodySemiBold,
           unselectedLabelStyle: AppTypography.bodyMedium,
           indicatorSize: TabBarIndicatorSize.tab,
           indicatorColor: AppColors.textPrimary,
@@ -286,7 +275,7 @@ class _ChipRowSection extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: AppTypography.headlineBold.copyWith(color: AppColors.gray800),
+          style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
         ),
         const SizedBox(height: AppTokens.smallGap),
         Wrap(
@@ -315,7 +304,7 @@ class _SelectableChip extends StatelessWidget {
     final Color bg = selected ? AppColors.primary : AppColors.gray100;
     final Color textColor = selected ? AppColors.white : AppColors.gray600;
     final TextStyle textStyle = selected
-        ? AppTypography.bodyBold.copyWith(color: textColor)
+        ? AppTypography.bodySemiBold.copyWith(color: textColor)
         : AppTypography.bodyMedium.copyWith(color: textColor);
 
     return Container(
@@ -352,7 +341,7 @@ class _PayoutTimeSection extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -377,7 +366,7 @@ class _DescriptionSection extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: AppTypography.headlineBold.copyWith(color: AppColors.gray800),
+          style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
         ),
         const SizedBox(height: AppTokens.smallGap),
         Container(
@@ -414,7 +403,7 @@ class _RewardChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle numberStyle = AppTypography.headlineBold.copyWith(
+    final TextStyle numberStyle = AppTypography.headlineSemiBold.copyWith(
       color: AppColors.primary,
     );
     final TextStyle unitStyle = AppTypography.headlineMedium.copyWith(
@@ -489,7 +478,7 @@ class _CameraPromptView extends StatelessWidget {
               const SizedBox(height: AppTokens.pageTop),
               Text(
                 mission.title,
-                style: AppTypography.heading1Bold,
+                style: AppTypography.heading1SemiBold,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppTokens.itemGap),
@@ -632,7 +621,7 @@ class _PhotoPreviewView extends StatelessWidget {
               const SizedBox(height: AppTokens.pageTop),
               Text(
                 mission.title,
-                style: AppTypography.heading1Bold.copyWith(
+                style: AppTypography.heading1SemiBold.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,
@@ -749,7 +738,7 @@ class _SubmittedView extends StatelessWidget {
               const SizedBox(height: _contentTopGap),
               Text(
                 title,
-                style: AppTypography.heading1Bold.copyWith(
+                style: AppTypography.heading1SemiBold.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,

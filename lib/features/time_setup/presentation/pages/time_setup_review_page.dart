@@ -11,6 +11,7 @@ import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../../../core/widgets/layout/bridge_day_row.dart';
 import '../../../../core/widgets/layout/bridge_step_header.dart';
 import '../../../../core/widgets/layout/bridge_total_time_card.dart';
+import '../../../../core/widgets/mixins/async_error_listener.dart';
 import '../../data/models/time_schedule.dart';
 import '../../state/time_setup_controller.dart';
 import '../../state/time_setup_scope.dart';
@@ -31,38 +32,17 @@ class TimeSetupReviewPage extends StatefulWidget {
   State<TimeSetupReviewPage> createState() => _TimeSetupReviewPageState();
 }
 
-class _TimeSetupReviewPageState extends State<TimeSetupReviewPage> {
+class _TimeSetupReviewPageState extends State<TimeSetupReviewPage>
+    with AsyncErrorListenerMixin<TimeSetupReviewPage> {
   static const double _sectionHeaderGap = 20;
-
-  TimeSetupController? _controller;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final TimeSetupController next = TimeSetupScope.of(context);
-    if (!identical(_controller, next)) {
-      _controller?.removeListener(_listenForErrors);
-      _controller = next;
-      _controller!.addListener(_listenForErrors);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.removeListener(_listenForErrors);
-    super.dispose();
-  }
-
-  /// Surfaces controller errors as a SnackBar and clears them so the next
-  /// failure can fire again. The `mounted` guard prevents post-dispose
-  /// ScaffoldMessenger lookups when the page is being torn down.
-  void _listenForErrors() {
-    final String? message = _controller?.errorMessage;
-    if (message == null || !mounted) return;
-    _controller!.clearError();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    // Wizard root re-injects the controller through TimeSetupScope on each
+    // dependency change; bindAsyncErrorListener is idempotent for the same
+    // instance and auto-detaches the previous one if the scope ever swaps.
+    bindAsyncErrorListener(TimeSetupScope.of(context));
   }
 
   @override
@@ -258,7 +238,7 @@ class _ScheduleSummaryRow extends StatelessWidget {
           children: <Widget>[
             Text(
               dayLabel,
-              style: AppTypography.headlineBold.copyWith(
+              style: AppTypography.headlineSemiBold.copyWith(
                 color: hasHours ? AppColors.gray800 : AppColors.gray400,
               ),
             ),
@@ -269,7 +249,7 @@ class _ScheduleSummaryRow extends StatelessWidget {
               hasHours
                   ? '${selectedHours.toString().padLeft(2, '0')}시간'
                   : '등록 없음',
-              style: AppTypography.labelBold.copyWith(
+              style: AppTypography.labelSemiBold.copyWith(
                 color: hasHours ? AppColors.gray800 : AppColors.gray400,
               ),
             ),
