@@ -3,6 +3,17 @@ class HourCell {
   final int weekday; // 0..6 (월=0)
   final int hour; // 0..23 (or 7..23 visible range)
 
+  /// JSON shape: `{"weekday": int, "hour": int}`.
+  factory HourCell.fromJson(Map<String, dynamic> json) => HourCell(
+    weekday: json['weekday'] as int,
+    hour: json['hour'] as int,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'weekday': weekday,
+    'hour': hour,
+  };
+
   @override
   bool operator ==(Object other) =>
       other is HourCell && other.weekday == weekday && other.hour == hour;
@@ -24,6 +35,24 @@ class DayAllocation {
 
   int get totalMinutes => hours * 60 + minutes;
   int get totalAllocatedMinutes => totalMinutes * weekdayIndices.length;
+
+  /// JSON shape:
+  /// `{"daysLabel": String, "weekdayIndices": [int...], "hours": int, "minutes": int}`.
+  factory DayAllocation.fromJson(Map<String, dynamic> json) => DayAllocation(
+    daysLabel: json['daysLabel'] as String,
+    weekdayIndices: (json['weekdayIndices'] as List<dynamic>)
+        .map((dynamic e) => e as int)
+        .toList(growable: false),
+    hours: json['hours'] as int,
+    minutes: json['minutes'] as int,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'daysLabel': daysLabel,
+    'weekdayIndices': weekdayIndices,
+    'hours': hours,
+    'minutes': minutes,
+  };
 }
 
 /// Per-week total cap. One row per 주차 in the 4-week plan.
@@ -37,6 +66,19 @@ class WeeklyTotal {
   final int hours;
   final int minutes;
   int get totalMinutes => hours * 60 + minutes;
+
+  /// JSON shape: `{"weekIndex": int, "hours": int, "minutes": int}`.
+  factory WeeklyTotal.fromJson(Map<String, dynamic> json) => WeeklyTotal(
+    weekIndex: json['weekIndex'] as int,
+    hours: json['hours'] as int,
+    minutes: json['minutes'] as int,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'weekIndex': weekIndex,
+    'hours': hours,
+    'minutes': minutes,
+  };
 }
 
 class TimeSchedule {
@@ -49,6 +91,36 @@ class TimeSchedule {
   final Set<HourCell> allowedHours; // from 스케쥴 등록 grid
   final List<WeeklyTotal> weeklyTotals; // one entry per 주차 (typically 4)
   final List<DayAllocation> dayAllocations;
+
+  /// JSON shape:
+  /// `{"allowedHours": [HourCell...], "weeklyTotals": [WeeklyTotal...],
+  ///   "dayAllocations": [DayAllocation...]}`.
+  factory TimeSchedule.fromJson(Map<String, dynamic> json) => TimeSchedule(
+    allowedHours: <HourCell>{
+      for (final dynamic cell in json['allowedHours'] as List<dynamic>)
+        HourCell.fromJson(cell as Map<String, dynamic>),
+    },
+    weeklyTotals: <WeeklyTotal>[
+      for (final dynamic w in json['weeklyTotals'] as List<dynamic>)
+        WeeklyTotal.fromJson(w as Map<String, dynamic>),
+    ],
+    dayAllocations: <DayAllocation>[
+      for (final dynamic a in json['dayAllocations'] as List<dynamic>)
+        DayAllocation.fromJson(a as Map<String, dynamic>),
+    ],
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'allowedHours': <Map<String, dynamic>>[
+      for (final HourCell cell in allowedHours) cell.toJson(),
+    ],
+    'weeklyTotals': <Map<String, dynamic>>[
+      for (final WeeklyTotal w in weeklyTotals) w.toJson(),
+    ],
+    'dayAllocations': <Map<String, dynamic>>[
+      for (final DayAllocation a in dayAllocations) a.toJson(),
+    ],
+  };
 
   /// Total cap across **all** weeks (sum of every entry in [weeklyTotals]).
   int get weeklyTotalCapMinutes =>

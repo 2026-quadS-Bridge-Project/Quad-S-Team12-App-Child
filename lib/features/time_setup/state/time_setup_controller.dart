@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/models/result.dart';
 import '../data/mock/time_schedule_mock.dart';
 import '../data/models/time_schedule.dart';
+import '../data/repositories/time_setup_repository.dart';
 
 enum TimeSetupStep {
   /// Pre-step splash that shows the 3-step description list and a `시작` CTA
@@ -20,9 +22,11 @@ class TimeSetupController extends ChangeNotifier {
   TimeSetupController({
     TimeSchedule? initial,
     TimeSetupMode mode = TimeSetupMode.v1Initial,
+    TimeSetupRepository? repository,
   }) : _schedule = initial ?? TimeScheduleMock.empty,
        _mode = mode,
-       _previousWeek = null;
+       _previousWeek = null,
+       _repository = repository ?? createTimeSetupRepository();
 
   /// v2 entry: keeps the immutable [previousWeek] snapshot for the dimmed
   /// `1주차` row, while the editable draft keeps weeks 2-4 empty until the
@@ -30,16 +34,22 @@ class TimeSetupController extends ChangeNotifier {
   /// (setWeeklyTotal / upsertAllocation / removeAllocation / toggleHour) only
   /// touch [_schedule] — [_previousWeek] remains untouched so the historical
   /// reference can always be re-read.
-  TimeSetupController.v2NextWeek({required TimeSchedule previousWeek})
-    : _schedule = _draftFromPreviousWeek(previousWeek),
-      _previousWeek = previousWeek,
-      _mode = TimeSetupMode.v2NextWeek,
-      _step = TimeSetupStep.intro;
+  TimeSetupController.v2NextWeek({
+    required TimeSchedule previousWeek,
+    TimeSetupRepository? repository,
+  }) : _schedule = _draftFromPreviousWeek(previousWeek),
+       _previousWeek = previousWeek,
+       _mode = TimeSetupMode.v2NextWeek,
+       _step = TimeSetupStep.intro,
+       _repository = repository ?? createTimeSetupRepository();
 
   TimeSchedule _schedule;
   final TimeSchedule? _previousWeek;
   TimeSetupStep _step = TimeSetupStep.intro;
   final TimeSetupMode _mode;
+  final TimeSetupRepository _repository;
+  bool _isSaving = false;
+  String? _errorMessage;
   static const List<int> _allWeekIndices = <int>[0, 1, 2, 3];
   static const List<int> _v2EditableWeekIndices = <int>[1, 2, 3];
   static const List<String> _weekdayLabels = <String>[
@@ -56,6 +66,8 @@ class TimeSetupController extends ChangeNotifier {
   TimeSchedule? get previousWeek => _previousWeek;
   TimeSetupStep get step => _step;
   TimeSetupMode get mode => _mode;
+  bool get isSaving => _isSaving;
+  String? get errorMessage => _errorMessage;
   bool get showPastWeekDim => _mode == TimeSetupMode.v2NextWeek;
   int get currentWeekIndex => showPastWeekDim ? 1 : 0;
   int get currentWeekTotalMinutes =>
@@ -301,10 +313,29 @@ class TimeSetupController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Final submit — in real backend this would push to parent; for mock, just transitions to complete.
-  void submit() {
-    _step = TimeSetupStep.complete;
+  // Final submit — pushes the finished plan through [TimeSetupRepository].
+  // On Success transitions to [TimeSetupStep.complete]; on Failure records
+  // [errorMessage] and stays on the current step.
+  Future<void> submit() async {
+    if (_isSaving) {
+      return;
+    }
+    _isSaving = true;
+    _errorMessage = null;
     notifyListeners();
+
+    try {
+      final Result<void> result = await _repository.saveSchedule(_schedule);
+      switch (result) {
+        case Success<void>():
+          _step = TimeSetupStep.complete;
+        case Failure<void>(message: final String message):
+          _errorMessage = message;
+      }
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
   }
 
   /// Mode-aware reset. v2 must preserve [_previousWeek] (immutable historical
