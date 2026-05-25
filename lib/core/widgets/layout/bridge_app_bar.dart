@@ -25,7 +25,7 @@ class BridgeAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.showBack = true,
   });
 
-  /// Title shown centered. Rendered with [AppTypography.headlineBold].
+  /// Title shown centered. Rendered with [AppTypography.headlineMedium].
   final String title;
 
   /// Override for back button tap. When null, defaults to `context.pop()`.
@@ -80,7 +80,7 @@ class BridgeAppBar extends StatelessWidget implements PreferredSizeWidget {
             Center(
               child: Text(
                 title,
-                style: AppTypography.headlineBold.copyWith(
+                style: AppTypography.headlineMedium.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,

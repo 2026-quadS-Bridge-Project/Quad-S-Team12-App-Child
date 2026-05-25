@@ -128,6 +128,14 @@ class BridgeTimeAllocBottomSheet extends StatefulWidget {
 
 class _BridgeTimeAllocBottomSheetState
     extends State<BridgeTimeAllocBottomSheet> {
+  // Wheel metrics — kept in sync with BridgeTimeBottomSheet and
+  // BridgeWheelPicker defaults so the selection band labels anchor to the
+  // selected value slots instead of drifting into the numbers.
+  static const double _wheelItemWidth = 56;
+  static const double _wheelItemHeight = 50;
+  static const int _visibleItems = 5;
+  static const double _wheelTotalHeight = _wheelItemHeight * _visibleItems;
+
   // Sheet chrome — derived from Figma frame 695-12148.
   static const double _sheetHeight = 397;
   static const double _sheetRadius = 24;
@@ -135,10 +143,12 @@ class _BridgeTimeAllocBottomSheetState
   static const double _handleWidth = 40;
   static const double _handleHeight = 4;
   static const double _headerTop = 27;
+  static const double _wheelsTop = 85;
   static const double _ctaBottom = 63;
   static const double _ctaHorizontalPadding = 24;
   static const double _selectionBandWidth = 324;
   static const double _selectionBandHeight = 50;
+  static const double _wheelGap = 80;
 
   late BottomSheetMode _mode;
   late Set<int> _days;
@@ -250,16 +260,69 @@ class _BridgeTimeAllocBottomSheetState
               ),
 
               // Body — mode-dependent.
-              Positioned.fill(
-                top: _headerTop + 40,
-                bottom: _ctaBottom + 54 + 16,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: _mode == BottomSheetMode.dayPicker
-                      ? _buildDayPickerBody()
-                      : _buildTimePickerBody(),
+              if (_mode == BottomSheetMode.dayPicker)
+                Positioned.fill(
+                  top: _headerTop + 40,
+                  bottom: _ctaBottom + 54 + 16,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: _buildDayPickerBody(),
+                  ),
+                )
+              else ...[
+                Positioned(
+                  top: _wheelsTop,
+                  left: 0,
+                  right: 0,
+                  height: _wheelTotalHeight,
+                  child: _buildTimePickerWheels(),
                 ),
-              ),
+                Positioned(
+                  top:
+                      _wheelsTop +
+                      (_wheelTotalHeight - _selectionBandHeight) / 2,
+                  left: 0,
+                  right: 0,
+                  height: _selectionBandHeight,
+                  child: IgnorePointer(
+                    child: LayoutBuilder(
+                      builder:
+                          (BuildContext context, BoxConstraints constraints) {
+                            final double bandWidth =
+                                constraints.maxWidth < _selectionBandWidth
+                                ? constraints.maxWidth
+                                : _selectionBandWidth;
+
+                            return Center(
+                              child: Opacity(
+                                opacity: 0.8,
+                                child: Container(
+                                  width: bandWidth,
+                                  height: _selectionBandHeight,
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: AppColors.primary,
+                                        width: 2,
+                                      ),
+                                      bottom: BorderSide(
+                                        color: AppColors.primary,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const _BandLabels(
+                                    wheelItemWidth: _wheelItemWidth,
+                                    wheelGap: _wheelGap,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                    ),
+                  ),
+                ),
+              ],
 
               // CTA.
               Positioned(
@@ -297,7 +360,7 @@ class _BridgeTimeAllocBottomSheetState
     );
   }
 
-  Widget _buildTimePickerBody() {
+  Widget _buildTimePickerWheels() {
     final hourValues = List<String>.generate(
       widget.maxHours + 1,
       (i) => i.toString().padLeft(2, '0'),
@@ -311,87 +374,95 @@ class _BridgeTimeAllocBottomSheetState
         .indexOf(_minutes)
         .clamp(0, _minuteValues.length - 1);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Two wheel pickers, side-by-side.
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                BridgeWheelPicker(
-                  values: hourValues,
-                  selectedIndex: hourIndex,
-                  onChanged: (i) => setState(() => _hours = i),
-                ),
-                BridgeWheelPicker(
-                  values: minuteStrings,
-                  selectedIndex: minuteIndex,
-                  onChanged: (i) => setState(() => _minutes = _minuteValues[i]),
-                ),
-              ],
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        BridgeWheelPicker(
+          values: hourValues,
+          selectedIndex: hourIndex,
+          itemWidth: _wheelItemWidth,
+          itemHeight: _wheelItemHeight,
+          visibleItems: _visibleItems,
+          onChanged: (i) => setState(() => _hours = i),
+        ),
+        const SizedBox(width: _wheelGap),
+        BridgeWheelPicker(
+          values: minuteStrings,
+          selectedIndex: minuteIndex,
+          itemWidth: _wheelItemWidth,
+          itemHeight: _wheelItemHeight,
+          visibleItems: _visibleItems,
+          onChanged: (i) => setState(() => _minutes = _minuteValues[i]),
+        ),
+      ],
+    );
+  }
+}
 
-            // Selection band overlay — fixed width, horizontal primary
-            // borders only (top + bottom).
-            IgnorePointer(
-              child: SizedBox(
-                width: _selectionBandWidth,
-                height: _selectionBandHeight,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(height: 2, color: AppColors.primary),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(height: 2, color: AppColors.primary),
-                    ),
-                    // Unit labels inside the band.
-                    Positioned.fill(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: Text(
-                                  '시간',
-                                  style: AppTypography.heading2Medium.copyWith(
-                                    color: AppColors.gray800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: Text(
-                                  '분',
-                                  style: AppTypography.heading2Medium.copyWith(
-                                    color: AppColors.gray800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+/// Renders the `시간` / `분` unit labels inside the selection band, anchored
+/// to the right of each wheel column.
+///
+/// The label positions are derived from the wheel-slot coordinates so the
+/// text remains outside the selected numeric values even when the band width
+/// or surrounding sheet padding changes.
+class _BandLabels extends StatelessWidget {
+  const _BandLabels({required this.wheelItemWidth, required this.wheelGap});
+
+  final double wheelItemWidth;
+  final double wheelGap;
+
+  static const double _labelGap = 12;
+  static const double _minWheelSeparation = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle unitStyle = AppTypography.heading2Medium.copyWith(
+      color: AppColors.gray800,
+    );
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double wheelRowWidth = wheelItemWidth * 2 + wheelGap;
+        final double wheelRowLeft = (constraints.maxWidth - wheelRowWidth) / 2;
+        final double safeWheelRowLeft = wheelRowLeft < 0 ? 0 : wheelRowLeft;
+        final double hourWheelRight = safeWheelRowLeft + wheelItemWidth;
+        final double minuteWheelLeft =
+            safeWheelRowLeft + wheelItemWidth + wheelGap;
+        final double minuteWheelRight = minuteWheelLeft + wheelItemWidth;
+        final double hourLabelLeft = hourWheelRight + _labelGap;
+        final double minuteLabelLeft = minuteWheelRight + _labelGap;
+        final double hourLabelWidth =
+            minuteWheelLeft - hourLabelLeft - _minWheelSeparation;
+        final double minuteLabelWidth = constraints.maxWidth - minuteLabelLeft;
+
+        Widget buildLabel({
+          required String text,
+          required double left,
+          required double width,
+        }) {
+          if (width <= 0) return const SizedBox.shrink();
+          return Positioned(
+            left: left,
+            top: 0,
+            bottom: 0,
+            width: width,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(text, maxLines: 1, softWrap: false, style: unitStyle),
+            ),
+          );
+        }
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            buildLabel(text: '시간', left: hourLabelLeft, width: hourLabelWidth),
+            buildLabel(
+              text: '분',
+              left: minuteLabelLeft,
+              width: minuteLabelWidth,
             ),
           ],
         );
@@ -447,18 +518,25 @@ class _TimeRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.gray200, width: 2),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(hours.toString().padLeft(2, '0'), style: numberStyle),
-                  const SizedBox(width: 6),
-                  Text('시간', style: unitStyle),
-                  const SizedBox(width: 12),
-                  Text(minutes.toString().padLeft(2, '0'), style: numberStyle),
-                  const SizedBox(width: 6),
-                  Text('분', style: unitStyle),
-                ],
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(hours.toString().padLeft(2, '0'), style: numberStyle),
+                    const SizedBox(width: 6),
+                    Text('시간', style: unitStyle),
+                    const SizedBox(width: 12),
+                    Text(
+                      minutes.toString().padLeft(2, '0'),
+                      style: numberStyle,
+                    ),
+                    const SizedBox(width: 6),
+                    Text('분', style: unitStyle),
+                  ],
+                ),
               ),
             ),
           ),

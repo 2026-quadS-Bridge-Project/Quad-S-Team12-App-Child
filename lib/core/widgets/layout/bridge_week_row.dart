@@ -1,20 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
-import '../../theme/app_tokens.dart';
 import '../../theme/app_typography.dart';
 
 /// Row card used on the weekly time-entry screen.
 ///
 /// Visual:
-/// - White card, radius [AppTokens.cardRadiusSmall] (16).
-/// - Outer padding 18 horizontal / 15 vertical.
-/// - Inner row height 45, [MainAxisAlignment.spaceBetween]:
-///   - Leading: week label (e.g. "1주차") rendered as
-///     [AppTypography.headlineBold] in [AppColors.gray800].
-///   - Trailing: inline time cluster — `H 시간   M 분`. When both [hours] and
-///     [minutes] are 0, the cluster renders as a placeholder (`00`/`00`) in
-///     [AppColors.gray300]; otherwise values render in [AppColors.gray800].
+/// - White card, radius 12.
+/// - Fixed 50px height with 8 horizontal / 11 vertical padding.
+/// - Leading week label (e.g. "1주차"), 22px divider, and inline time cluster.
+/// - When both [hours] and [minutes] are 0, the numeric placeholders render
+///   in [AppColors.gray200]; otherwise values render in [AppColors.inkBlack].
 ///
 /// Interaction:
 /// - When [onTap] is non-null the entire card is a hit target wrapped in
@@ -49,45 +45,61 @@ class BridgeWeekRow extends StatelessWidget {
   /// When true, dims the entire card to 20% opacity to mark a past week.
   final bool isPast;
 
-  static const double _rowHeight = 45;
-  static const double _horizontalPadding = 18;
-  static const double _verticalPadding = 15;
+  static const double _rowHeight = 50;
+  static const double _borderRadius = 12;
+  static const double _horizontalPadding = 8;
+  static const double _verticalPadding = 11;
+  static const double _labelWidth = 55;
+  static const double _dividerHeight = 22;
+  static const double _dividerGap = 22;
+  static const double _numberUnitGap = 4;
   static const double _unitGap = 10;
 
   @override
   Widget build(BuildContext context) {
     final bool isPlaceholder = hours == 0 && minutes == 0;
     final Color valueColor = isPlaceholder
-        ? AppColors.gray300
-        : AppColors.gray800;
+        ? AppColors.gray200
+        : AppColors.inkBlack;
 
-    final Widget card = Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: _horizontalPadding,
-            vertical: _verticalPadding,
-          ),
-          child: SizedBox(
-            height: _rowHeight,
+    final Widget card = SizedBox(
+      height: _rowHeight,
+      child: Material(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(_borderRadius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _horizontalPadding,
+              vertical: _verticalPadding,
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  weekLabel,
-                  style: AppTypography.headlineBold.copyWith(
-                    color: AppColors.gray800,
+                SizedBox(
+                  width: _labelWidth,
+                  child: Text(
+                    weekLabel,
+                    style: AppTypography.headlineBold.copyWith(
+                      color: AppColors.inkBlack,
+                    ),
                   ),
                 ),
+                const SizedBox(width: _dividerGap),
+                Container(
+                  width: 1,
+                  height: _dividerHeight,
+                  color: AppColors.gray200,
+                ),
+                const SizedBox(width: _dividerGap),
                 _TimeInline(
                   hours: hours,
                   minutes: minutes,
                   valueColor: valueColor,
+                  unitColor: AppColors.inkBlack,
+                  numberUnitGap: _numberUnitGap,
                   unitGap: _unitGap,
                 ),
               ],
@@ -110,12 +122,16 @@ class _TimeInline extends StatelessWidget {
     required this.hours,
     required this.minutes,
     required this.valueColor,
+    required this.unitColor,
+    required this.numberUnitGap,
     required this.unitGap,
   });
 
   final int hours;
   final int minutes;
   final Color valueColor;
+  final Color unitColor;
+  final double numberUnitGap;
   final double unitGap;
 
   String _twoDigits(int value) => value.toString().padLeft(2, '0');
@@ -126,7 +142,7 @@ class _TimeInline extends StatelessWidget {
       color: valueColor,
     );
     final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(
-      color: valueColor,
+      color: unitColor,
     );
 
     return Row(
@@ -134,9 +150,11 @@ class _TimeInline extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(_twoDigits(hours), style: valueStyle),
+        SizedBox(width: numberUnitGap),
         Text('시간', style: unitStyle),
         SizedBox(width: unitGap),
         Text(_twoDigits(minutes), style: valueStyle),
+        SizedBox(width: numberUnitGap),
         Text('분', style: unitStyle),
       ],
     );

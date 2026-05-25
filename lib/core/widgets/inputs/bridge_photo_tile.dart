@@ -10,7 +10,7 @@ import '../../theme/app_typography.dart';
 /// (`426-19035` / `426-18995` / `426-18974` per `docs/figma-specs/11-mission.md` §5).
 ///
 /// Renders a 157 × 156 rounded-corner image preview of a file at [path]
-/// with a circular black-overlay × button at the top-right that triggers
+/// with a gray close × button at the top-right that triggers
 /// [onDelete]. Falls back to a gray placeholder with `broken_image` if the
 /// underlying file cannot be decoded (e.g. the user deleted it externally
 /// or the path is stale).
@@ -64,13 +64,17 @@ class BridgePhotoTile extends StatelessWidget {
             child: InkWell(
               onTap: onDelete,
               child: Container(
-                width: 24,
-                height: 24,
+                width: 20,
+                height: 20,
                 decoration: const BoxDecoration(
-                  color: Colors.black54,
+                  color: AppColors.gray200,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, color: Colors.white, size: 16),
+                child: const Icon(
+                  Icons.close,
+                  color: AppColors.gray700,
+                  size: 14,
+                ),
               ),
             ),
           ),
@@ -130,7 +134,7 @@ class BridgeAddPhotoTile extends StatelessWidget {
                 children: [
                   const Icon(
                     Icons.camera_alt_outlined,
-                    size: 28,
+                    size: 24,
                     color: AppColors.gray700,
                   ),
                   const SizedBox(height: 8),

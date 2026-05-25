@@ -4,17 +4,22 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_tokens.dart';
 import '../../theme/app_typography.dart';
 
+enum BridgeTotalTimeCardVariant { standard, compact }
+
 /// Read-only total time display used at the top of weekly time distribution
-/// screens. Renders an inline "{hours} 시간 {minutes} 분" string with the
-/// numeric values emphasised in the primary color.
+/// screens.
 ///
-/// Layout:
+/// Standard layout:
 /// - Outer [Container] with white background, [AppTokens.cardRadiusSmall]
 ///   corners, and [AppTokens.cardPadding] padding.
 /// - Row arranged via [MainAxisAlignment.spaceBetween]:
 ///   - Leading [Column] (start-aligned): optional [title] above the inline
 ///     number row.
 ///   - Optional [trailing] slot on the right edge (e.g. a small "수정" button).
+///
+/// Compact layout:
+/// - Optional section title row above a 50px bordered time box.
+/// - Inline "{hours} 시간 {minutes} 분" centered with 18px typography.
 ///
 /// Spec: docs/figma-specs/08a-time-v1-entry-weekly.md
 class BridgeTotalTimeCard extends StatelessWidget {
@@ -24,6 +29,7 @@ class BridgeTotalTimeCard extends StatelessWidget {
     required this.minutes,
     this.title,
     this.trailing,
+    this.variant = BridgeTotalTimeCardVariant.standard,
   });
 
   /// Hour value rendered in the leading number slot.
@@ -38,8 +44,23 @@ class BridgeTotalTimeCard extends StatelessWidget {
   /// Optional widget rendered at the right edge of the card.
   final Widget? trailing;
 
+  /// Visual treatment for the time display.
+  final BridgeTotalTimeCardVariant variant;
+
+  static const double _compactHeight = 50;
+  static const double _compactRadius = 12;
+  static const double _compactBorderWidth = 2;
+  static const double _compactTitleGap = 12;
+
   @override
   Widget build(BuildContext context) {
+    return switch (variant) {
+      BridgeTotalTimeCardVariant.standard => _buildStandard(),
+      BridgeTotalTimeCardVariant.compact => _buildCompact(),
+    };
+  }
+
+  Widget _buildStandard() {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -106,4 +127,92 @@ class BridgeTotalTimeCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildCompact() {
+    final Widget timeBox = SizedBox(
+      height: _compactHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: AppColors.gray200,
+            width: _compactBorderWidth,
+          ),
+          borderRadius: BorderRadius.circular(_compactRadius),
+        ),
+        child: Center(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            mainAxisSize: MainAxisSize.min,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                _compactHourText(hours),
+                style: AppTypography.headlineBold.copyWith(
+                  color: AppColors.inkBlack,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '시간',
+                style: AppTypography.headlineRegular.copyWith(
+                  color: AppColors.inkBlack,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _twoDigits(minutes),
+                style: AppTypography.headlineBold.copyWith(
+                  color: AppColors.inkBlack,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '분',
+                style: AppTypography.headlineRegular.copyWith(
+                  color: AppColors.inkBlack,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (title == null && trailing == null) {
+      return timeBox;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (title != null)
+              Expanded(
+                child: Text(
+                  title!,
+                  style: AppTypography.heading2Bold.copyWith(
+                    color: AppColors.gray800,
+                  ),
+                ),
+              )
+            else
+              const Spacer(),
+            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+          ],
+        ),
+        const SizedBox(height: _compactTitleGap),
+        timeBox,
+      ],
+    );
+  }
+
+  static String _compactHourText(int value) {
+    if (value == 0) return _twoDigits(value);
+    return '$value';
+  }
+
+  static String _twoDigits(int value) => value.toString().padLeft(2, '0');
 }

@@ -46,7 +46,6 @@ class BridgeDayRow extends StatelessWidget {
   final bool showPencil;
 
   static const double _rowHeight = 45;
-  static const double _rowWidth = 291;
   static const double _horizontalPadding = 18;
   static const double _verticalPadding = 15;
   static const double _unitGap = 10;
@@ -65,14 +64,17 @@ class BridgeDayRow extends StatelessWidget {
 
     final Widget innerRow = SizedBox(
       height: _rowHeight,
-      width: _rowWidth,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            daysLabel,
-            style: AppTypography.headlineBold.copyWith(
-              color: AppColors.gray800,
+          Flexible(
+            child: Text(
+              daysLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.headlineBold.copyWith(
+                color: AppColors.gray800,
+              ),
             ),
           ),
           const SizedBox(width: _dividerInset),
@@ -90,18 +92,21 @@ class BridgeDayRow extends StatelessWidget {
       ),
     );
 
-    final Widget card = Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onEdit,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: _horizontalPadding,
-            vertical: _verticalPadding,
+    final Widget card = SizedBox(
+      width: double.infinity,
+      child: Material(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onEdit,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _horizontalPadding,
+              vertical: _verticalPadding,
+            ),
+            child: innerRow,
           ),
-          child: innerRow,
         ),
       ),
     );

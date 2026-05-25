@@ -247,27 +247,38 @@ class _BridgeTimeBottomSheetState extends State<BridgeTimeBottomSheet> {
               right: 0,
               height: _bandHeight,
               child: IgnorePointer(
-                child: Center(
-                  child: Opacity(
-                    opacity: 0.8,
-                    child: Container(
-                      width: _bandWidth,
-                      height: _bandHeight,
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: AppColors.primary, width: 2),
-                          bottom: BorderSide(
-                            color: AppColors.primary,
-                            width: 2,
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final double bandWidth = constraints.maxWidth < _bandWidth
+                        ? constraints.maxWidth
+                        : _bandWidth;
+
+                    return Center(
+                      child: Opacity(
+                        opacity: 0.8,
+                        child: Container(
+                          width: bandWidth,
+                          height: _bandHeight,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                color: AppColors.primary,
+                                width: 2,
+                              ),
+                              bottom: BorderSide(
+                                color: AppColors.primary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: _BandLabels(
+                            wheelItemWidth: _wheelItemWidth,
+                            wheelGap: _wheelGap,
                           ),
                         ),
                       ),
-                      child: _BandLabels(
-                        wheelItemWidth: _wheelItemWidth,
-                        wheelGap: _wheelGap,
-                      ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -295,16 +306,17 @@ class _BridgeTimeBottomSheetState extends State<BridgeTimeBottomSheet> {
 /// Renders the `시간` / `분` unit labels inside the selection band, anchored
 /// to the right of each wheel column.
 ///
-/// The band itself is centered in the sheet; inside the band we lay out the
-/// two wheel "slots" with the same gap as the wheel row above, then place the
-/// unit text immediately to the right of each slot.
+/// The band itself is centered in the sheet. Unit labels are positioned from
+/// the actual wheel-slot coordinates so they do not drift into the selected
+/// numbers when the label text is included in the measured row width.
 class _BandLabels extends StatelessWidget {
   const _BandLabels({required this.wheelItemWidth, required this.wheelGap});
 
   final double wheelItemWidth;
   final double wheelGap;
 
-  static const double _labelGap = 4; // space between wheel value and unit text
+  static const double _labelGap = 12; // space between wheel value and unit text
+  static const double _minWheelSeparation = 8;
 
   @override
   Widget build(BuildContext context) {
@@ -312,18 +324,52 @@ class _BandLabels extends StatelessWidget {
       color: AppColors.gray800,
     );
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        SizedBox(width: wheelItemWidth),
-        const SizedBox(width: _labelGap),
-        Text('시간', style: unitStyle),
-        SizedBox(width: wheelGap - _labelGap),
-        SizedBox(width: wheelItemWidth),
-        const SizedBox(width: _labelGap),
-        Text('분', style: unitStyle),
-      ],
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double wheelRowWidth = wheelItemWidth * 2 + wheelGap;
+        final double wheelRowLeft = (constraints.maxWidth - wheelRowWidth) / 2;
+        final double safeWheelRowLeft = wheelRowLeft < 0 ? 0 : wheelRowLeft;
+        final double hourWheelRight = safeWheelRowLeft + wheelItemWidth;
+        final double minuteWheelLeft =
+            safeWheelRowLeft + wheelItemWidth + wheelGap;
+        final double minuteWheelRight = minuteWheelLeft + wheelItemWidth;
+        final double hourLabelLeft = hourWheelRight + _labelGap;
+        final double minuteLabelLeft = minuteWheelRight + _labelGap;
+        final double hourLabelWidth =
+            minuteWheelLeft - hourLabelLeft - _minWheelSeparation;
+        final double minuteLabelWidth = constraints.maxWidth - minuteLabelLeft;
+
+        Widget buildLabel({
+          required String text,
+          required double left,
+          required double width,
+        }) {
+          if (width <= 0) return const SizedBox.shrink();
+          return Positioned(
+            left: left,
+            top: 0,
+            bottom: 0,
+            width: width,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(text, maxLines: 1, softWrap: false, style: unitStyle),
+            ),
+          );
+        }
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            buildLabel(text: '시간', left: hourLabelLeft, width: hourLabelWidth),
+            buildLabel(
+              text: '분',
+              left: minuteLabelLeft,
+              width: minuteLabelWidth,
+            ),
+          ],
+        );
+      },
     );
   }
 }
