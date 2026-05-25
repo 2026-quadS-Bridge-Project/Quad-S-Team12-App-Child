@@ -22,10 +22,11 @@ abstract interface class TimeConfirmRepository {
   Future<Result<void>> acknowledgeSchedule();
 }
 
-/// Factory that picks the right repo for the current environment.
-TimeConfirmRepository createTimeConfirmRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockTimeConfirmRepository();
-  }
-  return ApiTimeConfirmRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final TimeConfirmRepository _timeConfirmRepository =
+    currentEnvironment.useMocks
+        ? MockTimeConfirmRepository()
+        : ApiTimeConfirmRepository();
+
+/// Factory that returns the cached repo for the current environment.
+TimeConfirmRepository createTimeConfirmRepository() => _timeConfirmRepository;

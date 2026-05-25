@@ -30,15 +30,15 @@ abstract interface class AuthRepository {
   Future<Result<AuthToken>> refreshToken(String refreshToken);
 }
 
-/// Factory that resolves the active [AuthRepository] implementation based on
-/// [currentEnvironment.useMocks]. Pages call this once via a `late final`
-/// field so the choice is made lazily but cached for the widget's lifetime.
-AuthRepository createAuthRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockAuthRepository();
-  }
-  return ApiAuthRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final AuthRepository _authRepository = currentEnvironment.useMocks
+    ? MockAuthRepository()
+    : ApiAuthRepository();
+
+/// Factory that resolves the active [AuthRepository] implementation. The
+/// instance is cached so every call site shares the same Dio (and therefore
+/// the same interceptor chain).
+AuthRepository createAuthRepository() => _authRepository;
 
 /// Canonical failure messages emitted by [MockAuthRepository.login]. Exposed
 /// as constants so the login page can do an exact-match string comparison

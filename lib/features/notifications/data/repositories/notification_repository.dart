@@ -23,10 +23,12 @@ abstract interface class NotificationRepository {
   Future<Result<void>> markAsRead(String id);
 }
 
-/// Factory that picks the right repo for the current environment.
-NotificationRepository createNotificationRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockNotificationRepository();
-  }
-  return ApiNotificationRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final NotificationRepository _notificationRepository =
+    currentEnvironment.useMocks
+        ? MockNotificationRepository()
+        : ApiNotificationRepository();
+
+/// Factory that returns the cached repo for the current environment.
+NotificationRepository createNotificationRepository() =>
+    _notificationRepository;

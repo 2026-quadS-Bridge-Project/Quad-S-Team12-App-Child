@@ -23,12 +23,13 @@ abstract interface class PhotoUploadService {
   Future<Result<String>> uploadPhoto(String localPath);
 }
 
-/// Factory: selects mock vs. real implementation based on
-/// [currentEnvironment.useMocks]. Mirrors `createMissionRepository`.
-PhotoUploadService createPhotoUploadService() {
-  if (currentEnvironment.useMocks) return const MockPhotoUploadService();
-  return ApiPhotoUploadService(DioConfig.create());
-}
+/// Cached singleton — lazy-initialized at first access.
+final PhotoUploadService _photoUploadService = currentEnvironment.useMocks
+    ? const MockPhotoUploadService()
+    : ApiPhotoUploadService(DioConfig.create());
+
+/// Factory: returns the cached service. Mirrors `createMissionRepository`.
+PhotoUploadService createPhotoUploadService() => _photoUploadService;
 
 /// Mock impl — pretends the local path IS the remote URL.
 ///

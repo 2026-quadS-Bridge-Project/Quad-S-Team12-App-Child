@@ -24,10 +24,10 @@ abstract interface class TimeSetupRepository {
   Future<Result<void>> saveSchedule(TimeSchedule schedule);
 }
 
-/// Factory that picks the right repo for the current environment.
-TimeSetupRepository createTimeSetupRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockTimeSetupRepository();
-  }
-  return ApiTimeSetupRepository(dio: DioConfig.create());
-}
+/// Cached singleton — lazy-initialized at first access.
+final TimeSetupRepository _timeSetupRepository = currentEnvironment.useMocks
+    ? MockTimeSetupRepository()
+    : ApiTimeSetupRepository(dio: DioConfig.create());
+
+/// Factory that returns the cached repo for the current environment.
+TimeSetupRepository createTimeSetupRepository() => _timeSetupRepository;

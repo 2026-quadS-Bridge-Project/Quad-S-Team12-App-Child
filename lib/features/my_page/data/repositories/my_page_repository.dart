@@ -32,10 +32,10 @@ abstract interface class MyPageRepository {
   Future<Result<void>> deleteAccount();
 }
 
-/// Factory that picks the right repo for the current environment.
-MyPageRepository createMyPageRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockMyPageRepository();
-  }
-  return ApiMyPageRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final MyPageRepository _myPageRepository = currentEnvironment.useMocks
+    ? MockMyPageRepository()
+    : ApiMyPageRepository();
+
+/// Factory that returns the cached repo for the current environment.
+MyPageRepository createMyPageRepository() => _myPageRepository;

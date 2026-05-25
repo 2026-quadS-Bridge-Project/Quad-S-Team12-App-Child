@@ -18,10 +18,11 @@ abstract interface class UsageReportRepository {
   Future<Result<UsageReport>> fetchCurrentWeekReport();
 }
 
-/// Factory that picks the right repo for the current environment.
-UsageReportRepository createUsageReportRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockUsageReportRepository();
-  }
-  return ApiUsageReportRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final UsageReportRepository _usageReportRepository =
+    currentEnvironment.useMocks
+        ? MockUsageReportRepository()
+        : ApiUsageReportRepository();
+
+/// Factory that returns the cached repo for the current environment.
+UsageReportRepository createUsageReportRepository() => _usageReportRepository;

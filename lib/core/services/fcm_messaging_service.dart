@@ -79,10 +79,15 @@ abstract interface class FcmMessagingService {
   Future<FcmMessage?> getInitialMessage();
 }
 
-FcmMessagingService createFcmMessagingService() {
-  if (currentEnvironment.useMocks) return const MockFcmMessagingService();
-  return ApiFcmMessagingService();
-}
+/// Cached singleton — lazy-initialized at first access. Sharing one
+/// instance matters here because [ApiFcmMessagingService] holds the
+/// stream subscriptions to the firebase plugin; re-creating it would
+/// fork the streams.
+final FcmMessagingService _fcmMessagingService = currentEnvironment.useMocks
+    ? const MockFcmMessagingService()
+    : ApiFcmMessagingService();
+
+FcmMessagingService createFcmMessagingService() => _fcmMessagingService;
 
 class MockFcmMessagingService implements FcmMessagingService {
   const MockFcmMessagingService();

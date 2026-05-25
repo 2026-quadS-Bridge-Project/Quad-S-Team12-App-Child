@@ -20,10 +20,12 @@ abstract interface class CalendarService {
   String currentWeekLabel();
 }
 
-CalendarService createCalendarService() {
-  if (currentEnvironment.useMocks) return const MockCalendarService();
-  return const DeviceCalendarService();
-}
+/// Cached singleton — lazy-initialized at first access.
+final CalendarService _calendarService = currentEnvironment.useMocks
+    ? const MockCalendarService()
+    : const DeviceCalendarService();
+
+CalendarService createCalendarService() => _calendarService;
 
 /// Deterministic fixture matching the Figma `2월 1주차` reference. Used in
 /// the dev / mock environment so widget tests and screenshots stay stable.
