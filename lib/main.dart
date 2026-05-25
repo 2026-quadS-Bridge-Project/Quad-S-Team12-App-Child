@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'app/app.dart';
 import 'core/config/environment.dart';
 import 'core/services/fcm_bootstrap.dart';
+import 'firebase_options.dart';
 
 /// Background message handler. Must be a top-level function annotated with
 /// `@pragma('vm:entry-point')` because FCM spawns a separate isolate for
@@ -25,18 +26,27 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Initializes Firebase using the platform-resolved configuration files
-  // (android/app/google-services.json and ios/Runner/GoogleService-Info.plist).
-  // FCM and other Firebase services rely on this being awaited before any
-  // feature code touches them.
-  await Firebase.initializeApp();
 
-  // In the mock environment we still want the UI to boot, but skip touching
-  // FirebaseMessaging — the Android emulator without Google Play Services
-  // and the iOS simulator without APNs both fail otherwise.
+  // Firebase wiring is skipped in the mock environment so the dev simulator
+  // boots even when the iOS Xcode project hasn't been opened to register
+  // GoogleService-Info.plist as a build resource (and so the Android
+  // emulator without Google Play Services doesn't crash on background
+  // handler registration). FcmBootstrap is still called below — its mock
+  // implementation is a no-op.
   if (!currentEnvironment.useMocks) {
-    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+    } catch (e, stack) {
+      // Don't crash the app if Firebase init fails (e.g. simulator without
+      // APNs entitlements); FcmBootstrap will then no-op too.
+      debugPrint('[firebase] init failed — continuing without push: $e');
+      debugPrintStack(stackTrace: stack);
+    }
   }
+
   // Bootstraps permission, token registration, and the foreground +
   // tap-from-background streams. Mock impl is a no-op so tests stay green.
   await FcmBootstrap.initialize();
