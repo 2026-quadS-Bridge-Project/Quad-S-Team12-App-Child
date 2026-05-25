@@ -14,10 +14,14 @@ enum MissionFlowStep { info, cameraPrompt, photoPreview, submitted }
 
 class MissionController extends ChangeNotifier {
   MissionController({required String missionId})
-    : _mission = MissionMock.byId(missionId);
+    : this._(MissionMock.byId(missionId));
+
+  MissionController._(Mission mission)
+    : _mission = mission,
+      _step = _initialStepFor(mission);
 
   Mission _mission;
-  MissionFlowStep _step = MissionFlowStep.info;
+  MissionFlowStep _step;
   final List<String> _capturedPhotoPaths = [];
   Timer? _autoApproveTimer;
   bool _disposed = false;
@@ -53,10 +57,14 @@ class MissionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Mock submission — transitions to reviewing then (in real backend) eventually approved/rejected.
-  void submit({bool aiAutoApprove = true}) {
+  /// Mock submission — self-confirm missions complete immediately; AI/parent
+  /// confirmation missions enter reviewing until backend approval arrives.
+  void submit({bool? aiAutoApprove}) {
+    final bool completesImmediately = _mission.confirmationMethod == '자녀 확인';
     _mission = _mission.copyWith(
-      status: MissionStatus.reviewing,
+      status: completesImmediately
+          ? MissionStatus.completed
+          : MissionStatus.reviewing,
       photoUrls: List.of(_capturedPhotoPaths),
     );
     _step = MissionFlowStep.submitted;
@@ -65,7 +73,9 @@ class MissionController extends ChangeNotifier {
     // Simulate async review for mock UX. Cancellable via [dispose] so we
     // never call notifyListeners() on a disposed ChangeNotifier.
     _autoApproveTimer?.cancel();
-    if (aiAutoApprove) {
+    final bool shouldAutoApprove =
+        aiAutoApprove ?? (_mission.confirmationMethod == 'AI 자동확인');
+    if (!completesImmediately && shouldAutoApprove) {
       _autoApproveTimer = Timer(const Duration(seconds: 2), () {
         if (_disposed) return;
         if (_step == MissionFlowStep.submitted &&
@@ -98,5 +108,16 @@ class MissionController extends ChangeNotifier {
     _autoApproveTimer?.cancel();
     _autoApproveTimer = null;
     super.dispose();
+  }
+
+  static MissionFlowStep _initialStepFor(Mission mission) {
+    return switch (mission.status) {
+      MissionStatus.reviewing ||
+      MissionStatus.completed => MissionFlowStep.submitted,
+      // No rejected detail node exists in Figma; keep rejected missions on the
+      // information tabs until a retry/reason design is supplied.
+      MissionStatus.rejected ||
+      MissionStatus.pendingCheck => MissionFlowStep.info,
+    };
   }
 }

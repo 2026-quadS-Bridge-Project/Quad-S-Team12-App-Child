@@ -125,19 +125,24 @@ class _InfoTabsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TabBar(
-      labelColor: AppColors.textPrimary,
-      unselectedLabelColor: AppColors.gray400,
-      labelStyle: AppTypography.bodyMedium,
-      unselectedLabelStyle: AppTypography.bodyMedium,
-      indicatorSize: TabBarIndicatorSize.tab,
-      indicatorColor: AppColors.textPrimary,
-      indicatorWeight: 1.4,
-      dividerColor: AppColors.border,
-      tabs: const <Widget>[
-        Tab(text: '미션정보'),
-        Tab(text: '수행정보'),
-      ],
+    return Center(
+      child: SizedBox(
+        width: 190,
+        child: TabBar(
+          labelColor: AppColors.textPrimary,
+          unselectedLabelColor: AppColors.gray400,
+          labelStyle: AppTypography.bodyBold,
+          unselectedLabelStyle: AppTypography.bodyMedium,
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicatorColor: AppColors.textPrimary,
+          indicatorWeight: 1.4,
+          dividerColor: AppColors.border,
+          tabs: const <Widget>[
+            Tab(text: '미션정보'),
+            Tab(text: '수행정보'),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -429,6 +434,11 @@ class _RewardChip extends StatelessWidget {
 class _CameraPromptView extends StatelessWidget {
   const _CameraPromptView();
 
+  // Figma 426:18960 places the upload section at y=304 on the 375x812
+  // canvas. With the shared top bar ending at y=96 and the title block at
+  // y=120, this larger gap keeps the CTA in the intended lower position.
+  static const double _uploadSectionTopGap = 104;
+
   @override
   Widget build(BuildContext context) {
     final MissionController controller = MissionScope.of(context);
@@ -459,7 +469,7 @@ class _CameraPromptView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppTokens.sectionGap),
+              const SizedBox(height: _uploadSectionTopGap),
               _CameraCTA(
                 onTap: () async {
                   final String? path = await CameraService.capturePhoto();
@@ -531,7 +541,7 @@ class _CameraCTA extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   const Icon(
-                    Icons.camera_alt_outlined,
+                    Icons.ios_share,
                     size: 24,
                     color: AppColors.gray700,
                   ),
@@ -563,6 +573,12 @@ class _CameraCTA extends StatelessWidget {
 /// gated on [MissionController.canSubmit] (≥1 photo captured).
 class _PhotoPreviewView extends StatelessWidget {
   const _PhotoPreviewView();
+
+  // Figma 426:19035 / 426:18995 places the preview grid at y=250. The
+  // shared header stack ends near y=197 on the 375x812 canvas, so this keeps
+  // the photo row lower than the generic section spacing without affecting the
+  // bottom hint/submit anchors.
+  static const double _photoGridTopGap = 53;
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +614,7 @@ class _PhotoPreviewView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppTokens.sectionGap),
+              const SizedBox(height: _photoGridTopGap),
               Expanded(
                 child: SingleChildScrollView(
                   child: GridView.count(
@@ -666,6 +682,11 @@ class _PhotoPreviewView extends StatelessWidget {
 class _SubmittedView extends StatelessWidget {
   const _SubmittedView();
 
+  // Figma 426:19052 / 426:19062 starts the completion copy block at y≈213.
+  // The shared app bar consumes 96px on the 375x812 canvas, leaving this body
+  // offset to anchor the text block before the 60px check icon.
+  static const double _contentTopGap = 117;
+
   @override
   Widget build(BuildContext context) {
     final MissionController controller = MissionScope.of(context);
@@ -674,7 +695,7 @@ class _SubmittedView extends StatelessWidget {
 
     final String title = isCompleted ? '미션 수행 완료!' : '업로드 완료!';
     final String subtitle = isCompleted
-        ? '${controller.mission.rewardLabel}의 보너스 시간이 지급되었어요!'
+        ? '${_rewardDuration(controller.mission)}의 보너스 시간이 지급되었어요!'
         : '확인까지 조금만 기다려주세요';
 
     return Scaffold(
@@ -686,20 +707,9 @@ class _SubmittedView extends StatelessWidget {
             horizontal: AppTokens.pageHorizontal,
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              const Spacer(),
-              Container(
-                width: 60,
-                height: 60,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Icon(Icons.check, color: Colors.white, size: 20),
-                ),
-              ),
-              const SizedBox(height: 40),
+              const SizedBox(height: _contentTopGap),
               Text(
                 title,
                 style: AppTypography.heading1Bold.copyWith(
@@ -715,6 +725,20 @@ class _SubmittedView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 40),
+              Center(
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.check, color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
               const Spacer(),
               BridgeButton(
                 label: '홈으로',
@@ -729,5 +753,13 @@ class _SubmittedView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _rewardDuration(Mission mission) {
+    if (mission.rewardHours > 0 && mission.rewardMinutes > 0) {
+      return '${mission.rewardHours}시간 ${mission.rewardMinutes}분';
+    }
+    if (mission.rewardHours > 0) return '${mission.rewardHours}시간';
+    return '${mission.rewardMinutes}분';
   }
 }
