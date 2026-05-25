@@ -42,15 +42,11 @@ abstract final class AppColors {
 
   // Primary tonal ramp (light end) — speech bubbles, info backgrounds, button :active.
   static const Color primarySoft = Color(0xFFE1F0FE);
-  static const Color primary025 = primarySoft;
   static const Color primaryLight = Color(0xFFEBF5FE);
-  static const Color primary050 = primaryLight;
   static const Color primarySubtle = Color(0xFFC2DFFD);
-  static const Color primary100 = primarySubtle;
 
   // Destructive tonal extensions — chip bg + soft error border.
   static const Color destructiveSubtle = Color(0xFFFFD3D3);
-  static const Color destructive100 = destructiveSubtle;
   static const Color destructiveBorderSoft = Color(0xFFFF7878);
 
   // Bonus time donut + label (previously hardcoded in child_home).
@@ -81,7 +77,4 @@ abstract final class AppColors {
   static const Color inputText = inkBlack;
   static const Color dialogScrim = scrim;
   static const Color cardSeparator = gray150;
-
-  // Card drop shadow color — 50% gray (#D9D9D9 @ 50% alpha).
-  static const Color cardShadow = Color(0x80D9D9D9);
 }
