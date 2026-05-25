@@ -69,6 +69,55 @@
 - `200`: `{ "accessToken": "...", "refreshToken": "..." }`  (refresh token rotation)
 - `401 INVALID_REFRESH_TOKEN`: 강제 로그아웃.
 
+### `POST /auth/logout`
+- 토큰 blocklist 운영 시 사용. 운영 안 하면 클라이언트는 호출 안 해도 됨.
+- Body: 빈 객체 `{}` (Authorization 헤더의 access token으로 식별)
+- `204`: 서버 측 세션 무효화 완료. 클라이언트는 응답 후 로컬 토큰/세션 정리.
+
+---
+
+## Push Notification (FCM)
+
+자녀 앱은 Firebase Cloud Messaging을 통해 OS push를 받는다. 백엔드(Spring + AWS)는 Firebase Admin SDK로 메시지를 전송한다.
+
+### `POST /devices`
+- 로그인 직후 + 토큰 회전 시 호출. 같은 device를 두 번 등록하면 백엔드는 기존 row를 갱신해야 함 (upsert).
+- Body: `{ "fcmToken": "eXxxxx...", "platform": "ios" | "android" }`
+- `201`: `{ "id": "device-uuid" }` — 클라이언트는 이 id를 `clearTokens` 시점에 `DELETE /devices/:id`로 정리할 때 사용.
+- `409 ALREADY_REGISTERED`: 동일 fcmToken이 다른 user에 묶여있음. 백엔드가 transfer 처리. 클라이언트는 그냥 201 흐름과 동일하게 취급.
+
+### `DELETE /devices/:id`
+- 로그아웃 / 계정 탈퇴 시 호출. 실패해도 클라이언트 흐름은 진행 (fire-and-forget).
+- `204`: 삭제 완료.
+
+### Push payload 명세
+서버가 FCM Admin SDK로 보내는 메시지는 다음 shape의 `data` 필드를 포함한다 (`notification` 필드는 OS가 자동으로 트레이에 띄울 때 사용):
+
+```json
+{
+  "notification": {
+    "title": "미션 완료",
+    "body": "숙제하기 미션 수행을 AI가 확인했어요."
+  },
+  "data": {
+    "type": "missionCompleted",
+    "deeplink": "/child-home",
+    "notificationId": "noti-uuid",
+    "missionId": "mission-uuid"
+  }
+}
+```
+
+- `data.type`: NotificationType enum과 동일 — `weeklyReport` / `timeConfigured` / `missionCompleted` / `missionConfirmationRequested` / `missionRejected`.
+- `data.deeplink`: 클라이언트가 알림 탭 시 라우팅할 경로. 기존 라우터의 path를 사용 (예: `/child-home/report`, `/child-home/time-setup/confirm`).
+- `data.notificationId`: in-app 알림 row와 매칭. 클라이언트가 탭 시 자동으로 read 처리할 때 사용.
+- `data.<entity>Id`: 필요한 도메인 id (mission, report, schedule 등).
+
+### 클라이언트 동작 요약
+- **Foreground**: in-app 토스트나 배지 새로고침. 알림 페이지 로드 트리거.
+- **Background / Terminated**: OS가 자동 표시. 사용자가 탭 → 앱 진입 시 `data.deeplink`로 라우팅.
+- **권한**: iOS는 첫 로그인 후 권한 요청. Android 13+는 `POST_NOTIFICATIONS` 권한 별도.
+
 ---
 
 ## Mission
