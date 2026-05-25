@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
+import '../../data/repositories/my_page_repository.dart';
 
 enum _PasswordChangeErrorType { currentMismatch }
 
@@ -20,10 +22,14 @@ class PasswordChangePage extends StatefulWidget {
 }
 
 class _PasswordChangePageState extends State<PasswordChangePage> {
+  // Demo-only constant kept for client-side "same as current" guard.
+  // Authoritative current-password validation now lives in the repository.
   static const String _mockCurrentPassword = 'Gdg123456789!';
   static final RegExp _passwordPattern = RegExp(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])[^\s]{12,15}$',
   );
+
+  late final MyPageRepository _repository = createMyPageRepository();
 
   final TextEditingController _currentPasswordController =
       TextEditingController();
@@ -40,12 +46,13 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
   bool _newPasswordRuleSeverityIsError = false;
   bool _showSameAsCurrentError = false;
   bool _showConfirmMismatchError = false;
+  bool _submitting = false;
 
   String get _currentPassword => _currentPasswordController.text;
   String get _newPassword => _newPasswordController.text;
   String get _confirmPassword => _confirmPasswordController.text;
 
-  bool get _isCurrentPasswordValid => _currentPassword == _mockCurrentPassword;
+  bool get _isCurrentPasswordValid => _currentPassword.isNotEmpty;
   bool get _isNewPasswordValid => _passwordPattern.hasMatch(_newPassword);
   bool get _isSameAsCurrentPassword =>
       _newPassword.isNotEmpty && _newPassword == _mockCurrentPassword;
@@ -55,6 +62,7 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
       _newPassword == _confirmPassword;
 
   bool get _canSubmit =>
+      !_submitting &&
       _isCurrentPasswordValid &&
       _isNewPasswordValid &&
       !_isSameAsCurrentPassword &&
@@ -126,13 +134,11 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
     onChanged('');
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
     setState(() {
-      _currentPasswordError = _isCurrentPasswordValid
-          ? null
-          : _PasswordChangeErrorType.currentMismatch;
+      _currentPasswordError = null;
       _showNewPasswordRuleHint =
           _newPassword.isNotEmpty && !_isNewPasswordValid;
       _newPasswordRuleSeverityIsError = _showNewPasswordRuleHint;
@@ -146,7 +152,37 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
       return;
     }
 
-    context.pop();
+    setState(() {
+      _submitting = true;
+    });
+
+    final NavigatorState navigator = Navigator.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final Result<void> result = await _repository.changePassword(
+      currentPassword: _currentPassword,
+      newPassword: _newPassword,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (result) {
+      case Success<void>():
+        messenger.showSnackBar(
+          const SnackBar(content: Text('비밀번호가 변경되었어요.')),
+        );
+        navigator.pop();
+      case Failure<void>(:final String message):
+        setState(() {
+          _submitting = false;
+          if (message.contains('현재 비밀번호')) {
+            _currentPasswordError = _PasswordChangeErrorType.currentMismatch;
+          } else {
+            messenger.showSnackBar(SnackBar(content: Text(message)));
+          }
+        });
+    }
   }
 
   @override
@@ -258,7 +294,9 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
               ),
               child: _PasswordChangeButton(
                 enabled: _canSubmit,
-                onPressed: _submit,
+                onPressed: () {
+                  _submit();
+                },
               ),
             ),
           ),

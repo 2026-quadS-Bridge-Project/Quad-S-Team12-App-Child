@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
+import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
+import '../../data/models/user_profile.dart';
+import '../../data/repositories/my_page_repository.dart';
 
 class MyPage extends StatefulWidget {
   const MyPage({super.key});
@@ -15,28 +18,43 @@ class MyPage extends StatefulWidget {
 }
 
 class _MyPageState extends State<MyPage> {
-  // TODO(backend): wire _accountType and _childCode to user profile API.
-  // Static placeholders until the backend endpoint is available
-  // (see audit 08-mypage.md Issue 8).
-  static const String _accountType = '자녀회원';
-  static const String _childCode = 'XY785eZ';
+  late final MyPageRepository _repository = createMyPageRepository();
 
+  // Defaults shown while the profile fetch is in flight. They mirror the
+  // canned mock values so the layout never flashes empty strings.
   String _username = AuthSession.fallbackUsername;
+  String _accountType = '자녀회원';
+  String _childCode = 'XY785eZ';
 
   @override
   void initState() {
     super.initState();
-    _loadUsername();
+    _loadProfile();
   }
 
-  Future<void> _loadUsername() async {
-    final String username = await AuthSession.username();
+  Future<void> _loadProfile() async {
+    final Result<UserProfile> result = await _repository.fetchProfile();
     if (!mounted) {
       return;
     }
-    setState(() {
-      _username = username;
-    });
+    switch (result) {
+      case Success<UserProfile>(:final UserProfile data):
+        setState(() {
+          _username = data.username;
+          _accountType = data.accountType;
+          _childCode = data.childCode;
+        });
+      case Failure<UserProfile>():
+        // Fall back to AuthSession username so the screen still shows the
+        // logged-in id even if the profile fetch fails.
+        final String username = await AuthSession.username();
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _username = username;
+        });
+    }
   }
 
   Future<void> _showDeleteAccountDialog(BuildContext context) {
@@ -52,9 +70,9 @@ class _MyPageState extends State<MyPage> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 375),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 21),
-                  child: _DeleteAccountDialog(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 21),
+                  child: _DeleteAccountDialog(onConfirm: _handleDeleteAccount),
                 ),
               ),
             ),
@@ -72,6 +90,30 @@ class _MyPageState extends State<MyPage> {
         );
       },
     );
+  }
+
+  Future<void> _handleDeleteAccount() async {
+    final GoRouter router = GoRouter.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    // Dismiss the dialog before awaiting the network call so the user sees
+    // immediate feedback regardless of which branch we land on.
+    context.pop();
+
+    final Result<void> result = await _repository.deleteAccount();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Success<void>():
+        await AuthSession.clearLogin();
+        await AuthSession.clearTokens();
+        if (!mounted) {
+          return;
+        }
+        router.push('/mypage/delete-complete');
+      case Failure<void>(:final String message):
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
@@ -93,11 +135,11 @@ class _MyPageState extends State<MyPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const _InfoRow(label: '회원유형', value: _accountType),
+                      _InfoRow(label: '회원유형', value: _accountType),
                       const SizedBox(height: 24),
                       _InfoRow(label: '아이디', value: _username),
                       const SizedBox(height: 24),
-                      const _InfoRow(label: '자녀코드', value: _childCode),
+                      _InfoRow(label: '자녀코드', value: _childCode),
                       const SizedBox(height: 24),
                       const _PasswordRow(),
                     ],
@@ -135,7 +177,11 @@ class _MyPageState extends State<MyPage> {
 }
 
 class _DeleteAccountDialog extends StatelessWidget {
-  const _DeleteAccountDialog();
+  const _DeleteAccountDialog({required this.onConfirm});
+
+  /// Invoked when the user taps 확인. Owner ([_MyPageState]) is responsible
+  /// for dismissing the dialog, calling the repository, and routing.
+  final Future<void> Function() onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -167,11 +213,8 @@ class _DeleteAccountDialog extends StatelessWidget {
                   _DeleteDialogButton(
                     label: '확인',
                     filled: true,
-                    onTap: () async {
-                      final GoRouter router = GoRouter.of(context);
-                      context.pop();
-                      await AuthSession.clearLogin();
-                      router.push('/mypage/delete-complete');
+                    onTap: () {
+                      onConfirm();
                     },
                   ),
                 ],
