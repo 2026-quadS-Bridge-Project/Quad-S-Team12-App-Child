@@ -20,6 +20,14 @@ abstract interface class AuthRepository {
     required String username,
     required String password,
   });
+
+  /// Exchanges a [refreshToken] for a fresh access/refresh pair.
+  ///
+  /// The Dio 401 interceptor uses a separate, interceptor-free client to
+  /// perform this exchange (so the refresh call itself cannot recurse). This
+  /// method exists for callers that want an explicit refresh — e.g. a future
+  /// "force re-auth" admin flow — and for tests.
+  Future<Result<AuthToken>> refreshToken(String refreshToken);
 }
 
 /// Factory that resolves the active [AuthRepository] implementation based on
