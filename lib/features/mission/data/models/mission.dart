@@ -5,6 +5,38 @@ enum MissionStatus {
   rejected, // 반려됨
 }
 
+/// Mission confirmation method — drives the submit-flow branching in
+/// [MissionController.submit]:
+/// - [aiAuto]         → reviewing → auto-approve after a short delay
+/// - [childSelf]      → completes immediately on submit
+/// - [parentApproval] → reviewing until the parent approves
+enum ConfirmationMethod {
+  aiAuto,
+  childSelf,
+  parentApproval;
+
+  /// Korean display label used by the chip rows on Figma 746-11392.
+  String get label {
+    switch (this) {
+      case ConfirmationMethod.aiAuto:
+        return 'AI 자동확인';
+      case ConfirmationMethod.childSelf:
+        return '자녀 확인';
+      case ConfirmationMethod.parentApproval:
+        return '부모 확인';
+    }
+  }
+
+  /// Backward-compat lookup for legacy callers that still hand around the
+  /// Korean string. Returns null when no enum matches.
+  static ConfirmationMethod? fromLabel(String label) {
+    for (final ConfirmationMethod m in ConfirmationMethod.values) {
+      if (m.label == label) return m;
+    }
+    return null;
+  }
+}
+
 class Mission {
   const Mission({
     required this.id,
@@ -20,11 +52,11 @@ class Mission {
     this.categoryOptions = const <String>['루틴', '학습', '운동', '청소', '심부름'],
     this.resetCycle = '매일',
     this.resetCycleOptions = const <String>['매일', '일주일', '한 달'],
-    this.confirmationMethod = '자녀 확인',
-    this.confirmationMethodOptions = const <String>[
-      'AI 자동확인',
-      '자녀 확인',
-      '부모 확인',
+    this.confirmationMethod = ConfirmationMethod.childSelf,
+    this.confirmationMethodOptions = const <ConfirmationMethod>[
+      ConfirmationMethod.aiAuto,
+      ConfirmationMethod.childSelf,
+      ConfirmationMethod.parentApproval,
     ],
     this.payoutTime,
     this.captureInstruction = '깨끗해진 방을 찍어서 올려주세요!',
@@ -47,8 +79,8 @@ class Mission {
   final List<String> categoryOptions;
   final String resetCycle;
   final List<String> resetCycleOptions;
-  final String confirmationMethod;
-  final List<String> confirmationMethodOptions;
+  final ConfirmationMethod confirmationMethod;
+  final List<ConfirmationMethod> confirmationMethodOptions;
   final String? payoutTime;
 
   /// Mission-specific copy shown above the camera CTA on frames

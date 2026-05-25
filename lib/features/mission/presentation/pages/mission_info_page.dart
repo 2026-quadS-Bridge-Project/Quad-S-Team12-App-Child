@@ -182,8 +182,12 @@ class _MissionInfoTab extends StatelessWidget {
           const SizedBox(height: AppTokens.sectionGap - 8),
           _ChipRowSection(
             label: '확인방식',
-            options: mission.confirmationMethodOptions,
-            selected: mission.confirmationMethod,
+            options: <String>[
+              for (final ConfirmationMethod m
+                  in mission.confirmationMethodOptions)
+                m.label,
+            ],
+            selected: mission.confirmationMethod.label,
           ),
           const SizedBox(height: AppTokens.sectionGap - 8),
           _PayoutTimeSection(
@@ -233,7 +237,13 @@ class _MissionPerformInfoTab extends StatelessWidget {
             variant: BridgeButtonVariant.primary,
             size: BridgeButtonSize.large,
             fullWidth: true,
-            onPressed: controller.goToCameraPrompt,
+            // No rejected-detail node exists in Figma — disable the CTA so
+            // rejected missions can't enter the perform flow until a retry
+            // design is supplied.
+            onPressed:
+                controller.mission.status == MissionStatus.rejected
+                ? null
+                : controller.goToCameraPrompt,
           ),
         ],
       ),

@@ -60,7 +60,8 @@ class MissionController extends ChangeNotifier {
   /// Mock submission — self-confirm missions complete immediately; AI/parent
   /// confirmation missions enter reviewing until backend approval arrives.
   void submit({bool? aiAutoApprove}) {
-    final bool completesImmediately = _mission.confirmationMethod == '자녀 확인';
+    final bool completesImmediately =
+        _mission.confirmationMethod == ConfirmationMethod.childSelf;
     _mission = _mission.copyWith(
       status: completesImmediately
           ? MissionStatus.completed
@@ -74,7 +75,8 @@ class MissionController extends ChangeNotifier {
     // never call notifyListeners() on a disposed ChangeNotifier.
     _autoApproveTimer?.cancel();
     final bool shouldAutoApprove =
-        aiAutoApprove ?? (_mission.confirmationMethod == 'AI 자동확인');
+        aiAutoApprove ??
+        (_mission.confirmationMethod == ConfirmationMethod.aiAuto);
     if (!completesImmediately && shouldAutoApprove) {
       _autoApproveTimer = Timer(const Duration(seconds: 2), () {
         if (_disposed) return;

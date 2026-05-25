@@ -7,51 +7,26 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../mission/data/mock/mission_mock.dart';
+import '../../../mission/data/models/mission.dart' as mission_model;
 
 class ChildHomePage extends StatefulWidget {
   const ChildHomePage({
     super.key,
-    this.showOnboarding = false,
     this.showContent = true,
-    this.onDismissOnboarding,
   });
 
-  final bool showOnboarding;
   final bool showContent;
-  final VoidCallback? onDismissOnboarding;
 
   @override
   State<ChildHomePage> createState() => _ChildHomePageState();
 }
 
 class _ChildHomePageState extends State<ChildHomePage> {
-  late bool _showOnboarding = widget.showOnboarding;
   // TODO: Wire `_hasSchedule` to real schedule state once persistence lands.
   // Default false so the empty-state + button is reachable on first run.
   // Long-press the time card to toggle for debug (see _toggleHasScheduleForDebug).
   bool _hasSchedule = false;
-
-  @override
-  void didUpdateWidget(covariant ChildHomePage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.showOnboarding != widget.showOnboarding) {
-      _showOnboarding = widget.showOnboarding;
-    }
-  }
-
-  void _dismissOnboarding() {
-    if (!_showOnboarding) {
-      return;
-    }
-    final VoidCallback? dismissCallback = widget.onDismissOnboarding;
-    if (dismissCallback != null) {
-      dismissCallback();
-      return;
-    }
-    setState(() {
-      _showOnboarding = false;
-    });
-  }
 
   void _toggleHasScheduleForDebug() {
     setState(() {
@@ -64,51 +39,23 @@ class _ChildHomePageState extends State<ChildHomePage> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: _showOnboarding
-            ? AppColors.gray050
-            : AppColors.gray100,
-        body: Stack(
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: AppTokens.mobileFrameWidth,
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: _ChildHomeContent(
-                    onboarding: _showOnboarding,
-                    hasContent: widget.showContent,
-                    hasSchedule: _hasSchedule,
-                    onDebugToggleSchedule: kDebugMode
-                        ? _toggleHasScheduleForDebug
-                        : null,
-                  ),
-                ),
+        backgroundColor: AppColors.gray100,
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppTokens.mobileFrameWidth,
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: _ChildHomeContent(
+                hasContent: widget.showContent,
+                hasSchedule: _hasSchedule,
+                onDebugToggleSchedule: kDebugMode
+                    ? _toggleHasScheduleForDebug
+                    : null,
               ),
             ),
-            if (_showOnboarding)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _dismissOnboarding,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: AppTokens.mobileFrameWidth,
-                      ),
-                      child: SafeArea(
-                        bottom: false,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: const [_ParentConnectGuide()],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -117,13 +64,11 @@ class _ChildHomePageState extends State<ChildHomePage> {
 
 class _ChildHomeContent extends StatelessWidget {
   const _ChildHomeContent({
-    required this.onboarding,
     required this.hasContent,
     required this.hasSchedule,
     required this.onDebugToggleSchedule,
   });
 
-  final bool onboarding;
   final bool hasContent;
   final bool hasSchedule;
   // Null in release builds — see ChildHomePage build(). Keeps the long-press
@@ -137,7 +82,6 @@ class _ChildHomeContent extends StatelessWidget {
         MediaQuery.sizeOf(context).height - padding.top - padding.bottom;
     const double emptyContentTopGap = 20;
     const double populatedContentTopGap = 30;
-    const double onboardingContentTopGap = 29;
 
     return SingleChildScrollView(
       physics: hasContent
@@ -154,31 +98,18 @@ class _ChildHomeContent extends StatelessWidget {
               _TopBar(hasNotification: hasContent),
               // Figma: topbar bottom y=88, content y=108 (empty) / 118 (v2).
               SizedBox(
-                height: onboarding
-                    ? onboardingContentTopGap
-                    : (hasContent
-                          ? populatedContentTopGap
-                          : emptyContentTopGap),
+                height: hasContent
+                    ? populatedContentTopGap
+                    : emptyContentTopGap,
               ),
-              Opacity(
-                opacity: onboarding ? 0.2 : 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _TodayTimeSection(
-                      hasContent: hasContent,
-                      hasSchedule: hasSchedule,
-                      onDebugToggleSchedule: onDebugToggleSchedule,
-                    ),
-                    SizedBox(height: onboarding ? 46 : 50),
-                    _MissionSection(
-                      emptyOnboardingCopy: onboarding,
-                      hasContent: hasContent,
-                    ),
-                    if (hasContent) const SizedBox(height: 32),
-                  ],
-                ),
+              _TodayTimeSection(
+                hasContent: hasContent,
+                hasSchedule: hasSchedule,
+                onDebugToggleSchedule: onDebugToggleSchedule,
               ),
+              const SizedBox(height: 50),
+              _MissionSection(hasContent: hasContent),
+              if (hasContent) const SizedBox(height: 32),
             ],
           ),
         ),
@@ -621,12 +552,8 @@ class _TimeDetailGroup extends StatelessWidget {
 }
 
 class _MissionSection extends StatelessWidget {
-  const _MissionSection({
-    required this.emptyOnboardingCopy,
-    required this.hasContent,
-  });
+  const _MissionSection({required this.hasContent});
 
-  final bool emptyOnboardingCopy;
   final bool hasContent;
 
   @override
@@ -636,7 +563,7 @@ class _MissionSection extends StatelessWidget {
     }
 
     return SizedBox(
-      height: emptyOnboardingCopy ? 367 : 281,
+      height: 281,
       width: double.infinity,
       child: Stack(
         children: [
@@ -644,48 +571,42 @@ class _MissionSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                emptyOnboardingCopy ? '미션 현황' : '오늘의 미션',
+                '오늘의 미션',
                 style: AppTypography.heading2Bold.copyWith(
                   color: AppColors.black,
                   letterSpacing: -0.24,
                 ),
               ),
-              if (emptyOnboardingCopy) ...[
-                const SizedBox(width: 8),
-                const Icon(Icons.settings, color: AppColors.gray300, size: 22),
-              ],
-              if (!emptyOnboardingCopy) ...[
-                const Spacer(),
-                Text(
-                  '0개 완료',
-                  style: AppTypography.labelBold.copyWith(
-                    color: AppColors.gray700,
-                    fontSize: 14,
-                    height: 1.429,
-                    letterSpacing: 0.203,
-                  ),
+              const Spacer(),
+              Text(
+                '0개 완료',
+                style: AppTypography.labelBold.copyWith(
+                  color: AppColors.gray700,
+                  fontSize: 14,
+                  height: 1.429,
+                  letterSpacing: 0.203,
                 ),
-                const SizedBox(width: 8),
-                Container(width: 1, height: 14, color: AppColors.gray200),
-                const SizedBox(width: 8),
-                Text(
-                  '0',
-                  style: AppTypography.labelBold.copyWith(
-                    color: AppColors.gray200,
-                    fontSize: 14,
-                    height: 1.429,
-                    letterSpacing: 0.203,
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Container(width: 1, height: 14, color: AppColors.gray200),
+              const SizedBox(width: 8),
+              Text(
+                '0',
+                style: AppTypography.labelBold.copyWith(
+                  color: AppColors.gray200,
+                  fontSize: 14,
+                  height: 1.429,
+                  letterSpacing: 0.203,
                 ),
-              ],
+              ),
             ],
           ),
           Positioned(
-            top: emptyOnboardingCopy ? 88 : 98,
+            top: 98,
             left: 0,
             right: 0,
             child: Text(
-              emptyOnboardingCopy ? '부모님이 아직 미션을 등록하지 않았어요' : '아직 등록된 미션이 없어요',
+              '아직 등록된 미션이 없어요',
               textAlign: TextAlign.center,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.gray500,
@@ -706,43 +627,18 @@ class _MissionListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Replace mock data once mission data wiring lands.
-    const List<_MissionItemData> missions = [
-      _MissionItemData(
-        id: '1',
-        status: _MissionStatus.pendingCheck,
-        title: '방청소 하기',
-        rewardText: '1시간 지급',
-        iconAsset: 'assets/icons/청소.svg',
-      ),
-      _MissionItemData(
-        id: '2',
-        status: _MissionStatus.rejected,
-        title: '운동하기',
-        rewardText: '30분 지급',
-        iconAsset: 'assets/icons/운동.svg',
-      ),
-      _MissionItemData(
-        id: '3',
-        status: _MissionStatus.reviewing,
-        title: '숙제하기',
-        rewardText: '15분 지급',
-        iconAsset: 'assets/icons/학습.svg',
-      ),
-      _MissionItemData(
-        id: '4',
-        status: _MissionStatus.completed,
-        title: '심부름하기',
-        rewardText: '20분 지급',
-        iconAsset: 'assets/icons/심부름.svg',
-      ),
-      _MissionItemData(
-        id: '5',
-        status: _MissionStatus.completed,
-        title: '루틴 지키기',
-        rewardText: '10분 지급',
-        iconAsset: 'assets/icons/루틴.svg',
-      ),
+    // Single source of truth: MissionMock.all. Mapping happens inline so the
+    // home-card visual shape (_MissionItemData) is preserved while the
+    // titles/statuses stay in sync with the mission detail screen.
+    final List<_MissionItemData> missions = <_MissionItemData>[
+      for (final mission_model.Mission m in MissionMock.all)
+        _MissionItemData(
+          id: m.id,
+          status: _statusFromModel(m.status),
+          title: m.title,
+          rewardText: m.rewardLabel,
+          iconAsset: _iconAssetForCategory(m.category),
+        ),
     ];
 
     final int completedCount = missions
@@ -800,6 +696,38 @@ class _MissionListSection extends StatelessWidget {
 }
 
 enum _MissionStatus { pendingCheck, rejected, reviewing, completed }
+
+_MissionStatus _statusFromModel(mission_model.MissionStatus status) {
+  switch (status) {
+    case mission_model.MissionStatus.pendingCheck:
+      return _MissionStatus.pendingCheck;
+    case mission_model.MissionStatus.rejected:
+      return _MissionStatus.rejected;
+    case mission_model.MissionStatus.reviewing:
+      return _MissionStatus.reviewing;
+    case mission_model.MissionStatus.completed:
+      return _MissionStatus.completed;
+  }
+}
+
+/// Maps a Mission.category to its SVG asset on disk. Falls back to the
+/// generic 루틴 icon when an unknown category arrives, matching the default
+/// from [mission_model.Mission].
+String _iconAssetForCategory(String category) {
+  switch (category) {
+    case '청소':
+      return 'assets/icons/청소.svg';
+    case '학습':
+      return 'assets/icons/학습.svg';
+    case '운동':
+      return 'assets/icons/운동.svg';
+    case '심부름':
+      return 'assets/icons/심부름.svg';
+    case '루틴':
+    default:
+      return 'assets/icons/루틴.svg';
+  }
+}
 
 class _MissionItemData {
   const _MissionItemData({
@@ -889,7 +817,7 @@ class _MissionText extends StatelessWidget {
             color: color,
             fontSize: 16,
             height: 1.5,
-            letterSpacing: 0.091,
+            letterSpacing: 0.0912,
             decoration: decoration,
           ),
         ),
@@ -972,135 +900,3 @@ class _ReviewingStatusIcon extends StatelessWidget {
   }
 }
 
-class _ParentConnectGuide extends StatelessWidget {
-  const _ParentConnectGuide();
-
-  @override
-  Widget build(BuildContext context) {
-    // IgnorePointer: the bubble is purely informational. Without this, taps
-    // on the bubble visual would be absorbed before reaching the overlay's
-    // GestureDetector(behavior: translucent) dismiss handler, and if the
-    // bubble overlaps the my-button or notification bell those hit areas
-    // would also be blocked.
-    return Positioned(
-      left: 62,
-      top: 21,
-      child: IgnorePointer(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Padding(padding: EdgeInsets.only(top: 12), child: _GuidePointer()),
-            _GuideBubble(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GuidePointer extends StatelessWidget {
-  const _GuidePointer();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: _GuidePointerClipper(),
-      child: Container(width: 11, height: 14, color: AppColors.primarySoft),
-    );
-  }
-}
-
-class _GuideBubble extends StatelessWidget {
-  const _GuideBubble();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 204,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _GuideStepBadge(),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '부모님 계정과 연결하기',
-                    maxLines: 1,
-                    style: AppTypography.captionBold.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                      height: 1.334,
-                      letterSpacing: 0.302,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'my 버튼에서 자녀 코드를 확인해\n부모님 계정과 연결해 주세요.',
-            style: AppTypography.captionRegular.copyWith(
-              color: AppColors.gray600,
-              fontSize: 12,
-              height: 1.334,
-              letterSpacing: 0.302,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuideStepBadge extends StatelessWidget {
-  const _GuideStepBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: const BoxDecoration(
-        color: AppColors.primarySubtle,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          '1',
-          style: AppTypography.captionBold.copyWith(
-            color: AppColors.primary,
-            fontSize: 12,
-            height: 1.334,
-            letterSpacing: 0.302,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GuidePointerClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    return Path()
-      ..moveTo(size.width, 0)
-      ..lineTo(0, size.height / 2)
-      ..lineTo(size.width, size.height)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}

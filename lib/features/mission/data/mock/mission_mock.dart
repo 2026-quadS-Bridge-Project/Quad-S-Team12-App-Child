@@ -12,6 +12,8 @@ class MissionMock {
       status: MissionStatus.pendingCheck,
       description: '방청소하고 깨끗하진 방 사진 찍기',
       assignedBy: 'parent',
+      category: '청소',
+      confirmationMethod: ConfirmationMethod.childSelf,
     ),
     Mission(
       id: '2',
@@ -21,6 +23,8 @@ class MissionMock {
       status: MissionStatus.rejected,
       description: '사진을 다시 찍어주세요.',
       assignedBy: 'parent',
+      category: '청소',
+      confirmationMethod: ConfirmationMethod.parentApproval,
     ),
     Mission(
       id: '3',
@@ -30,6 +34,8 @@ class MissionMock {
       status: MissionStatus.reviewing,
       description: '제출되었어요. 확인을 기다려주세요.',
       assignedBy: 'ai',
+      category: '청소',
+      confirmationMethod: ConfirmationMethod.aiAuto,
     ),
     Mission(
       id: '4',
@@ -39,6 +45,8 @@ class MissionMock {
       status: MissionStatus.completed,
       description: '잘했어요!',
       assignedBy: 'parent',
+      category: '청소',
+      confirmationMethod: ConfirmationMethod.parentApproval,
     ),
     Mission(
       id: '5',
@@ -48,6 +56,8 @@ class MissionMock {
       status: MissionStatus.pendingCheck,
       description: '수학 문제집 p.32-35 풀고 사진 제출.',
       assignedBy: 'parent',
+      category: '학습',
+      confirmationMethod: ConfirmationMethod.parentApproval,
     ),
   ];
 
