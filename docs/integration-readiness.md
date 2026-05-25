@@ -37,9 +37,10 @@ and injects `Authorization: Bearer <token>` when present.
 
 ## 2. Per-feature repository catalog
 
-All API impls currently throw `UnimplementedError`. Verb/path columns
-are **tentative** — confirm against the backend contract before
-implementing.
+All API impls are wired against the endpoints documented in
+[`api-contract.md`](api-contract.md). Verb/path entries below match
+the impls and are kept here as a quick reference; the contract doc
+is the canonical source.
 
 ### Mission — [mission_repository.dart](../lib/features/mission/data/repositories/mission_repository.dart)
 
@@ -47,7 +48,7 @@ implementing.
 |---|---|---|---|
 | `listMissions` | `Future<Result<List<Mission>>>` | Returns `MissionMock.all` | `GET /missions` |
 | `fetchMission` | `Future<Result<Mission>>(String id)` | Looks up by id; Failure when absent | `GET /missions/{id}` |
-| `submitMission` | `Future<Result<Mission>>({id, photoPaths})` | Echoes mission with attached `photoUrls`; controller owns status transitions | `POST /missions/{id}/submissions` |
+| `submitMission` | `Future<Result<Mission>>({id, photoPaths})` | Echoes mission with attached `photoUrls`; controller owns status transitions | `POST /missions/{id}/submit` |
 
 Notes: `submitMission` accepts local paths today. After photo upload
 goes live the controller should pass remote URLs returned by
@@ -57,17 +58,17 @@ goes live the controller should pass remote URLs returned by
 
 | Method | Signature | Mock behavior | Tentative endpoint |
 |---|---|---|---|
-| `fetchPreviousWeekSchedule` | `Future<Result<TimeSchedule>>` | Returns `TimeScheduleMock.previousWeek` | `GET /schedules/previous-week` |
-| `fetchCurrentSchedule` | `Future<Result<TimeSchedule?>>` | Returns saved fixture or `null` | `GET /schedules/current` |
-| `saveSchedule` | `Future<Result<void>>(TimeSchedule)` | Mutates in-memory fixture | `PUT /schedules/current` |
+| `fetchPreviousWeekSchedule` | `Future<Result<TimeSchedule>>` | Returns `TimeScheduleMock.previousWeek` | `GET /time-setup/previous-week` |
+| `fetchCurrentSchedule` | `Future<Result<TimeSchedule?>>` | Returns saved fixture or `null` | `GET /time-setup/current` |
+| `saveSchedule` | `Future<Result<void>>(TimeSchedule)` | Mutates in-memory fixture | `PUT /time-setup/current` |
 
 ### TimeConfirm — [time_confirm_repository.dart](../lib/features/time_confirm/data/repositories/time_confirm_repository.dart)
 
 | Method | Signature | Mock behavior | Tentative endpoint |
 |---|---|---|---|
-| `fetchCurrentSchedule` | `Future<Result<TimeConfirmData>>` | Returns `TimeConfirmMock.current` | `GET /schedules/parent-proposed` |
-| `requestModification` | `Future<Result<void>>` | No-op success | `POST /schedules/modification-requests` |
-| `acknowledgeSchedule` | `Future<Result<void>>` | No-op success | `POST /schedules/acknowledge` |
+| `fetchCurrentSchedule` | `Future<Result<TimeConfirmData>>` | Returns `TimeConfirmMock.current` | `GET /time-confirm/current` |
+| `requestModification` | `Future<Result<void>>` | No-op success | `POST /time-confirm/modification-requests` |
+| `acknowledgeSchedule` | `Future<Result<void>>` | No-op success | `POST /time-confirm/acknowledge` |
 
 ### Notification — [notification_repository.dart](../lib/features/notifications/data/repositories/notification_repository.dart)
 
@@ -163,18 +164,24 @@ default missing fields to safe values so partial payloads still render.
 The following are explicitly out of scope for the current scaffolding
 and will need follow-up tickets:
 
-- **Refresh-token rotation** — `DioConfig.create()` has a `TODO(auth)`
-  in the `onError` branch ([dio_config.dart line 39](../lib/core/config/dio_config.dart)).
-  No retry logic, no refresh-then-replay.
 - **Loading skeletons / error UI** — pages do not yet render skeleton
   placeholders or styled error states for non-mock failure paths.
   Deferred until the API contracts are known so error copy can be
   authored once.
 - **WebSocket / real-time listeners** — no push channel exists.
   Mission status changes, notification arrivals, and schedule pushes
-  rely on pull-only endpoints.
+  rely on pull-only endpoints + FCM fan-out.
 - **Multipart photo upload** — `ApiPhotoUploadService.uploadPhoto`
   throws. Wire `MultipartFile.fromFile(localPath)` once the upload
   endpoint is finalised.
 - **End-to-end route walkthrough** — the 53-route Phase 5 verification
   pass from the old plan has not been run against this scaffolding.
+
+**Already done since the original draft:**
+- 401-refresh interceptor is live in
+  [dio_config.dart](../lib/core/config/dio_config.dart) — rotates
+  tokens via `/auth/refresh` and replays the failing request.
+- FCM client wiring (registration + foreground / background / tap
+  handlers + deeplink) is in
+  [`core/services/fcm_*`](../lib/core/services/) and
+  [`features/devices/`](../lib/features/devices/).
