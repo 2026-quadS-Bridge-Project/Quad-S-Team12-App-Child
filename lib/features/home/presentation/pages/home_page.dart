@@ -181,8 +181,8 @@ class _BridgeIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return SvgPicture.asset(
       'assets/icons/Icon Container.svg',
-      width: 99,
-      height: 98,
+      width: 90,
+      height: 90,
       fit: BoxFit.contain,
     );
   }

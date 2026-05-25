@@ -13,10 +13,12 @@ class ChildHomePage extends StatefulWidget {
     super.key,
     this.showOnboarding = false,
     this.showContent = true,
+    this.onDismissOnboarding,
   });
 
   final bool showOnboarding;
   final bool showContent;
+  final VoidCallback? onDismissOnboarding;
 
   @override
   State<ChildHomePage> createState() => _ChildHomePageState();
@@ -39,6 +41,11 @@ class _ChildHomePageState extends State<ChildHomePage> {
 
   void _dismissOnboarding() {
     if (!_showOnboarding) {
+      return;
+    }
+    final VoidCallback? dismissCallback = widget.onDismissOnboarding;
+    if (dismissCallback != null) {
+      dismissCallback();
       return;
     }
     setState(() {
@@ -128,6 +135,9 @@ class _ChildHomeContent extends StatelessWidget {
     final EdgeInsets padding = MediaQuery.paddingOf(context);
     final double visibleHeight =
         MediaQuery.sizeOf(context).height - padding.top - padding.bottom;
+    const double emptyContentTopGap = 20;
+    const double populatedContentTopGap = 30;
+    const double onboardingContentTopGap = 29;
 
     return SingleChildScrollView(
       physics: hasContent
@@ -142,9 +152,14 @@ class _ChildHomeContent extends StatelessWidget {
             children: [
               const SizedBox(height: 12),
               _TopBar(hasNotification: hasContent),
-              // v2 (hasContent==true) requires 40 px top gap per
-              // 02-child-home.md "Deltas" §1; v1 keeps 20.
-              SizedBox(height: onboarding ? 29 : (hasContent ? 40 : 20)),
+              // Figma: topbar bottom y=88, content y=108 (empty) / 118 (v2).
+              SizedBox(
+                height: onboarding
+                    ? onboardingContentTopGap
+                    : (hasContent
+                          ? populatedContentTopGap
+                          : emptyContentTopGap),
+              ),
               Opacity(
                 opacity: onboarding ? 0.2 : 1,
                 child: Column(
@@ -666,7 +681,7 @@ class _MissionSection extends StatelessWidget {
             ],
           ),
           Positioned(
-            top: emptyOnboardingCopy ? 88 : 78,
+            top: emptyOnboardingCopy ? 88 : 98,
             left: 0,
             right: 0,
             child: Text(

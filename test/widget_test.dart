@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bridge_k/app/app.dart';
+import 'package:bridge_k/app/router/app_router.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
 import 'package:bridge_k/features/child_home/presentation/pages/child_home_page.dart';
 import 'package:bridge_k/features/my_page/presentation/pages/my_page.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
+    appRouter.go('/');
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
@@ -59,6 +61,25 @@ void main() {
 
     expect(find.text('부모님 계정과 연결하기'), findsNothing);
     expect(find.text('오늘의 시간'), findsOneWidget);
+  });
+
+  testWidgets('legacy onboarding route dismisses to child home route', (
+    WidgetTester tester,
+  ) async {
+    appRouter.go('/child-home/onboarding');
+
+    await tester.pumpWidget(const BridgeKApp());
+    await tester.pumpAndSettle();
+
+    expect(appRouter.state.uri.path, '/child-home/onboarding');
+    expect(find.text('부모님 계정과 연결하기'), findsOneWidget);
+
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pumpAndSettle();
+
+    expect(appRouter.state.uri.path, '/child-home');
+    expect(find.text('부모님 계정과 연결하기'), findsNothing);
+    expect(find.text('방청소 하기'), findsOneWidget);
   });
 
   testWidgets('child my page renders account details and actions', (
