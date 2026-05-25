@@ -1,7 +1,9 @@
 enum NotificationType {
+  weeklyReport,
+  timeConfigured,
   missionCompleted,
   missionConfirmationRequested,
-  timeConfigured,
+  missionRejected,
 }
 
 class NotificationItem {

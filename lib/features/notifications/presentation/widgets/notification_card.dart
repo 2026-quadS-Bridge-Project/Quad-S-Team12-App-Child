@@ -111,7 +111,7 @@ class _NotificationCardState extends State<NotificationCard>
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: Padding(
-                      padding: const EdgeInsets.only(right: 16.183),
+                      padding: const EdgeInsets.only(right: 16),
                       child: Opacity(
                         opacity: (-_dragOffset / _maxSlide).clamp(0, 1),
                         child: const _DeleteRevealIcon(),
@@ -133,8 +133,8 @@ class _NotificationCardState extends State<NotificationCard>
                     borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14.385,
-                    vertical: 12.587,
+                    horizontal: 16,
+                    vertical: 14,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,48 +142,41 @@ class _NotificationCardState extends State<NotificationCard>
                       Row(
                         children: <Widget>[
                           _NotificationLeadingIcon(style: style),
-                          const SizedBox(width: 3.596),
-                          Text(
-                            widget.item.title,
-                            style: AppTypography.labelBold.copyWith(
-                              fontSize: 10.79,
-                              height: 1.334,
-                              letterSpacing: 0.2719,
-                              color: style.accentColor,
-                              decoration: TextDecoration.none,
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              widget.item.title,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.captionBold.copyWith(
+                                color: style.accentColor,
+                                decoration: TextDecoration.none,
+                              ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           Text(
                             widget.item.timeAgo,
                             style: AppTypography.captionRegular.copyWith(
-                              fontSize: 10.79,
-                              height: 1.334,
-                              letterSpacing: 0.2719,
                               color: AppColors.gray300,
                               decoration: TextDecoration.none,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10.789),
+                      const SizedBox(height: 12),
                       Text(
                         widget.item.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.labelMedium.copyWith(
-                          fontSize: 12.59,
-                          height: 1.429,
-                          letterSpacing: 0.1826,
                           color: AppColors.gray800,
                           decoration: TextDecoration.none,
                         ),
                       ),
-                      const SizedBox(height: 10.789),
+                      const SizedBox(height: 12),
                       Text(
                         '${widget.item.actionLabel} →',
-                        style: AppTypography.labelMedium.copyWith(
-                          fontSize: 10.79,
-                          height: 1.334,
-                          letterSpacing: 0.2719,
+                        style: AppTypography.captionMedium.copyWith(
                           color: AppColors.gray500,
                           decoration: TextDecoration.none,
                         ),
@@ -206,8 +199,8 @@ class _DeleteRevealIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 21.578,
-      height: 21.578,
+      width: 24,
+      height: 24,
       decoration: const BoxDecoration(
         // Figma spec 06-notifications.md:160 — swipe-reveal trailing X icon
         // is the destructive token (#FF4242), not the undocumented #FF4B4B
@@ -215,7 +208,7 @@ class _DeleteRevealIcon extends StatelessWidget {
         color: AppColors.destructive,
         shape: BoxShape.circle,
       ),
-      child: const Icon(Icons.close_rounded, size: 14, color: AppColors.white),
+      child: const Icon(Icons.close_rounded, size: 16, color: AppColors.white),
     );
   }
 }
@@ -228,15 +221,15 @@ class _NotificationLeadingIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 18,
-      height: 18,
+      width: 20,
+      height: 20,
       decoration: BoxDecoration(
         color: style.backgroundColor,
         shape: BoxShape.circle,
       ),
       child: Icon(
         style.icon,
-        size: style.icon == Icons.schedule_rounded ? 11 : 12,
+        size: style.icon == Icons.schedule_rounded ? 13 : 14,
         color: AppColors.white,
       ),
     );
@@ -256,8 +249,20 @@ class _NotificationStyle {
 
   factory _NotificationStyle.fromType(NotificationType type) {
     switch (type) {
+      case NotificationType.weeklyReport:
+        return const _NotificationStyle(
+          accentColor: AppColors.positive,
+          backgroundColor: AppColors.positive,
+          icon: Icons.insights_rounded,
+        );
+      case NotificationType.timeConfigured:
+        return const _NotificationStyle(
+          accentColor: AppColors.primary,
+          backgroundColor: AppColors.primary,
+          icon: Icons.schedule_rounded,
+        );
       case NotificationType.missionCompleted:
-        return _NotificationStyle(
+        return const _NotificationStyle(
           accentColor: AppColors.secondaryYellow,
           backgroundColor: AppColors.secondaryYellow,
           icon: Icons.check_rounded,
@@ -268,11 +273,11 @@ class _NotificationStyle {
           backgroundColor: AppColors.positive,
           icon: Icons.autorenew_rounded,
         );
-      case NotificationType.timeConfigured:
+      case NotificationType.missionRejected:
         return const _NotificationStyle(
-          accentColor: AppColors.primary,
-          backgroundColor: AppColors.primary,
-          icon: Icons.schedule_rounded,
+          accentColor: AppColors.destructive,
+          backgroundColor: AppColors.destructive,
+          icon: Icons.close_rounded,
         );
     }
   }

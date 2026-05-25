@@ -10,9 +10,8 @@ import '../widgets/notification_card.dart';
 
 /// 알림 (Notifications) screen.
 ///
-/// Mirrors the parent app's `NotificationsPage` (1:1 visual + UX) so the two
-/// apps share the same notification surface. State is held inline via
-/// `StatefulWidget.setState` rather than a separate controller — matches parent.
+/// Child notification surface. State is held inline via `StatefulWidget.setState`
+/// until the real notification service lands.
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
 
@@ -26,17 +25,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   /// Maps a notification to a sensible default route. Used when the item has
   /// no explicit `deeplink` override.
-  // TODO: route per item.type — backend deeplinks land later. Once the
-  // notifications service ships, prefer `item.deeplink` and remove the
-  // type-based fallback below.
+  // TODO: once the notifications service ships, prefer backend deeplinks and
+  // remove the type-based fallback below.
   String _defaultRouteFor(NotificationType type) {
     switch (type) {
+      case NotificationType.weeklyReport:
+        return '/child-home/report';
+      case NotificationType.timeConfigured:
+        return '/child-home/time-setup/confirm';
       case NotificationType.missionCompleted:
         return '/child-home';
       case NotificationType.missionConfirmationRequested:
         return '/child-home';
-      case NotificationType.timeConfigured:
-        return '/child-home/time-setup/confirm';
+      case NotificationType.missionRejected:
+        return '/child-home';
     }
   }
 
@@ -50,7 +52,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'notification-delete-dialog',
-      barrierColor: const Color.fromRGBO(68, 68, 68, 0.6),
+      barrierColor: AppColors.scrim,
       pageBuilder: (BuildContext context, _, _) {
         return Material(
           type: MaterialType.transparency,
@@ -103,7 +105,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 375),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -117,9 +119,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             '확인하지 않은 알림이 없습니다.',
                             textAlign: TextAlign.center,
                             style: AppTypography.headlineMedium.copyWith(
-                              fontSize: 16.183,
-                              height: 1.445,
-                              letterSpacing: -0.0032,
                               color: AppColors.gray300,
                               decoration: TextDecoration.none,
                             ),
@@ -135,7 +134,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           padding: EdgeInsets.zero,
                           itemCount: _notifications.length,
                           separatorBuilder: (_, _) =>
-                              const SizedBox(height: 13.486),
+                              const SizedBox(height: 15),
                           itemBuilder: (BuildContext context, int index) {
                             final NotificationItem item = _notifications[index];
                             return NotificationCard(
@@ -180,7 +179,7 @@ class _DeleteNotificationDialog extends StatelessWidget {
                 width: 28.77,
                 height: 28.77,
                 decoration: const BoxDecoration(
-                  color: AppColors.destructive,
+                  color: AppColors.secondaryYellow,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -327,9 +326,6 @@ class _NotificationsTopBar extends StatelessWidget {
             child: Text(
               '알림',
               style: AppTypography.headlineMedium.copyWith(
-                fontSize: 16.18,
-                height: 1.445,
-                letterSpacing: -0.0032,
                 color: AppColors.inkBlack,
                 decoration: TextDecoration.none,
               ),
