@@ -49,9 +49,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
         setState(() {
           _notifications = data;
         });
-      case Failure<List<NotificationItem>>(:final String message):
+      case Failure<List<NotificationItem>>():
+        // One-time hint that the list may be stale; the seed (fixture mock)
+        // remains on-screen so the user is never left blank.
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+          const SnackBar(content: Text('알림을 새로고침하지 못했어요.')),
         );
     }
   }
@@ -120,6 +122,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 21),
                   child: _DeleteNotificationDialog(
                     onConfirm: () {
+                      // Gate against double-tap: pop first so a second tap on
+                      // the (now-detached) button cannot re-enter delete.
+                      if (!Navigator.canPop(context)) {
+                        return;
+                      }
                       context.pop();
                       _confirmDelete(item);
                     },
