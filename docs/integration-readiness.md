@@ -60,14 +60,14 @@ goes live the controller should pass remote URLs returned by
 |---|---|---|---|
 | `fetchPreviousWeekSchedule` | `Future<Result<TimeSchedule>>` | Returns `TimeScheduleMock.previousWeek` | `GET /time-setup/previous-week` |
 | `fetchCurrentSchedule` | `Future<Result<TimeSchedule?>>` | Returns saved fixture or `null` | `GET /time-setup/current` |
-| `saveSchedule` | `Future<Result<void>>(TimeSchedule)` | Mutates in-memory fixture | `PUT /time-setup/current` |
+| `saveSchedule` | `Future<Result<void>>(TimeSchedule)` | Mutates in-memory fixture | `POST /time-setup` |
 
 ### TimeConfirm — [time_confirm_repository.dart](../lib/features/time_confirm/data/repositories/time_confirm_repository.dart)
 
 | Method | Signature | Mock behavior | Tentative endpoint |
 |---|---|---|---|
 | `fetchCurrentSchedule` | `Future<Result<TimeConfirmData>>` | Returns `TimeConfirmMock.current` | `GET /time-confirm/current` |
-| `requestModification` | `Future<Result<void>>` | No-op success | `POST /time-confirm/modification-requests` |
+| `requestModification` | `Future<Result<void>>` | No-op success | `POST /time-confirm/request-modification` |
 | `acknowledgeSchedule` | `Future<Result<void>>` | No-op success | `POST /time-confirm/acknowledge` |
 
 ### Notification — [notification_repository.dart](../lib/features/notifications/data/repositories/notification_repository.dart)
@@ -82,15 +82,15 @@ goes live the controller should pass remote URLs returned by
 
 | Method | Signature | Mock behavior | Tentative endpoint |
 |---|---|---|---|
-| `fetchCurrentWeekReport` | `Future<Result<UsageReport>>` | Returns `UsageReportMock.currentWeek` | `GET /reports/usage/current-week` |
+| `fetchCurrentWeekReport` | `Future<Result<UsageReport>>` | Returns `UsageReportMock.currentWeek` | `GET /reports/weekly` |
 
 ### MyPage — [my_page_repository.dart](../lib/features/my_page/data/repositories/my_page_repository.dart)
 
 | Method | Signature | Mock behavior | Tentative endpoint |
 |---|---|---|---|
-| `fetchProfile` | `Future<Result<UserProfile>>` | Returns canned profile | `GET /me` |
-| `changePassword` | `Future<Result<void>>({currentPassword, newPassword})` | Validates against demo password; Failure with `'현재 비밀번호가 일치하지 않아요.'` on mismatch | `POST /me/password` |
-| `deleteAccount` | `Future<Result<void>>` | No-op success | `DELETE /me` |
+| `fetchProfile` | `Future<Result<UserProfile>>` | Returns canned profile | `GET /user/profile` |
+| `changePassword` | `Future<Result<void>>({currentPassword, newPassword})` | Validates against demo password; Failure with `'현재 비밀번호가 일치하지 않아요.'` on mismatch | `PATCH /user/password` |
+| `deleteAccount` | `Future<Result<void>>` | No-op success | `DELETE /user/account` |
 
 ### Auth — [auth_repository.dart](../lib/features/auth/data/repositories/auth_repository.dart)
 
@@ -111,29 +111,24 @@ match exactly — no substring checks.
 Lives under `core/services` because it crosses feature boundaries
 (mission submission, future profile photo, etc.).
 
-## 3. How to swap a Mock for Api
+## 3. How to point the app at a real backend
 
-1. **Confirm the backend contract** — verify the HTTP verb, path,
-   request body shape, and response shape with the server team.
-   Replace the tentative entries above.
-2. **Flip the environment toggle** — update
-   [environment.dart](../lib/core/config/environment.dart) so
-   `EnvironmentConfig.staging()` / `.production()` have `useMocks: false`,
-   and update the top-level `currentEnvironment` const for the target
-   build.
-3. **Fill in the `Api*Repository` method** — replace the
-   `UnimplementedError` with `_dio.get/post/put/patch/delete(...)` and
-   decode responses through `Model.fromJson`.
-4. **Translate non-2xx responses** into
-   `Result.failure(<Korean user-facing message>, cause: ..., stack: ...)`.
-   Keep success paths returning `Result.success(...)`.
-5. **Add 401 refresh handling** in the `DioConfig.create()` interceptor
-   (currently a `TODO(auth)` placeholder at
-   [dio_config.dart](../lib/core/config/dio_config.dart) line 39).
-   On 401: call refresh endpoint, persist new tokens via
-   `AuthSession.saveTokens`, retry the original request.
-6. **Verify** — run `flutter test` and walk the page manually with
-   `useMocks: false` to confirm error paths render expected copy.
+The Api* repositories are already implemented; switching environments
+is a one-line config change.
+
+1. **Confirm the backend contract** — sanity-check
+   [api-contract.md](api-contract.md) against the staging server.
+   Any drift here surfaces as `Failure` with a server-supplied Korean
+   message (see [api_error.dart](../lib/core/network/api_error.dart)).
+2. **Flip the environment toggle** — edit
+   [environment.dart](../lib/core/config/environment.dart) so the
+   top-level `currentEnvironment` points at `.staging()` /
+   `.production()` (both default to `useMocks: false`). No other code
+   changes are required — every feature factory reads this const.
+3. **Verify** — run `flutter test` and exercise the auth → mission →
+   time-setup happy paths manually. The 401-refresh interceptor
+   already handles token rotation; new failures should originate
+   from contract drift, not the client.
 
 ## 4. Outstanding mock-only UX to revisit
 
