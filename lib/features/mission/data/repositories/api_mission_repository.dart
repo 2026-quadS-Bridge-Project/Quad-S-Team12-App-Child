@@ -7,12 +7,11 @@ import 'mission_repository.dart';
 
 /// HTTP-backed [MissionRepository] wired to the endpoints defined under
 /// "Mission" in `docs/api-contract.md`:
-/// - `GET /missions`            → list view (response wraps the array in
-///   `{ "missions": [...] }`).
-/// - `GET /missions/:id`        → single mission detail.
-/// - `POST /missions/:id/submit`→ photo submission; body uses `photoUrls`
-///   per the contract even though the repo method parameter is named
-///   `photoPaths` for historical (pre-upload) reasons.
+/// - `GET /api/v1/missions`               → list view (array, S1-unwrapped).
+/// - `GET /api/v1/missions/:id`           → single mission detail.
+/// - `POST /api/v1/missions/:id/performances` → photo submission as
+///   `multipart/form-data` (`image` file). childId/category/prompt are
+///   derived server-side (backend-handoff §3.2).
 ///
 /// DioException → [Result.failure] via [failureFromDioException]; the
 /// helper carries server-supplied Korean copy when available and falls
@@ -51,20 +50,39 @@ class ApiMissionRepository implements MissionRepository {
   }
 
   @override
-  Future<Result<Mission>> submitMission({
+  Future<Result<void>> submitMission({
     required String id,
     required List<String> photoPaths,
   }) async {
-    try {
-      final Response<dynamic> response = await _dio.post<dynamic>(
-        '/missions/$id/submit',
-        data: <String, dynamic>{'photoUrls': photoPaths},
-      );
-      return Result<Mission>.success(
-        Mission.fromJson(response.data as Map<String, dynamic>),
-      );
-    } on DioException catch (e) {
-      return failureFromDioException<Mission>(e);
+    if (photoPaths.isEmpty) {
+      return Result<void>.failure('제출할 사진이 없어요.');
     }
+    try {
+      // Upload the captured photo file directly as multipart to the existing
+      // backend endpoint. childId(JWT), category & prompt are derived
+      // server-side — see backend-handoff §3.2. The backend returns an
+      // AiVerificationResponse; the controller owns the UI status transition,
+      // so a success signal is all this layer needs.
+      final String path = photoPaths.first;
+      final FormData formData = FormData.fromMap(<String, dynamic>{
+        'image': await MultipartFile.fromFile(path, filename: _basename(path)),
+      });
+      await _dio.post<dynamic>(
+        '/api/v1/missions/$id/performances',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return Result<void>.success(null);
+    } on DioException catch (e) {
+      return failureFromDioException<void>(e);
+    }
+  }
+
+  /// Last path segment (POSIX or Windows separator) for the multipart filename.
+  static String _basename(String path) {
+    final int slash = path.lastIndexOf('/');
+    final int backslash = path.lastIndexOf(r'\');
+    final int sep = slash > backslash ? slash : backslash;
+    return sep == -1 ? path : path.substring(sep + 1);
   }
 }

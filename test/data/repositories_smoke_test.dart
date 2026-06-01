@@ -49,18 +49,13 @@ void main() {
       expect(result, isA<Success<Mission>>());
     });
 
-    test('submitMission returns Success and attaches photo paths', () async {
+    test('submitMission returns Success in mock mode', () async {
       final MissionRepository repo = MockMissionRepository();
-      final Result<Mission> result = await repo.submitMission(
+      final Result<void> result = await repo.submitMission(
         id: '1',
         photoPaths: const <String>['/tmp/photo1.jpg'],
       );
-      switch (result) {
-        case Success<Mission>(:final Mission data):
-          expect(data.photoUrls, <String>['/tmp/photo1.jpg']);
-        case Failure<Mission>():
-          fail('submitMission should succeed in mock mode');
-      }
+      expect(result, isA<Success<void>>());
     });
   });
 

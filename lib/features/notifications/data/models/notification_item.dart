@@ -71,13 +71,14 @@ class NotificationItem {
   /// Backend will populate this once notification deeplinks land.
   final String? deeplink;
 
-  /// Serialize to the wire format the backend expects. Mirrors [fromJson].
+  /// Serialize to the wire format. Keys mirror [fromJson] (backend contract:
+  /// notificationId / notificationType / content) so toJson→fromJson round-trips.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'id': id,
-      'type': type.name,
+      'notificationId': id,
+      'notificationType': type.name,
       'title': title,
-      'message': message,
+      'content': message,
       'createdAt': createdAt.toIso8601String(),
       'actionLabel': actionLabel,
       'deeplink': deeplink,

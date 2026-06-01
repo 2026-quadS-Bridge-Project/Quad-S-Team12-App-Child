@@ -123,13 +123,13 @@ class MissionController extends ChangeNotifier
     notifyListeners();
 
     try {
-      final Result<Mission> result = await _repository.submitMission(
+      final Result<void> result = await _repository.submitMission(
         id: _mission.id,
         photoPaths: List.of(_capturedPhotoPaths),
       );
 
       switch (result) {
-        case Success<Mission>():
+        case Success<void>():
           final bool completesImmediately =
               _mission.confirmationMethod == ConfirmationMethod.childSelf;
           _mission = _mission.copyWith(
@@ -159,7 +159,7 @@ class MissionController extends ChangeNotifier
               },
             );
           }
-        case Failure<Mission>(message: final String message):
+        case Failure<void>(message: final String message):
           _errorMessage = message;
       }
     } finally {

@@ -13,7 +13,7 @@ import 'mock_mission_repository.dart';
 abstract interface class MissionRepository {
   Future<Result<List<Mission>>> listMissions();
   Future<Result<Mission>> fetchMission(String id);
-  Future<Result<Mission>> submitMission({
+  Future<Result<void>> submitMission({
     required String id,
     required List<String> photoPaths,
   });
