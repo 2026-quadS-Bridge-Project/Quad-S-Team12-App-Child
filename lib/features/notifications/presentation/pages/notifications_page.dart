@@ -8,7 +8,6 @@ import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../data/mock/notifications_mock.dart';
 import '../../data/models/notification_item.dart';
 import '../../data/repositories/notification_repository.dart';
 import '../widgets/notification_card.dart';
@@ -27,11 +26,7 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   late final NotificationRepository _repository = createNotificationRepository();
 
-  // Seed with mock fixtures so the list paints on first frame without a
-  // loading state; `_loadNotifications` then overwrites with the repo result.
-  List<NotificationItem> _notifications = List<NotificationItem>.from(
-    NotificationsMock.filled,
-  );
+  List<NotificationItem> _notifications = <NotificationItem>[];
 
   @override
   void initState() {

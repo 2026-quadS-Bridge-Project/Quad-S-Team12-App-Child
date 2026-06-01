@@ -8,7 +8,6 @@ import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../mission/data/mock/mission_mock.dart';
 import '../../../mission/data/models/mission.dart' as mission_model;
 import '../../../mission/data/repositories/mission_repository.dart';
 
@@ -634,13 +633,12 @@ class _MissionListSection extends StatefulWidget {
 }
 
 class _MissionListSectionState extends State<_MissionListSection> {
-  // Source of truth post-Phase-2B: the repository. We seed synchronously
-  // from MissionMock.all so the first paint matches today's behavior, then
-  // [_loadMissions] hydrates the list from the repo (mock today, HTTP once
-  // useMocks flips off). No loading/error UI by design — the seed bridges
-  // the (currently instant) async window.
+  // Source of truth post-Phase-2B: the repository. The list starts empty and
+  // [_loadMissions] hydrates it from the repo (mock today, HTTP once
+  // useMocks flips off). No loading/error UI by design — the repo load fills
+  // the (currently instant) async window; an empty list is retained on failure.
   late final MissionRepository _repository = createMissionRepository();
-  late List<_MissionItemData> _missions = _mapMissions(MissionMock.all);
+  late List<_MissionItemData> _missions = <_MissionItemData>[];
 
   @override
   void initState() {
@@ -658,11 +656,11 @@ class _MissionListSectionState extends State<_MissionListSection> {
       });
     } else {
       // Keep silent for the user — home is a low-frequency view and a SnackBar
-      // on open would be intrusive. Surface a dev-only warning so stale seed
-      // data from MissionMock isn't mistaken for a successful repo fetch.
+      // on open would be intrusive. Surface a dev-only warning so an empty
+      // mission list isn't mistaken for a successful repo fetch.
       debugPrint(
         '[_MissionListSection] listMissions() failed; '
-        'retaining seeded MissionMock list.',
+        'retaining empty mission list.',
       );
     }
   }

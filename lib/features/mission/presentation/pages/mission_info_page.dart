@@ -42,6 +42,7 @@ class _MissionInfoPageState extends State<MissionInfoPage>
     super.initState();
     _controller = MissionController(missionId: widget.missionId);
     bindAsyncErrorListener(_controller);
+    _controller.reload();
   }
 
   @override
