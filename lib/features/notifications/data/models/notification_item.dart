@@ -21,19 +21,42 @@ class NotificationItem {
   /// against [NotificationType.values] by `.name`; [createdAt] is parsed as
   /// ISO-8601 via [DateTime.parse]. [deeplink] is optional.
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
-    final String typeName = json['type'] as String;
-    final NotificationType type = NotificationType.values.firstWhere(
-      (NotificationType candidate) => candidate.name == typeName,
-    );
     return NotificationItem(
-      id: json['id'] as String,
-      type: type,
-      title: json['title'] as String,
-      message: json['message'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      // Backend sends notificationId as a number (Long); stringify to avoid a
+      // cast crash that would take down the whole list parse.
+      id: (json['notificationId'] ?? '').toString(),
+      type: _typeFromName((json['notificationType'] ?? '').toString()),
+      title: (json['title'] ?? '').toString(),
+      message: (json['content'] ?? '').toString(),
+      createdAt:
+          DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
+          DateTime.now(),
       actionLabel: json['actionLabel'] as String? ?? '확인하러 가기',
       deeplink: json['deeplink'] as String?,
     );
+  }
+
+  /// Resolve [NotificationType] from a wire name. Matches the app enum names
+  /// first (mock compatibility), then maps the backend NotificationType enum
+  /// {MISSION_CREATED, MISSION_APPROVED, MISSION_REJECTED, GENERAL}. Falls back
+  /// to a safe default instead of throwing on unknown values.
+  static NotificationType _typeFromName(String name) {
+    for (final NotificationType t in NotificationType.values) {
+      if (t.name == name) {
+        return t;
+      }
+    }
+    switch (name) {
+      case 'MISSION_APPROVED':
+        return NotificationType.missionCompleted;
+      case 'MISSION_REJECTED':
+        return NotificationType.missionRejected;
+      case 'MISSION_CREATED':
+        return NotificationType.missionConfirmationRequested;
+      case 'GENERAL':
+      default:
+        return NotificationType.timeConfigured;
+    }
   }
 
   final String id;

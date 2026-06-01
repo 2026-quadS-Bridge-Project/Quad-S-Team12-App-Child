@@ -25,8 +25,9 @@ class ApiMissionRepository implements MissionRepository {
   @override
   Future<Result<List<Mission>>> listMissions() async {
     try {
-      final Response<dynamic> response = await _dio.get<dynamic>('/missions');
-      final List<Mission> missions = (response.data['missions'] as List)
+      final Response<dynamic> response =
+          await _dio.get<dynamic>('/api/v1/missions');
+      final List<Mission> missions = (response.data as List)
           .cast<Map<String, dynamic>>()
           .map(Mission.fromJson)
           .toList();
@@ -40,7 +41,7 @@ class ApiMissionRepository implements MissionRepository {
   Future<Result<Mission>> fetchMission(String id) async {
     try {
       final Response<dynamic> response =
-          await _dio.get<dynamic>('/missions/$id');
+          await _dio.get<dynamic>('/api/v1/missions/$id');
       return Result<Mission>.success(
         Mission.fromJson(response.data as Map<String, dynamic>),
       );

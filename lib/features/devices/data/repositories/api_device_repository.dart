@@ -17,23 +17,20 @@ class ApiDeviceRepository implements DeviceRepository {
   }) async {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
-        '/devices',
+        '/api/v1/fcm/token',
         data: <String, dynamic>{
           'fcmToken': fcmToken,
-          'platform': platform,
         },
       );
       final Object? body = response.data;
-      if (body is! Map<String, dynamic>) {
-        return Failure<String>(
-          'Unexpected device-registration response shape.',
-        );
+      if (body is String) {
+        return Result.success(body);
       }
-      final String? id = body['id'] as String?;
-      if (id == null) {
-        return Failure<String>('Device registration returned no id.');
+      if (body is Map<String, dynamic>) {
+        final String? id = body['id'] as String?;
+        if (id != null) return Result.success(id);
       }
-      return Result.success(id);
+      return Result.success('registered');
     } on DioException catch (e) {
       // 409 ALREADY_REGISTERED is a transfer-case (token moved to current
       // user). Treat as success if the server still returned an id.

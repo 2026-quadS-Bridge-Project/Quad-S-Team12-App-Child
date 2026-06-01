@@ -21,7 +21,7 @@ class ApiNotificationRepository implements NotificationRepository {
   Future<Result<List<NotificationItem>>> listNotifications() async {
     try {
       final Response<dynamic> response = await _dio.get<dynamic>(
-        '/notifications',
+        '/api/v1/notifications',
       );
       final dynamic data = response.data;
       if (data is! Map) {
@@ -48,7 +48,7 @@ class ApiNotificationRepository implements NotificationRepository {
   @override
   Future<Result<void>> deleteNotification(String id) async {
     try {
-      await _dio.delete<dynamic>('/notifications/$id');
+      await _dio.delete<dynamic>('/api/v1/notifications/$id');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);
@@ -58,7 +58,7 @@ class ApiNotificationRepository implements NotificationRepository {
   @override
   Future<Result<void>> markAsRead(String id) async {
     try {
-      await _dio.patch<dynamic>('/notifications/$id/read');
+      await _dio.patch<dynamic>('/api/v1/notifications/$id/read');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);

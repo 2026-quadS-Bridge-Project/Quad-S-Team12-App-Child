@@ -7,7 +7,7 @@ import 'environment.dart';
 ///
 /// Wires two interceptors:
 /// 1. Request: inject `Authorization: Bearer <accessToken>` when available.
-/// 2. Error: on `401`, attempt one `/auth/refresh` rotation and retry the
+/// 2. Error: on `401`, attempt one `/auth/token/refresh` rotation and retry the
 ///    original request transparently. On refresh failure, tokens are cleared
 ///    and the original error propagates to the caller — pages then route the
 ///    user back to login per the standard `Result.failure` flow.
@@ -21,7 +21,7 @@ class DioConfig {
   /// Path of the refresh endpoint. Hard-coded here because the interceptor
   /// must short-circuit if the original failing request was already a
   /// refresh call.
-  static const String _kRefreshPath = '/auth/refresh';
+  static const String _kRefreshPath = '/auth/token/refresh';
 
   static Dio create({EnvironmentConfig? overrideConfig}) {
     final EnvironmentConfig env = overrideConfig ?? currentEnvironment;
@@ -47,7 +47,29 @@ class DioConfig {
           }
           handler.next(options);
         },
+        onResponse: (
+          Response<dynamic> response,
+          ResponseInterceptorHandler handler,
+        ) {
+          final dynamic body = response.data;
+          if (body is Map && body.containsKey('isSuccess')) {
+            response.data = body['data'];
+          }
+          handler.next(response);
+        },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
+          final dynamic body = error.response?.data;
+          if (body is Map &&
+              !body.containsKey('error') &&
+              body.containsKey('code') &&
+              body.containsKey('message')) {
+            error.response!.data = <String, dynamic>{
+              'error': <String, dynamic>{
+                'code': body['code'],
+                'message': body['message'],
+              },
+            };
+          }
           await _handleError(
             dio: dio,
             baseUrl: env.baseUrl,
@@ -101,12 +123,14 @@ class DioConfig {
       refreshClient.close(force: true);
     }
 
-    final dynamic data = refreshResponse.data;
-    if (data is! Map) {
+    final dynamic body = refreshResponse.data;
+    if (body is! Map) {
       await _forceLogout();
       handler.next(error);
       return;
     }
+    final Map<dynamic, dynamic> data =
+        body['data'] is Map ? body['data'] as Map : body;
     final String? newAccess = data['accessToken'] as String?;
     final String? newRefresh = data['refreshToken'] as String?;
     if (newAccess == null || newAccess.isEmpty) {

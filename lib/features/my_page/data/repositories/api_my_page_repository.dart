@@ -8,8 +8,9 @@ import 'my_page_repository.dart';
 
 /// Network-backed [MyPageRepository].
 ///
-/// Implements `GET /user/profile`, `PATCH /user/password`, and
-/// `DELETE /user/account` per `docs/api-contract.md`. Each method wraps the
+/// Implements `PATCH /api/v1/members/password` and `DELETE /api/v1/members`.
+/// (`fetchProfile` still calls `GET /user/profile`, which the backend does not
+/// yet expose for child accounts.) Each method wraps the
 /// Dio call in try/on DioException and funnels failures through
 /// [failureFromDioException] for consistent Korean error messages.
 ///
@@ -50,9 +51,9 @@ class ApiMyPageRepository implements MyPageRepository {
   }) async {
     try {
       await _dio.patch<dynamic>(
-        '/user/password',
+        '/api/v1/members/password',
         data: <String, dynamic>{
-          'currentPassword': currentPassword,
+          'oldPassword': currentPassword,
           'newPassword': newPassword,
         },
       );
@@ -65,7 +66,7 @@ class ApiMyPageRepository implements MyPageRepository {
   @override
   Future<Result<void>> deleteAccount() async {
     try {
-      await _dio.delete<dynamic>('/user/account');
+      await _dio.delete<dynamic>('/api/v1/members');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);

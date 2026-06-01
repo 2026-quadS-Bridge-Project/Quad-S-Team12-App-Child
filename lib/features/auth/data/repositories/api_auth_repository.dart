@@ -8,7 +8,8 @@ import 'auth_repository.dart';
 
 /// Network-backed [AuthRepository].
 ///
-/// Implements `POST /auth/login`, `POST /auth/signup`, `POST /auth/refresh`
+/// Implements `POST /auth/children/login`, `POST /auth/children/signup`,
+/// `POST /auth/token/refresh`
 /// per `docs/api-contract.md`. Each method wraps the Dio call in a
 /// try/catch that funnels [DioException]s through [failureFromDioException]
 /// for consistent Korean error messages.
@@ -30,9 +31,9 @@ class ApiAuthRepository implements AuthRepository {
   }) async {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
-        '/auth/login',
+        '/auth/children/login',
         data: <String, dynamic>{
-          'username': username,
+          'email': username,
           'password': password,
         },
       );
@@ -53,9 +54,9 @@ class ApiAuthRepository implements AuthRepository {
   }) async {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
-        '/auth/signup',
+        '/auth/children/signup',
         data: <String, dynamic>{
-          'username': username,
+          'email': username,
           'password': password,
         },
       );
@@ -73,7 +74,7 @@ class ApiAuthRepository implements AuthRepository {
   Future<Result<AuthToken>> refreshToken(String refreshToken) async {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
-        '/auth/refresh',
+        '/auth/token/refresh',
         data: <String, dynamic>{'refreshToken': refreshToken},
       );
       // Refresh response omits username; keep it empty so callers can decide
