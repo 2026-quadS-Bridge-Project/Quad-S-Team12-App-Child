@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/models/result.dart';
+import '../../../../core/services/device_block_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -28,6 +31,22 @@ class _ChildHomePageState extends State<ChildHomePage> {
   // Default false so the empty-state + button is reachable on first run.
   // Long-press the time card to toggle for debug (see _toggleHasScheduleForDebug).
   bool _hasSchedule = false;
+
+  // TODO(time): source remaining minutes from the policies / daily-schedule
+  // read path once it lands. Hardcoded today to match the home time card
+  // (기본 01:30 + 보너스 00:30). When this hits 0 the native blocker engages,
+  // restricting the device to essential apps (phone / SMS).
+  static const int _remainingMinutes = 90 + 30;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sync the OS-level device blocker with the child's remaining screen time.
+    // No-op on platforms / builds without the native channel.
+    unawaited(
+      DeviceBlockController.instance.applyForRemainingMinutes(_remainingMinutes),
+    );
+  }
 
   void _toggleHasScheduleForDebug() {
     setState(() {

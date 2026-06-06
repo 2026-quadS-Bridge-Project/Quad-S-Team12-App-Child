@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">사용 가능한 시간이 끝나면 전화·문자 등 기본 앱만 남기고 다른 앱 사용을 제한합니다.</string>
+</resources>
