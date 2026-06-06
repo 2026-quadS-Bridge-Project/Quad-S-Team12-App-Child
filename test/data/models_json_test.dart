@@ -35,6 +35,38 @@ void main() {
             reason: 'confirmationMethod drift for ${m.id}');
       }
     });
+
+    test('parses backend MissionSummaryResponse wire shape', () {
+      // GET /api/v1/missions → [{missionId, title, category(enum), reward(min)}]
+      final Mission decoded = Mission.fromJson(<String, dynamic>{
+        'missionId': 42,
+        'title': '방 청소하기',
+        'category': 'CLEANING',
+        'reward': 90,
+      });
+      expect(decoded.id, '42'); // missionId → id (was silently '' before)
+      expect(decoded.category, '청소'); // CLEANING → Korean label
+      expect(decoded.rewardHours, 1); // reward 90 → 1h
+      expect(decoded.rewardMinutes, 30); // 30m
+    });
+
+    test('parses backend MissionResponse (detail) enums', () {
+      // GET /api/v1/missions/{id} → {missionId, ..., resetCycle, verificationType}
+      final Mission decoded = Mission.fromJson(<String, dynamic>{
+        'missionId': 7,
+        'title': '영어 단어 외우기',
+        'category': 'STUDY',
+        'resetCycle': 'WEEKLY',
+        'verificationType': 'PARENT',
+        'reward': 45,
+        'description': '하루 10개',
+      });
+      expect(decoded.id, '7');
+      expect(decoded.category, '학습');
+      expect(decoded.resetCycle, '일주일');
+      expect(decoded.confirmationMethod, ConfirmationMethod.parentApproval);
+      expect(decoded.rewardMinutes, 45);
+    });
   });
 
   group('TimeSchedule JSON round-trip', () {

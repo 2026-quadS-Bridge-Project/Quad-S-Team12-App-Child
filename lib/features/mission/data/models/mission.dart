@@ -58,6 +58,53 @@ MissionStatus _missionStatusFromName(String? name) {
   return MissionStatus.pendingCheck;
 }
 
+/// Backend mission category enum (`CLEANING`/`STUDY`/…) → the Korean label the
+/// child app stores in [Mission.category]. Lookup is case-insensitive. Values
+/// already in Korean (mock fixtures, contract shape) pass through unchanged.
+String _categoryFromWire(Object? raw) {
+  if (raw == null) return '루틴';
+  const Map<String, String> map = <String, String>{
+    'CLEANING': '청소',
+    'STUDY': '학습',
+    'EXERCISE': '운동',
+    'ERRAND': '심부름',
+    'ROUTINE': '루틴',
+  };
+  final String value = raw.toString();
+  return map[value.toUpperCase()] ?? value;
+}
+
+/// Backend reset-cycle enum (`DAILY`/`WEEKLY`/`MONTHLY`) → Korean label.
+/// Case-insensitive; Korean/contract values pass through unchanged.
+String _resetCycleFromWire(Object? raw) {
+  if (raw == null) return '매일';
+  const Map<String, String> map = <String, String>{
+    'DAILY': '매일',
+    'WEEKLY': '일주일',
+    'MONTHLY': '한 달',
+  };
+  final String value = raw.toString();
+  return map[value.toUpperCase()] ?? value;
+}
+
+/// Resolve [ConfirmationMethod] from either the child app's own field
+/// (`confirmationMethod`: `aiAuto`/`childSelf`/`parentApproval`) or the
+/// backend mission's `verificationType` enum (`AI`/`CHILD`/`PARENT`).
+ConfirmationMethod _confirmationFromWire(Map<String, dynamic> json) {
+  final Object? verificationType = json['verificationType'];
+  if (verificationType != null) {
+    switch (verificationType.toString().toUpperCase()) {
+      case 'AI':
+        return ConfirmationMethod.aiAuto;
+      case 'CHILD':
+        return ConfirmationMethod.childSelf;
+      case 'PARENT':
+        return ConfirmationMethod.parentApproval;
+    }
+  }
+  return ConfirmationMethod.fromName(json['confirmationMethod']?.toString());
+}
+
 class Mission {
   const Mission({
     required this.id,
@@ -181,23 +228,33 @@ class Mission {
         ? DateTime.tryParse(rawDeadline)
         : null;
 
+    // Reward: backend mission DTOs send a single `reward` (total minutes);
+    // the app's own shape splits it into rewardHours + rewardMinutes. Prefer
+    // the backend field when present, else fall back to the split fields.
+    final num? rawReward = json['reward'] as num?;
+    final int rewardHours = rawReward != null
+        ? rawReward.toInt() ~/ 60
+        : (json['rewardHours'] as num?)?.toInt() ?? 0;
+    final int rewardMinutes = rawReward != null
+        ? rawReward.toInt() % 60
+        : (json['rewardMinutes'] as num?)?.toInt() ?? 0;
+
     return Mission(
-      id: (json['id'] ?? '').toString(),
+      // Backend summary/detail key is `missionId`; the app's own shape uses `id`.
+      id: (json['missionId'] ?? json['id'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
-      rewardHours: (json['rewardHours'] as num?)?.toInt() ?? 0,
-      rewardMinutes: (json['rewardMinutes'] as num?)?.toInt() ?? 0,
+      rewardHours: rewardHours,
+      rewardMinutes: rewardMinutes,
       status: _missionStatusFromName(json['status']?.toString()),
       description: json['description']?.toString(),
       assignedBy: (json['assignedBy'] ?? 'parent').toString(),
       photoUrls: photoUrls,
       deadline: deadline,
-      category: (json['category'] ?? '루틴').toString(),
+      category: _categoryFromWire(json['category']),
       categoryOptions: categoryOptions,
-      resetCycle: (json['resetCycle'] ?? '매일').toString(),
+      resetCycle: _resetCycleFromWire(json['resetCycle']),
       resetCycleOptions: resetCycleOptions,
-      confirmationMethod: ConfirmationMethod.fromName(
-        json['confirmationMethod']?.toString(),
-      ),
+      confirmationMethod: _confirmationFromWire(json),
       confirmationMethodOptions: confirmationOptions,
       payoutTime: json['payoutTime']?.toString(),
       captureInstruction:
