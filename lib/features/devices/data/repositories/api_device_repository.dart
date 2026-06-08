@@ -48,15 +48,9 @@ class ApiDeviceRepository implements DeviceRepository {
 
   @override
   Future<Result<void>> unregisterDevice(String deviceId) async {
-    try {
-      await _dio.delete<dynamic>('/devices/$deviceId');
-      return Result.success(null);
-    } on DioException catch (e) {
-      // 404 — already gone; treat as success.
-      if (e.response?.statusCode == 404) {
-        return Result.success(null);
-      }
-      return failureFromDioException<void>(e);
-    }
+    // AWS Swagger exposes token registration only (`POST /api/v1/fcm/token`).
+    // There is no unregister endpoint, so real-api mode must not call the
+    // legacy `/devices/{id}` path. Local cleanup happens in the caller.
+    return Result.success(null);
   }
 }

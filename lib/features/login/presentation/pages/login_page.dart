@@ -18,7 +18,14 @@ import '../../../../features/auth/data/repositories/auth_repository.dart';
 enum _LoginErrorType { missingUser, wrongPassword }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({
+    super.key,
+    this.initialUsername,
+    this.showSignupCompleteNotice = false,
+  });
+
+  final String? initialUsername;
+  final bool showSignupCompleteNotice;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -38,6 +45,22 @@ class _LoginPageState extends State<LoginPage> {
   String get _password => _passwordController.text;
   bool get _canSubmit =>
       _username.isNotEmpty && _password.isNotEmpty && !_isSubmitting;
+
+  @override
+  void initState() {
+    super.initState();
+    _usernameController.text = widget.initialUsername ?? '';
+    if (widget.showSignupCompleteNotice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('회원가입이 완료됐어요. 로그인해주세요.')));
+      });
+    }
+  }
 
   String? get _errorMessage {
     switch (_activeError) {
@@ -93,7 +116,12 @@ class _LoginPageState extends State<LoginPage> {
           _activeError = null;
           _genericErrorMessage = null;
         });
-        await AuthSession.saveLogin(username: data.username);
+        await AuthSession.saveLogin(
+          username: data.username,
+          memberId: data.memberId,
+          name: data.name,
+          childCode: data.childCode,
+        );
         await AuthSession.saveTokens(
           accessToken: data.accessToken,
           refreshToken: data.refreshToken,
@@ -172,7 +200,7 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                               const SizedBox(height: 25),
                               _LoginField(
-                                label: '아이디',
+                                label: '이메일',
                                 controller: _usernameController,
                                 borderColor:
                                     _activeError == _LoginErrorType.missingUser
@@ -183,9 +211,9 @@ class _LoginPageState extends State<LoginPage> {
                                   FilteringTextInputFormatter.deny(
                                     RegExp(r'\s'),
                                   ),
-                                  LengthLimitingTextInputFormatter(12),
+                                  LengthLimitingTextInputFormatter(80),
                                 ],
-                                keyboardType: TextInputType.text,
+                                keyboardType: TextInputType.emailAddress,
                                 labelBottomSpacing: 10,
                               ),
                               const SizedBox(height: 35),

@@ -32,10 +32,7 @@ class ApiAuthRepository implements AuthRepository {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
         '/auth/children/login',
-        data: <String, dynamic>{
-          'email': username,
-          'password': password,
-        },
+        data: <String, dynamic>{'email': username, 'password': password},
       );
       final AuthToken token = _parseTokenResponse(
         response.data,
@@ -44,11 +41,17 @@ class ApiAuthRepository implements AuthRepository {
       return Result<AuthToken>.success(token);
     } on DioException catch (e) {
       return _mapAuthLoginError(e);
+    } on FormatException catch (e) {
+      return Failure<AuthToken>(
+        AuthFailureMessages.invalidAuthResponse,
+        cause: e,
+      );
     }
   }
 
   @override
   Future<Result<AuthToken>> signup({
+    required String name,
     required String username,
     required String password,
   }) async {
@@ -56,6 +59,7 @@ class ApiAuthRepository implements AuthRepository {
       final Response<dynamic> response = await _dio.post<dynamic>(
         '/auth/children/signup',
         data: <String, dynamic>{
+          'name': name,
           'email': username,
           'password': password,
         },
@@ -67,6 +71,11 @@ class ApiAuthRepository implements AuthRepository {
       return Result<AuthToken>.success(token);
     } on DioException catch (e) {
       return _mapAuthSignupError(e);
+    } on FormatException catch (e) {
+      return Failure<AuthToken>(
+        AuthFailureMessages.invalidAuthResponse,
+        cause: e,
+      );
     }
   }
 
@@ -86,13 +95,20 @@ class ApiAuthRepository implements AuthRepository {
       return Result<AuthToken>.success(token);
     } on DioException catch (e) {
       return failureFromDioException<AuthToken>(e);
+    } on FormatException catch (e) {
+      return Failure<AuthToken>(
+        AuthFailureMessages.invalidAuthResponse,
+        cause: e,
+      );
     }
   }
 
-  /// Tolerant parser: the `/auth/refresh` response shape is
-  /// `{ accessToken, refreshToken }` (no username), while login/signup
-  /// include `username`. We accept both and substitute [fallbackUsername]
-  /// when missing.
+  /// Tolerant parser for both the unwrapped AuthResponse and the raw
+  /// ApiResponse wrapper (`{ isSuccess, code, message, data: AuthResponse }`).
+  ///
+  /// Login returns tokens, while signup may be tokenless on some backend
+  /// builds. In the tokenless case we return an empty [AuthToken.accessToken]
+  /// and let the page hand the user off to login instead of crashing.
   AuthToken _parseTokenResponse(
     dynamic data, {
     required String fallbackUsername,
@@ -100,11 +116,28 @@ class ApiAuthRepository implements AuthRepository {
     if (data is! Map) {
       throw const FormatException('Auth response was not a JSON object.');
     }
-    final Map<String, dynamic> json = Map<String, dynamic>.from(data);
+    final Map<String, dynamic> envelope = Map<String, dynamic>.from(data);
+    final dynamic payload = envelope['data'] is Map
+        ? envelope['data']
+        : envelope;
+    if (payload is! Map) {
+      return AuthToken(
+        accessToken: '',
+        refreshToken: null,
+        username: fallbackUsername,
+      );
+    }
+    final Map<String, dynamic> json = Map<String, dynamic>.from(payload);
     return AuthToken(
-      accessToken: json['accessToken'] as String,
+      accessToken: (json['accessToken'] as String?) ?? '',
       refreshToken: json['refreshToken'] as String?,
-      username: (json['username'] as String?) ?? fallbackUsername,
+      username:
+          (json['username'] as String?) ??
+          (json['email'] as String?) ??
+          fallbackUsername,
+      memberId: json['memberId']?.toString(),
+      name: json['name'] as String?,
+      childCode: json['childCode'] as String?,
     );
   }
 
@@ -114,16 +147,10 @@ class ApiAuthRepository implements AuthRepository {
   Failure<AuthToken> _mapAuthLoginError(DioException e) {
     final String? code = errorCodeOf(e);
     if (code == 'INVALID_CREDENTIALS') {
-      return Failure<AuthToken>(
-        AuthFailureMessages.wrongPassword,
-        cause: code,
-      );
+      return Failure<AuthToken>(AuthFailureMessages.wrongPassword, cause: code);
     }
     if (code == 'USER_NOT_FOUND') {
-      return Failure<AuthToken>(
-        AuthFailureMessages.unknownUser,
-        cause: code,
-      );
+      return Failure<AuthToken>(AuthFailureMessages.unknownUser, cause: code);
     }
     return failureFromDioException<AuthToken>(e);
   }

@@ -16,6 +16,7 @@ import '../../../../features/auth/data/models/auth_token.dart';
 import '../../../../features/auth/data/repositories/auth_repository.dart';
 
 enum _SignupErrorType {
+  invalidName,
   invalidUsername,
   duplicatedUsername,
   invalidPassword,
@@ -32,9 +33,7 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  static final RegExp _usernamePattern = RegExp(
-    r'^(?=.*[a-z])(?=.*\d)[a-z\d]{6,12}$',
-  );
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   static final RegExp _passwordPattern = RegExp(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])[^\s]{12,15}$',
   );
@@ -42,7 +41,8 @@ class _SignupPageState extends State<SignupPage> {
   late final AuthRepository _repository = createAuthRepository();
   bool _isSubmitting = false;
 
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _passwordConfirmController =
       TextEditingController();
@@ -50,16 +50,18 @@ class _SignupPageState extends State<SignupPage> {
   _SignupErrorType? _activeError;
   String? _genericErrorMessage;
 
-  String get _username => _usernameController.text;
+  String get _name => _nameController.text.trim();
+  String get _email => _emailController.text.trim();
   String get _password => _passwordController.text;
   String get _passwordConfirm => _passwordConfirmController.text;
 
-  bool get _isUsernameFormatValid => _usernamePattern.hasMatch(_username);
+  bool get _isNameValid => _name.characters.length >= 2;
+  bool get _isUsernameFormatValid => _emailPattern.hasMatch(_email);
   // Inline duplicate-detection happens server-side now; the live helper text
   // only flips after a failed signup attempt surfaces a duplicate failure.
   bool _serverReportedDuplicate = false;
   bool get _isUsernameDuplicate =>
-      _username.isNotEmpty && _serverReportedDuplicate;
+      _email.isNotEmpty && _serverReportedDuplicate;
   bool get _isPasswordValid => _passwordPattern.hasMatch(_password);
   bool get _isPasswordMatched =>
       _password.isNotEmpty &&
@@ -67,7 +69,8 @@ class _SignupPageState extends State<SignupPage> {
       _password == _passwordConfirm;
 
   bool get _hasAllFields =>
-      _username.isNotEmpty &&
+      _name.isNotEmpty &&
+      _email.isNotEmpty &&
       _password.isNotEmpty &&
       _passwordConfirm.isNotEmpty;
 
@@ -86,14 +89,14 @@ class _SignupPageState extends State<SignupPage> {
       !_isSubmitting;
 
   String? get _usernameInlineMessage {
-    if (_username.isEmpty) {
+    if (_email.isEmpty) {
       return null;
     }
     if (!_isUsernameFormatValid) {
-      return '영문 소문자, 숫자 조합 6~12자 / 빈칸, 공백 불가';
+      return '이메일 형식으로 입력해주세요.';
     }
     if (_isUsernameDuplicate) {
-      return '이미 사용 중인 아이디입니다.';
+      return '이미 사용 중인 이메일입니다.';
     }
     return null;
   }
@@ -117,10 +120,12 @@ class _SignupPageState extends State<SignupPage> {
 
   String? get _errorMessage {
     switch (_activeError) {
+      case _SignupErrorType.invalidName:
+        return '이름을 2자 이상 입력해주세요.';
       case _SignupErrorType.invalidUsername:
-        return '아이디 규칙에 어긋납니다. 수정해주세요.';
+        return '이메일 형식에 어긋납니다. 수정해주세요.';
       case _SignupErrorType.duplicatedUsername:
-        return '아이디가 중복됩니다. 수정해주세요!';
+        return '이메일이 중복됩니다. 수정해주세요!';
       case _SignupErrorType.invalidPassword:
         return '비밀번호 규칙에 어긋납니다. 수정해주세요.';
       case _SignupErrorType.passwordMismatch:
@@ -149,6 +154,15 @@ class _SignupPageState extends State<SignupPage> {
       return _CheckState.active;
     }
     return _CheckState.inactive;
+  }
+
+  void _onNameChanged(String value) {
+    setState(() {
+      if (_activeError == _SignupErrorType.invalidName) {
+        _activeError = null;
+      }
+      _genericErrorMessage = null;
+    });
   }
 
   void _onUsernameChanged(String value) {
@@ -192,6 +206,13 @@ class _SignupPageState extends State<SignupPage> {
     }
     FocusScope.of(context).unfocus();
 
+    if (!_isNameValid) {
+      setState(() {
+        _activeError = _SignupErrorType.invalidName;
+      });
+      return;
+    }
+
     if (!_isUsernameFormatValid) {
       setState(() {
         _activeError = _SignupErrorType.invalidUsername;
@@ -220,7 +241,8 @@ class _SignupPageState extends State<SignupPage> {
     });
 
     final Result<AuthToken> result = await _repository.signup(
-      username: _username,
+      name: _name,
+      username: _email,
       password: _password,
     );
 
@@ -230,7 +252,27 @@ class _SignupPageState extends State<SignupPage> {
 
     switch (result) {
       case Success<AuthToken>(:final AuthToken data):
-        await AuthSession.saveLogin(username: data.username);
+        if (data.accessToken.isEmpty) {
+          setState(() {
+            _isSubmitting = false;
+          });
+          context.go(
+            Uri(
+              path: '/login',
+              queryParameters: <String, String>{
+                'username': _email,
+                'notice': 'signup-complete',
+              },
+            ).toString(),
+          );
+          return;
+        }
+        await AuthSession.saveLogin(
+          username: data.username,
+          memberId: data.memberId,
+          name: data.name,
+          childCode: data.childCode,
+        );
         await AuthSession.saveTokens(
           accessToken: data.accessToken,
           refreshToken: data.refreshToken,
@@ -263,7 +305,8 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _passwordConfirmController.dispose();
     super.dispose();
@@ -302,8 +345,30 @@ class _SignupPageState extends State<SignupPage> {
                               ),
                               const SizedBox(height: 25),
                               _SignupField(
-                                label: '아이디',
-                                controller: _usernameController,
+                                label: '이름',
+                                controller: _nameController,
+                                borderColor:
+                                    _activeError == _SignupErrorType.invalidName
+                                    ? AppColors.destructive
+                                    : AppColors.gray200,
+                                checkState: _isNameValid
+                                    ? _CheckState.active
+                                    : _CheckState.inactive,
+                                helperText: null,
+                                onChanged: _onNameChanged,
+                                inputFormatters: <TextInputFormatter>[
+                                  FilteringTextInputFormatter.deny(
+                                    RegExp(r'^\s'),
+                                  ),
+                                  LengthLimitingTextInputFormatter(50),
+                                ],
+                                keyboardType: TextInputType.name,
+                                labelBottomSpacing: 10,
+                              ),
+                              const SizedBox(height: 35),
+                              _SignupField(
+                                label: '이메일',
+                                controller: _emailController,
                                 borderColor: _hasUsernameError
                                     ? AppColors.destructive
                                     : AppColors.gray200,
@@ -314,9 +379,9 @@ class _SignupPageState extends State<SignupPage> {
                                   FilteringTextInputFormatter.deny(
                                     RegExp(r'\s'),
                                   ),
-                                  LengthLimitingTextInputFormatter(12),
+                                  LengthLimitingTextInputFormatter(80),
                                 ],
-                                keyboardType: TextInputType.text,
+                                keyboardType: TextInputType.emailAddress,
                                 labelBottomSpacing: 10,
                               ),
                               const SizedBox(height: 35),

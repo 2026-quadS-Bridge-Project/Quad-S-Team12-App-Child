@@ -37,26 +37,22 @@ class DioConfig {
 
     dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (
-          RequestOptions options,
-          RequestInterceptorHandler handler,
-        ) async {
-          final String? token = await AuthSession.accessToken();
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
-          }
-          handler.next(options);
-        },
-        onResponse: (
-          Response<dynamic> response,
-          ResponseInterceptorHandler handler,
-        ) {
-          final dynamic body = response.data;
-          if (body is Map && body.containsKey('isSuccess')) {
-            response.data = body['data'];
-          }
-          handler.next(response);
-        },
+        onRequest:
+            (RequestOptions options, RequestInterceptorHandler handler) async {
+              final String? token = await AuthSession.accessToken();
+              if (token != null && token.isNotEmpty) {
+                options.headers['Authorization'] = 'Bearer $token';
+              }
+              handler.next(options);
+            },
+        onResponse:
+            (Response<dynamic> response, ResponseInterceptorHandler handler) {
+              final dynamic body = response.data;
+              if (body is Map && body.containsKey('isSuccess')) {
+                response.data = body['data'];
+              }
+              handler.next(response);
+            },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
           final dynamic body = error.response?.data;
           if (body is Map &&
@@ -129,8 +125,9 @@ class DioConfig {
       handler.next(error);
       return;
     }
-    final Map<dynamic, dynamic> data =
-        body['data'] is Map ? body['data'] as Map : body;
+    final Map<dynamic, dynamic> data = body['data'] is Map
+        ? body['data'] as Map
+        : body;
     final String? newAccess = data['accessToken'] as String?;
     final String? newRefresh = data['refreshToken'] as String?;
     if (newAccess == null || newAccess.isEmpty) {
@@ -141,6 +138,11 @@ class DioConfig {
     await AuthSession.saveTokens(
       accessToken: newAccess,
       refreshToken: newRefresh,
+    );
+    await AuthSession.saveProfile(
+      memberId: data['memberId']?.toString(),
+      name: data['name'] as String?,
+      childCode: data['childCode'] as String?,
     );
 
     // Retry the original request with the rotated access token.
@@ -154,10 +156,7 @@ class DioConfig {
       responseType: original.responseType,
       sendTimeout: original.sendTimeout,
       receiveTimeout: original.receiveTimeout,
-      extra: <String, dynamic>{
-        ...original.extra,
-        _kRetriedFlag: true,
-      },
+      extra: <String, dynamic>{...original.extra, _kRetriedFlag: true},
     );
 
     try {

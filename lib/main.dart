@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
@@ -27,29 +29,34 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase wiring is skipped in the mock environment so the dev simulator
-  // boots even when the iOS Xcode project hasn't been opened to register
-  // GoogleService-Info.plist as a build resource (and so the Android
-  // emulator without Google Play Services doesn't crash on background
-  // handler registration). FcmBootstrap is still called below — its mock
-  // implementation is a no-op.
+  runApp(const BridgeKApp());
+
+  // Push setup must never block the first frame. In real API mode the app
+  // still needs Firebase/FCM, but simulator/APNs/plugin issues should degrade
+  // to "no push" instead of leaving the user on a white launch screen.
   if (!currentEnvironment.useMocks) {
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
-    } catch (e, stack) {
-      // Don't crash the app if Firebase init fails (e.g. simulator without
-      // APNs entitlements); FcmBootstrap will then no-op too.
-      debugPrint('[firebase] init failed — continuing without push: $e');
-      debugPrintStack(stackTrace: stack);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initializePush());
+    });
+  }
+}
+
+Future<void> _initializePush() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  } catch (e, stack) {
+    debugPrint('[firebase] init failed — continuing without push: $e');
+    debugPrintStack(stackTrace: stack);
+    return;
   }
 
-  // Bootstraps permission, token registration, and the foreground +
-  // tap-from-background streams. Mock impl is a no-op so tests stay green.
-  await FcmBootstrap.initialize();
-
-  runApp(const BridgeKApp());
+  try {
+    await FcmBootstrap.initialize();
+  } catch (e, stack) {
+    debugPrint('[fcm] bootstrap failed — continuing without push: $e');
+    debugPrintStack(stackTrace: stack);
+  }
 }

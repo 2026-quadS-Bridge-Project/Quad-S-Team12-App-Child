@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../../../core/auth/auth_session.dart';
 import '../../../../core/config/dio_config.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/network/api_error.dart';
@@ -8,9 +9,11 @@ import 'my_page_repository.dart';
 
 /// Network-backed [MyPageRepository].
 ///
-/// Implements `PATCH /api/v1/members/password` and `DELETE /api/v1/members`.
-/// (`fetchProfile` still calls `GET /user/profile`, which the backend does not
-/// yet expose for child accounts.) Each method wraps the
+/// Implements the AWS member endpoints exposed by Swagger:
+/// `PATCH /api/v1/members/password` and `DELETE /api/v1/members`.
+/// Swagger does not expose a child profile read endpoint, so [fetchProfile]
+/// derives the display-only profile from the local auth session instead of
+/// calling the legacy `/user/profile` path. Each network method wraps the
 /// Dio call in try/on DioException and funnels failures through
 /// [failureFromDioException] for consistent Korean error messages.
 ///
@@ -25,23 +28,15 @@ class ApiMyPageRepository implements MyPageRepository {
 
   @override
   Future<Result<UserProfile>> fetchProfile() async {
-    try {
-      final Response<dynamic> response = await _dio.get<dynamic>(
-        '/user/profile',
-      );
-      final dynamic data = response.data;
-      if (data is! Map) {
-        throw const FormatException(
-          'Profile response was not a JSON object.',
-        );
-      }
-      final UserProfile profile = UserProfile.fromJson(
-        Map<String, dynamic>.from(data),
-      );
-      return Result<UserProfile>.success(profile);
-    } on DioException catch (e) {
-      return failureFromDioException<UserProfile>(e);
-    }
+    final String username = await AuthSession.username();
+    final String? childCode = await AuthSession.childCode();
+    return Result<UserProfile>.success(
+      UserProfile(
+        username: username,
+        accountType: '자녀회원',
+        childCode: childCode?.isNotEmpty == true ? childCode! : '-',
+      ),
+    );
   }
 
   @override

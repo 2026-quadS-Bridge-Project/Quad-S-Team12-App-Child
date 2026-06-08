@@ -27,7 +27,14 @@ final GoRouter appRouter = GoRouter(
     // All 4 destinations (홈/리포트/알림/마이) are reached via header icons
     // or push navigation rather than a tab bar.
     GoRoute(path: '/', builder: (context, state) => const HomePage()),
-    GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => LoginPage(
+        initialUsername: state.uri.queryParameters['username'],
+        showSignupCompleteNotice:
+            state.uri.queryParameters['notice'] == 'signup-complete',
+      ),
+    ),
     GoRoute(path: '/signup', builder: (context, state) => const SignupPage()),
     GoRoute(
       path: '/mypage',
@@ -72,7 +79,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/child-home/time-setup/confirm',
       parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const TimeConfirmPage(),
+      builder: (context, state) =>
+          TimeConfirmPage(variant: state.uri.queryParameters['variant']),
     ),
     GoRoute(
       path: '/child-home/mission/:id',

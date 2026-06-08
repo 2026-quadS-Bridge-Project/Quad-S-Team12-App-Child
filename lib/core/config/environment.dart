@@ -1,7 +1,5 @@
 /// Runtime environment selector + per-environment config.
 ///
-/// Phase 2A scaffolding: URLs below are placeholders and MUST be replaced
-/// with real backend endpoints before any non-mock environment is shipped.
 /// [useMocks] toggles whether feature repositories should return canned
 /// mock data instead of hitting the network.
 enum AppEnvironment { development, staging, production }
@@ -17,22 +15,42 @@ class EnvironmentConfig {
   final String baseUrl;
   final bool useMocks;
 
-  // NOTE: placeholder URLs — replace once backend hostnames are confirmed.
-  factory EnvironmentConfig.development() => const EnvironmentConfig(
+  /// Development defaults to the shared AWS-backed API server.
+  ///
+  /// Override at build/run time when targeting Android emulator or a remote
+  /// server:
+  /// `--dart-define=BRIDGE_API_BASE_URL=http://10.0.2.2:8080`
+  /// `--dart-define=BRIDGE_USE_MOCKS=true`
+  const EnvironmentConfig.development()
+    : this(
         environment: AppEnvironment.development,
-        baseUrl: 'https://api.dev.bridge-k.example.com',
-        useMocks: true, // until real backend is wired
+        baseUrl: const String.fromEnvironment(
+          'BRIDGE_API_BASE_URL',
+          defaultValue: 'https://leyoung.shop',
+        ),
+        useMocks: const bool.fromEnvironment(
+          'BRIDGE_USE_MOCKS',
+          defaultValue: false,
+        ),
       );
 
-  factory EnvironmentConfig.staging() => const EnvironmentConfig(
+  const EnvironmentConfig.staging()
+    : this(
         environment: AppEnvironment.staging,
-        baseUrl: 'https://api.staging.bridge-k.example.com',
+        baseUrl: const String.fromEnvironment(
+          'BRIDGE_API_BASE_URL',
+          defaultValue: 'https://leyoung.shop',
+        ),
         useMocks: false,
       );
 
-  factory EnvironmentConfig.production() => const EnvironmentConfig(
+  const EnvironmentConfig.production()
+    : this(
         environment: AppEnvironment.production,
-        baseUrl: 'https://api.bridge-k.example.com',
+        baseUrl: const String.fromEnvironment(
+          'BRIDGE_API_BASE_URL',
+          defaultValue: 'https://leyoung.shop',
+        ),
         useMocks: false,
       );
 }
@@ -41,9 +59,4 @@ class EnvironmentConfig {
 ///
 /// Declared as a top-level `const` so Phase 2B factory selection can read
 /// this synchronously (no async bootstrap required).
-// TODO(env): swap to .staging() / .production() at build time before release.
-const EnvironmentConfig currentEnvironment = EnvironmentConfig(
-  environment: AppEnvironment.development,
-  baseUrl: 'https://api.dev.bridge-k.example.com',
-  useMocks: true,
-);
+const EnvironmentConfig currentEnvironment = EnvironmentConfig.development();

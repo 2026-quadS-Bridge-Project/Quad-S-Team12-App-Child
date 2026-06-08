@@ -17,6 +17,7 @@ abstract interface class AuthRepository {
   });
 
   Future<Result<AuthToken>> signup({
+    required String name,
     required String username,
     required String password,
   });
@@ -48,4 +49,5 @@ abstract final class AuthFailureMessages {
   static const String unknownUser = '아이디를 다시 확인해 주세요.';
   static const String wrongPassword = '비밀번호가 일치하지 않아요.';
   static const String duplicatedUsername = '이미 사용 중인 아이디예요.';
+  static const String invalidAuthResponse = '인증 응답을 확인할 수 없어요. 다시 시도해 주세요.';
 }

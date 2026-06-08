@@ -38,6 +38,7 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<Result<AuthToken>> signup({
+    required String name,
     required String username,
     required String password,
   }) async {
@@ -56,7 +57,7 @@ class MockAuthRepository implements AuthRepository {
   @override
   Future<Result<AuthToken>> refreshToken(String refreshToken) async {
     // Mock environment never expires; just hand back a rotated pair. The
-    // empty `username` mirrors the contract — `/auth/refresh` does not echo
+    // empty `username` mirrors the contract — `/auth/token/refresh` does not echo
     // a username field — and callers preserve the existing session value.
     return Result<AuthToken>.success(
       const AuthToken(
