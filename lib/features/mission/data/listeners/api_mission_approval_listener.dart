@@ -1,7 +1,7 @@
 import '../models/mission.dart';
 import 'mission_approval_listener.dart';
 
-/// Stub for the real mission auto-approval channel.
+/// Real-environment placeholder for the mission auto-approval channel.
 ///
 /// Expected behavior once the backend ships:
 /// - Open a WebSocket (or SSE / long-poll) connection scoped to the current
@@ -19,18 +19,27 @@ import 'mission_approval_listener.dart';
 /// - Surface transport errors to the caller via a logger or callback; do
 ///   not throw out of [subscribe] in steady state.
 ///
-/// Today this throws [UnimplementedError] so the factory in
-/// `mission_approval_listener.dart` fails fast if `useMocks` is flipped to
-/// `false` before the contract is implemented.
+/// Today this is intentionally a no-op: the real backend submission call
+/// succeeds or fails via [ApiMissionRepository], but there is not yet a push
+/// channel for subsequent status changes. Keeping the listener silent avoids
+/// a runtime crash in real API mode while leaving the mission in `reviewing`
+/// until a future refresh / push implementation updates it.
 class ApiMissionApprovalListener implements MissionApprovalListener {
+  const ApiMissionApprovalListener();
+
   @override
   MissionApprovalSubscription subscribe({
     required String missionId,
     required ConfirmationMethod confirmationMethod,
     required void Function(MissionStatus status) onApproval,
   }) {
-    throw UnimplementedError(
-      'Mission approval listener: WebSocket/SSE contract pending',
-    );
+    return const _NoopSubscription();
   }
+}
+
+class _NoopSubscription implements MissionApprovalSubscription {
+  const _NoopSubscription();
+
+  @override
+  void cancel() {}
 }

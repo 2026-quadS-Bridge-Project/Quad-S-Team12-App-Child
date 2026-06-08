@@ -24,15 +24,14 @@ class ApiNotificationRepository implements NotificationRepository {
         '/api/v1/notifications',
       );
       final dynamic data = response.data;
-      if (data is! Map) {
-        throw const FormatException(
-          'Notifications response was not a JSON object.',
-        );
-      }
-      final dynamic raw = data['notifications'];
+      final dynamic raw = data is List
+          ? data
+          : data is Map
+          ? data['notifications']
+          : null;
       if (raw is! List) {
         throw const FormatException(
-          'Notifications response missing "notifications" array.',
+          'Notifications response was not a JSON array.',
         );
       }
       final List<NotificationItem> items = raw

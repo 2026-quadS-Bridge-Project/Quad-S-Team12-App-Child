@@ -24,7 +24,8 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  late final NotificationRepository _repository = createNotificationRepository();
+  late final NotificationRepository _repository =
+      createNotificationRepository();
 
   List<NotificationItem> _notifications = <NotificationItem>[];
 
@@ -35,8 +36,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _loadNotifications() async {
-    final Result<List<NotificationItem>> result =
-        await _repository.listNotifications();
+    final Result<List<NotificationItem>> result = await _repository
+        .listNotifications();
     if (!mounted) {
       return;
     }
@@ -48,9 +49,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       case Failure<List<NotificationItem>>():
         // One-time hint that the list may be stale; the seed (fixture mock)
         // remains on-screen so the user is never left blank.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('알림을 새로고침하지 못했어요.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('알림을 새로고침하지 못했어요.')));
     }
   }
 
@@ -95,9 +96,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
           );
         });
       case Failure<void>(:final String message):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -163,9 +164,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               maxWidth: AppTokens.mobileFrameWidth,
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTokens.mobileHorizontalPadding,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[

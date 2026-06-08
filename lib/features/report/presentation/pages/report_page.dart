@@ -78,9 +78,9 @@ class _ReportPageState extends State<ReportPage> {
         // Retain the seed fixture and notify the user once.
         if (!_didNotifyLoadFailure) {
           _didNotifyLoadFailure = true;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('리포트를 새로고침하지 못했어요.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('리포트를 새로고침하지 못했어요.')));
         }
     }
   }
@@ -95,12 +95,7 @@ class _ReportPageState extends State<ReportPage> {
       body: SafeArea(
         top: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppTokens.pageHorizontal,
-            0,
-            AppTokens.pageHorizontal,
-            16,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           children: [
             _WeeklyIntroCard(weekLabel: report.weekLabel),
             const SizedBox(height: 20),

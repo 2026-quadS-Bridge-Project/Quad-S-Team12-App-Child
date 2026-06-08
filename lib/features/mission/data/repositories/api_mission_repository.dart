@@ -24,8 +24,9 @@ class ApiMissionRepository implements MissionRepository {
   @override
   Future<Result<List<Mission>>> listMissions() async {
     try {
-      final Response<dynamic> response =
-          await _dio.get<dynamic>('/api/v1/missions');
+      final Response<dynamic> response = await _dio.get<dynamic>(
+        '/api/v1/missions',
+      );
       final List<Mission> missions = (response.data as List)
           .cast<Map<String, dynamic>>()
           .map(Mission.fromJson)
@@ -39,8 +40,9 @@ class ApiMissionRepository implements MissionRepository {
   @override
   Future<Result<Mission>> fetchMission(String id) async {
     try {
-      final Response<dynamic> response =
-          await _dio.get<dynamic>('/api/v1/missions/$id');
+      final Response<dynamic> response = await _dio.get<dynamic>(
+        '/api/v1/missions/$id',
+      );
       return Result<Mission>.success(
         Mission.fromJson(response.data as Map<String, dynamic>),
       );
@@ -50,12 +52,12 @@ class ApiMissionRepository implements MissionRepository {
   }
 
   @override
-  Future<Result<void>> submitMission({
+  Future<Result<MissionSubmissionResult>> submitMission({
     required String id,
     required List<String> photoPaths,
   }) async {
     if (photoPaths.isEmpty) {
-      return Result<void>.failure('제출할 사진이 없어요.');
+      return Result<MissionSubmissionResult>.failure('제출할 사진이 없어요.');
     }
     try {
       // Upload the captured photo file directly as multipart to the existing
@@ -67,14 +69,16 @@ class ApiMissionRepository implements MissionRepository {
       final FormData formData = FormData.fromMap(<String, dynamic>{
         'image': await MultipartFile.fromFile(path, filename: _basename(path)),
       });
-      await _dio.post<dynamic>(
+      final Response<dynamic> response = await _dio.post<dynamic>(
         '/api/v1/missions/$id/performances',
         data: formData,
         options: Options(contentType: 'multipart/form-data'),
       );
-      return Result<void>.success(null);
+      return Result<MissionSubmissionResult>.success(
+        MissionSubmissionResult.fromJson(_jsonMap(response.data)),
+      );
     } on DioException catch (e) {
-      return failureFromDioException<void>(e);
+      return failureFromDioException<MissionSubmissionResult>(e);
     }
   }
 
@@ -84,5 +88,15 @@ class ApiMissionRepository implements MissionRepository {
     final int backslash = path.lastIndexOf(r'\');
     final int sep = slash > backslash ? slash : backslash;
     return sep == -1 ? path : path.substring(sep + 1);
+  }
+
+  static Map<String, dynamic> _jsonMap(dynamic data) {
+    if (data is Map && data['data'] is Map) {
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return const <String, dynamic>{};
   }
 }

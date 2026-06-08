@@ -5,6 +5,35 @@ enum MissionStatus {
   rejected, // 반려됨
 }
 
+class MissionSubmissionResult {
+  const MissionSubmissionResult({this.isAccepted, this.reason});
+
+  final bool? isAccepted;
+  final String? reason;
+
+  factory MissionSubmissionResult.fromJson(Map<String, dynamic> json) {
+    return MissionSubmissionResult(
+      isAccepted: json['isAccepted'] as bool?,
+      reason: json['reason'] as String?,
+    );
+  }
+
+  MissionStatus statusFor(ConfirmationMethod confirmationMethod) {
+    switch (confirmationMethod) {
+      case ConfirmationMethod.childSelf:
+        return MissionStatus.completed;
+      case ConfirmationMethod.parentApproval:
+        return MissionStatus.reviewing;
+      case ConfirmationMethod.aiAuto:
+        return switch (isAccepted) {
+          true => MissionStatus.completed,
+          false => MissionStatus.rejected,
+          null => MissionStatus.reviewing,
+        };
+    }
+  }
+}
+
 /// Mission confirmation method — drives the submit-flow branching in
 /// [MissionController.submit]:
 /// - [aiAuto]         → reviewing → auto-approve after a short delay
@@ -214,14 +243,14 @@ class Mission {
     final dynamic rawConfirmationOptions = json['confirmationMethodOptions'];
     final List<ConfirmationMethod> confirmationOptions =
         rawConfirmationOptions is List
-            ? rawConfirmationOptions
-                .map((dynamic e) => ConfirmationMethod.fromName(e?.toString()))
-                .toList()
-            : const <ConfirmationMethod>[
-                ConfirmationMethod.aiAuto,
-                ConfirmationMethod.childSelf,
-                ConfirmationMethod.parentApproval,
-              ];
+        ? rawConfirmationOptions
+              .map((dynamic e) => ConfirmationMethod.fromName(e?.toString()))
+              .toList()
+        : const <ConfirmationMethod>[
+            ConfirmationMethod.aiAuto,
+            ConfirmationMethod.childSelf,
+            ConfirmationMethod.parentApproval,
+          ];
 
     final dynamic rawDeadline = json['deadline'];
     final DateTime? deadline = rawDeadline is String
@@ -257,32 +286,32 @@ class Mission {
       confirmationMethod: _confirmationFromWire(json),
       confirmationMethodOptions: confirmationOptions,
       payoutTime: json['payoutTime']?.toString(),
-      captureInstruction:
-          (json['captureInstruction'] ?? '깨끗해진 방을 찍어서 올려주세요!').toString(),
+      captureInstruction: (json['captureInstruction'] ?? '깨끗해진 방을 찍어서 올려주세요!')
+          .toString(),
     );
   }
 
   /// Hand-written JSON encoder. Enums are serialised via [Enum.name] so the
   /// payload matches what [Mission.fromJson] expects.
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'rewardHours': rewardHours,
-        'rewardMinutes': rewardMinutes,
-        'status': status.name,
-        'description': description,
-        'assignedBy': assignedBy,
-        'photoUrls': photoUrls,
-        'deadline': deadline?.toIso8601String(),
-        'category': category,
-        'categoryOptions': categoryOptions,
-        'resetCycle': resetCycle,
-        'resetCycleOptions': resetCycleOptions,
-        'confirmationMethod': confirmationMethod.name,
-        'confirmationMethodOptions': <String>[
-          for (final ConfirmationMethod m in confirmationMethodOptions) m.name,
-        ],
-        'payoutTime': payoutTime,
-        'captureInstruction': captureInstruction,
-      };
+    'id': id,
+    'title': title,
+    'rewardHours': rewardHours,
+    'rewardMinutes': rewardMinutes,
+    'status': status.name,
+    'description': description,
+    'assignedBy': assignedBy,
+    'photoUrls': photoUrls,
+    'deadline': deadline?.toIso8601String(),
+    'category': category,
+    'categoryOptions': categoryOptions,
+    'resetCycle': resetCycle,
+    'resetCycleOptions': resetCycleOptions,
+    'confirmationMethod': confirmationMethod.name,
+    'confirmationMethodOptions': <String>[
+      for (final ConfirmationMethod m in confirmationMethodOptions) m.name,
+    ],
+    'payoutTime': payoutTime,
+    'captureInstruction': captureInstruction,
+  };
 }

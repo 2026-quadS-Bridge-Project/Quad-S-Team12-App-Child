@@ -15,8 +15,7 @@ import '../../../core/widgets/mixins/async_error_listener.dart';
 /// tab active).
 enum MissionFlowStep { info, cameraPrompt, photoPreview, submitted }
 
-class MissionController extends ChangeNotifier
-    implements AsyncErrorController {
+class MissionController extends ChangeNotifier implements AsyncErrorController {
   /// Public constructor.
   ///
   /// [repository] is injectable for tests; production callers can omit it
@@ -34,19 +33,19 @@ class MissionController extends ChangeNotifier
     PhotoUploadService? uploadService,
     MissionApprovalListener? approvalListener,
   }) : this._(
-          MissionMock.byId(missionId),
-          repository ?? createMissionRepository(),
-          uploadService ?? createPhotoUploadService(),
-          approvalListener ?? createMissionApprovalListener(),
-        );
+         MissionMock.byId(missionId),
+         repository ?? createMissionRepository(),
+         uploadService ?? createPhotoUploadService(),
+         approvalListener ?? createMissionApprovalListener(),
+       );
 
   MissionController._(
     Mission mission,
     this._repository,
     this._uploadService,
     this._approvalListener,
-  )   : _mission = mission,
-        _step = _initialStepFor(mission);
+  ) : _mission = mission,
+      _step = _initialStepFor(mission);
 
   final MissionRepository _repository;
   final PhotoUploadService _uploadService;
@@ -123,19 +122,21 @@ class MissionController extends ChangeNotifier
     notifyListeners();
 
     try {
-      final Result<void> result = await _repository.submitMission(
-        id: _mission.id,
-        photoPaths: List.of(_capturedPhotoPaths),
-      );
+      final Result<MissionSubmissionResult> result = await _repository
+          .submitMission(
+            id: _mission.id,
+            photoPaths: List.of(_capturedPhotoPaths),
+          );
 
       switch (result) {
-        case Success<void>():
-          final bool completesImmediately =
-              _mission.confirmationMethod == ConfirmationMethod.childSelf;
+        case Success<MissionSubmissionResult>(
+          data: final MissionSubmissionResult submission,
+        ):
+          final MissionStatus nextStatus = submission.statusFor(
+            _mission.confirmationMethod,
+          );
           _mission = _mission.copyWith(
-            status: completesImmediately
-                ? MissionStatus.completed
-                : MissionStatus.reviewing,
+            status: nextStatus,
             photoUrls: List.of(_capturedPhotoPaths),
           );
           _step = MissionFlowStep.submitted;
@@ -144,9 +145,10 @@ class MissionController extends ChangeNotifier
           // fires after 2s for aiAuto and stays silent otherwise, preserving
           // the original inline-Timer behavior verbatim.
           _approvalSubscription?.cancel();
-          final bool shouldAutoApprove = aiAutoApprove ??
+          final bool shouldAutoApprove =
+              aiAutoApprove ??
               (_mission.confirmationMethod == ConfirmationMethod.aiAuto);
-          if (!completesImmediately && shouldAutoApprove) {
+          if (nextStatus == MissionStatus.reviewing && shouldAutoApprove) {
             _approvalSubscription = _approvalListener.subscribe(
               missionId: _mission.id,
               confirmationMethod: _mission.confirmationMethod,
@@ -159,7 +161,7 @@ class MissionController extends ChangeNotifier
               },
             );
           }
-        case Failure<void>(message: final String message):
+        case Failure<MissionSubmissionResult>(message: final String message):
           _errorMessage = message;
       }
     } finally {
