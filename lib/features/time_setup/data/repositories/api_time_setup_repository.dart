@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../../../core/auth/auth_session.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/network/api_error.dart';
 import '../models/time_schedule.dart';
@@ -7,12 +8,12 @@ import 'time_setup_repository.dart';
 
 /// HTTP-backed implementation of [TimeSetupRepository].
 ///
-/// Wires the three Time Setup endpoints documented in
-/// `docs/api-contract.md`:
-///   * `GET  /time-setup/previous-week` → seed for the v2 (next-month) flow.
-///   * `GET  /time-setup/current`       → currently-saved upcoming schedule
-///                                        (wrapped as `{ "schedule": ... }`).
-///   * `POST /time-setup`               → persist the finished plan.
+/// Wires the AWS Swagger schedule endpoints:
+///   * `GET  /api/v1/schedules/daily`
+///   * `GET  /api/v1/schedules/routines`
+///   * `POST /api/v1/schedules/weekly-budgets`
+///   * `PUT  /api/v1/schedules/templates`
+///   * `POST/DELETE /api/v1/schedules/routines`
 ///
 /// All [DioException]s funnel through [failureFromDioException] for
 /// consistent Korean error messages.
@@ -24,17 +25,8 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
   @override
   Future<Result<TimeSchedule>> fetchPreviousWeekSchedule() async {
     try {
-      final Response<dynamic> response = await _dio.get<dynamic>(
-        '/time-setup/previous-week',
-      );
-      final dynamic data = response.data;
-      if (data is! Map) {
-        throw const FormatException(
-          'GET /time-setup/previous-week response was not a JSON object.',
-        );
-      }
-      final TimeSchedule schedule = TimeSchedule.fromJson(
-        Map<String, dynamic>.from(data),
+      final TimeSchedule schedule = await _fetchDailySchedule(
+        DateTime.now().subtract(const Duration(days: 7)),
       );
       return Result<TimeSchedule>.success(schedule);
     } on DioException catch (e) {
@@ -45,30 +37,85 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
   @override
   Future<Result<TimeSchedule?>> fetchCurrentSchedule() async {
     try {
-      final Response<dynamic> response = await _dio.get<dynamic>(
-        '/time-setup/current',
-      );
-      final dynamic data = response.data;
-      if (data is! Map) {
-        throw const FormatException(
-          'GET /time-setup/current response was not a JSON object.',
-        );
+      final TimeSchedule? policySchedule = await _fetchPolicySchedule();
+      if (policySchedule != null) {
+        return Result<TimeSchedule?>.success(policySchedule);
       }
-      final dynamic inner = data['schedule'];
-      if (inner == null) {
-        return Result<TimeSchedule?>.success(null);
-      }
-      if (inner is! Map) {
-        throw const FormatException(
-          'GET /time-setup/current `schedule` field was not a JSON object.',
-        );
-      }
-      final TimeSchedule schedule = TimeSchedule.fromJson(
-        Map<String, dynamic>.from(inner),
-      );
+
+      final TimeSchedule schedule = await _fetchDailySchedule(DateTime.now());
       return Result<TimeSchedule?>.success(schedule);
     } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return Result<TimeSchedule?>.success(null);
+      }
       return failureFromDioException<TimeSchedule?>(e);
+    }
+  }
+
+  Future<TimeSchedule> _fetchDailySchedule(DateTime date) async {
+    final Response<dynamic> response = await _dio.get<dynamic>(
+      '/api/v1/schedules/daily',
+      queryParameters: <String, dynamic>{'date': _yyyyMmDd(date)},
+    );
+    final Map<String, dynamic>? data = _responseObject(response.data);
+    if (data == null) {
+      throw const FormatException(
+        'GET /api/v1/schedules/daily response was not a JSON object.',
+      );
+    }
+    return dailyScheduleToTimeSchedule(data, routines: await _fetchRoutines());
+  }
+
+  Future<TimeSchedule?> _fetchPolicySchedule() async {
+    final String? childId = await AuthSession.memberId();
+    if (childId == null || childId.isEmpty) {
+      return null;
+    }
+
+    final Response<dynamic> response = await _dio.get<dynamic>(
+      '/api/v1/children/$childId/policies',
+    );
+    final Map<String, dynamic>? data = _responseObject(response.data);
+    if (data == null) {
+      return null;
+    }
+
+    final int baseTime = _intValue(data['baseTime']);
+    final int totalAvailableTime = _intValue(data['totalAvailableTime']);
+    final int monthlyBudgetMinutes = baseTime > 0
+        ? baseTime
+        : totalAvailableTime;
+    if (monthlyBudgetMinutes <= 0) {
+      return null;
+    }
+
+    return TimeSchedule(
+      allowedHours: routinesToHourCells(await _fetchRoutinesOrEmpty()),
+      weeklyTotals: _emptyWeeklyTotals(),
+      dayAllocations: const <DayAllocation>[],
+      monthlyBudgetMinutes: monthlyBudgetMinutes,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchRoutines() async {
+    final Response<dynamic> response = await _dio.get<dynamic>(
+      '/api/v1/schedules/routines',
+    );
+    final dynamic data = response.data;
+    if (data is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return data
+        .whereType<Map>()
+        .map((Map value) => Map<String, dynamic>.from(value))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchRoutinesOrEmpty() async {
+    try {
+      return await _fetchRoutines();
+    } on DioException {
+      return const <Map<String, dynamic>>[];
     }
   }
 
@@ -135,8 +182,9 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
   /// contiguous run of allowed hours per weekday. `createRoutine` always
   /// inserts (no upsert), so a delete-first pass keeps re-saves idempotent.
   Future<void> _replaceRoutines(Set<HourCell> allowedHours) async {
-    final Response<dynamic> listResp =
-        await _dio.get<dynamic>('/api/v1/schedules/routines');
+    final Response<dynamic> listResp = await _dio.get<dynamic>(
+      '/api/v1/schedules/routines',
+    );
     final dynamic existing = listResp.data;
     if (existing is List) {
       for (final dynamic routine in existing) {
@@ -213,5 +261,35 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     final DateTime now = DateTime.now();
     return '${now.year.toString().padLeft(4, '0')}-'
         '${now.month.toString().padLeft(2, '0')}';
+  }
+
+  String _yyyyMmDd(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Map<String, dynamic>? _responseObject(dynamic data) {
+    if (data is Map && data['data'] is Map) {
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return null;
+  }
+
+  List<WeeklyTotal> _emptyWeeklyTotals() {
+    return <WeeklyTotal>[
+      for (int weekIndex = 0; weekIndex < 4; weekIndex++)
+        WeeklyTotal(weekIndex: weekIndex, hours: 0, minutes: 0),
+    ];
+  }
+
+  int _intValue(Object? value) {
+    if (value is num) {
+      return value.toInt();
+    }
+    return 0;
   }
 }

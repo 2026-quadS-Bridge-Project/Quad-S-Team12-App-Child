@@ -51,6 +51,7 @@ class BridgeDayRow extends StatelessWidget {
   static const double _unitGap = 10;
   static const double _dividerHeight = 22;
   static const double _dividerInset = 12;
+  static const double _labelWidth = 82;
   static const double _pencilSize = 24;
   static const String _pencilAsset = 'assets/icons/solar_pen-bold-duotone.svg';
 
@@ -67,7 +68,8 @@ class BridgeDayRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Flexible(
+          SizedBox(
+            width: _labelWidth,
             child: Text(
               daysLabel,
               maxLines: 1,

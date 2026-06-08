@@ -16,8 +16,8 @@ class TimeConfirmController extends ChangeNotifier
   TimeConfirmController({
     TimeConfirmData? initial,
     TimeConfirmRepository? repository,
-  })  : _data = initial ?? TimeConfirmMock.filled,
-        _repository = repository ?? createTimeConfirmRepository();
+  }) : _data = initial ?? TimeConfirmMock.empty,
+       _repository = repository ?? createTimeConfirmRepository();
 
   final TimeConfirmRepository _repository;
 
@@ -49,8 +49,8 @@ class TimeConfirmController extends ChangeNotifier
     _errorMessage = null;
     notifyListeners();
 
-    final Result<TimeConfirmData> result =
-        await _repository.fetchCurrentSchedule();
+    final Result<TimeConfirmData> result = await _repository
+        .fetchCurrentSchedule();
     switch (result) {
       case Success<TimeConfirmData>(:final data):
         _data = data;

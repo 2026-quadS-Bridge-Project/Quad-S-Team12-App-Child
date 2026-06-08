@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/auth/auth_session.dart';
+import '../../../../core/config/dio_config.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/services/device_block_controller.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -13,12 +16,11 @@ import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../mission/data/models/mission.dart' as mission_model;
 import '../../../mission/data/repositories/mission_repository.dart';
+import '../../../notifications/data/models/notification_item.dart';
+import '../../../notifications/data/repositories/notification_repository.dart';
 
 class ChildHomePage extends StatefulWidget {
-  const ChildHomePage({
-    super.key,
-    this.showContent = true,
-  });
+  const ChildHomePage({super.key, this.showContent = true});
 
   final bool showContent;
 
@@ -27,30 +29,183 @@ class ChildHomePage extends StatefulWidget {
 }
 
 class _ChildHomePageState extends State<ChildHomePage> {
-  // TODO: Wire `_hasSchedule` to real schedule state once persistence lands.
-  // Default false so the empty-state + button is reachable on first run.
-  // Long-press the time card to toggle for debug (see _toggleHasScheduleForDebug).
-  bool _hasSchedule = false;
+  final Dio _dio = DioConfig.create();
+  late final NotificationRepository _notificationRepository =
+      createNotificationRepository();
 
-  // TODO(time): source remaining minutes from the policies / daily-schedule
-  // read path once it lands. Hardcoded today to match the home time card
-  // (기본 01:30 + 보너스 00:30). When this hits 0 the native blocker engages,
-  // restricting the device to essential apps (phone / SMS).
-  static const int _remainingMinutes = 90 + 30;
+  bool _hasSchedule = false;
+  bool _hasNotification = false;
+  _HomeTimeSnapshot? _timeSnapshot;
+  int _remainingSeconds = 0;
+  Timer? _countdownTimer;
+  bool _appliedExpiryBlock = false;
 
   @override
   void initState() {
     super.initState();
-    // Sync the OS-level device blocker with the child's remaining screen time.
-    // No-op on platforms / builds without the native channel.
+    if (widget.showContent) {
+      unawaited(_loadHomeTime());
+      unawaited(_loadNotificationIndicator());
+    }
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _dio.close(force: true);
+    super.dispose();
+  }
+
+  Future<void> _loadHomeTime() async {
+    try {
+      final _HomeTimeSnapshot? snapshot = await _fetchHomeTimeSnapshot();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _timeSnapshot = snapshot;
+        _hasSchedule = snapshot != null && snapshot.totalMinutes > 0;
+        _remainingSeconds = (snapshot?.totalMinutes ?? 0) * 60;
+        _appliedExpiryBlock = false;
+      });
+      _syncDeviceBlocker();
+      _restartCountdown();
+    } on DioException catch (e) {
+      debugPrint('Child home time load failed: ${e.message}');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _hasSchedule = false;
+        _timeSnapshot = null;
+        _remainingSeconds = 0;
+      });
+    } on FormatException catch (e) {
+      debugPrint('Child home time parse failed: ${e.message}');
+    }
+  }
+
+  Future<void> _loadNotificationIndicator() async {
+    final Result<List<NotificationItem>> result = await _notificationRepository
+        .listNotifications();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _hasNotification =
+          result is Success<List<NotificationItem>> && result.data.isNotEmpty;
+    });
+  }
+
+  Future<_HomeTimeSnapshot?> _fetchHomeTimeSnapshot() async {
+    _HomeTimeSnapshot? dailySnapshot;
+    try {
+      final Response<dynamic> dailyResponse = await _dio.get<dynamic>(
+        '/api/v1/schedules/daily',
+        queryParameters: <String, dynamic>{'date': _yyyyMmDd(DateTime.now())},
+      );
+      final Map<String, dynamic>? daily = _jsonMap(dailyResponse.data);
+      if (daily != null) {
+        dailySnapshot = _HomeTimeSnapshot(
+          baseMinutes: _intValue(daily['baseMinutes']),
+          bonusMinutes: _intValue(daily['extendedMinutes']),
+          totalMinutes: _intValue(
+            daily['totalAvailableMinutes'],
+            fallback:
+                _intValue(daily['baseMinutes']) +
+                _intValue(daily['extendedMinutes']),
+          ),
+        );
+      }
+    } on DioException {
+      // Use the child policy only as a fallback. When today's daily schedule
+      // exists, it is the source of truth for the home countdown.
+    }
+
+    if (dailySnapshot != null) {
+      return dailySnapshot;
+    }
+
+    final String? memberId = await AuthSession.memberId();
+    if (memberId == null || memberId.isEmpty) {
+      return dailySnapshot;
+    }
+
+    try {
+      final Response<dynamic> policyResponse = await _dio.get<dynamic>(
+        '/api/v1/children/$memberId/policies',
+      );
+      final Map<String, dynamic>? policy = _jsonMap(policyResponse.data);
+      if (policy == null) {
+        return dailySnapshot;
+      }
+      return _HomeTimeSnapshot(
+        baseMinutes: _intValue(
+          policy['baseTime'],
+          fallback: dailySnapshot?.baseMinutes ?? 0,
+        ),
+        bonusMinutes: _intValue(
+          policy['accumulatedRewardTime'],
+          fallback: dailySnapshot?.bonusMinutes ?? 0,
+        ),
+        totalMinutes: _intValue(
+          policy['totalAvailableTime'],
+          fallback: dailySnapshot?.totalMinutes ?? 0,
+        ),
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return dailySnapshot;
+      }
+      rethrow;
+    }
+  }
+
+  void _restartCountdown() {
+    _countdownTimer?.cancel();
+    if (_remainingSeconds <= 0) {
+      return;
+    }
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _remainingSeconds = _remainingSeconds > 0 ? _remainingSeconds - 1 : 0;
+      });
+      _syncDeviceBlocker();
+      if (_remainingSeconds <= 0) {
+        _countdownTimer?.cancel();
+      }
+    });
+  }
+
+  void _syncDeviceBlocker() {
+    final int remainingMinutes = _remainingSeconds <= 0
+        ? 0
+        : (_remainingSeconds / 60).ceil();
+    if (remainingMinutes <= 0) {
+      if (_appliedExpiryBlock) {
+        return;
+      }
+      _appliedExpiryBlock = true;
+    }
     unawaited(
-      DeviceBlockController.instance.applyForRemainingMinutes(_remainingMinutes),
+      DeviceBlockController.instance.applyForRemainingMinutes(remainingMinutes),
     );
   }
 
   void _toggleHasScheduleForDebug() {
     setState(() {
       _hasSchedule = !_hasSchedule;
+      if (_hasSchedule && _timeSnapshot == null) {
+        _timeSnapshot = const _HomeTimeSnapshot(
+          baseMinutes: 90,
+          bonusMinutes: 30,
+          totalMinutes: 120,
+        );
+        _remainingSeconds = 120 * 60;
+      }
     });
   }
 
@@ -60,7 +215,8 @@ class _ChildHomePageState extends State<ChildHomePage> {
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: AppColors.gray100,
-        body: Center(
+        body: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: AppTokens.mobileFrameWidth,
@@ -70,6 +226,11 @@ class _ChildHomePageState extends State<ChildHomePage> {
               child: _ChildHomeContent(
                 hasContent: widget.showContent,
                 hasSchedule: _hasSchedule,
+                hasNotification: _hasNotification,
+                timeSnapshot: _timeSnapshot,
+                remainingSeconds: _remainingSeconds,
+                onNotificationsChanged: () =>
+                    unawaited(_loadNotificationIndicator()),
                 onDebugToggleSchedule: kDebugMode
                     ? _toggleHasScheduleForDebug
                     : null,
@@ -82,15 +243,80 @@ class _ChildHomePageState extends State<ChildHomePage> {
   }
 }
 
+class _HomeTimeSnapshot {
+  const _HomeTimeSnapshot({
+    required this.baseMinutes,
+    required this.bonusMinutes,
+    required this.totalMinutes,
+  });
+
+  final int baseMinutes;
+  final int bonusMinutes;
+  final int totalMinutes;
+}
+
+Map<String, dynamic>? _jsonMap(dynamic data) {
+  if (data is Map && data['data'] is Map) {
+    return Map<String, dynamic>.from(data['data'] as Map);
+  }
+  if (data is Map) {
+    return Map<String, dynamic>.from(data);
+  }
+  return null;
+}
+
+int _intValue(Object? value, {int fallback = 0}) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+String _yyyyMmDd(DateTime date) {
+  final String year = date.year.toString().padLeft(4, '0');
+  final String month = date.month.toString().padLeft(2, '0');
+  final String day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+String _formatMinutes(int totalMinutes) {
+  final int safeMinutes = totalMinutes < 0 ? 0 : totalMinutes;
+  final int hours = safeMinutes ~/ 60;
+  final int minutes = safeMinutes % 60;
+  return '${hours.toString().padLeft(2, '0')}:'
+      '${minutes.toString().padLeft(2, '0')}';
+}
+
+String _formatRemainingSeconds(int totalSeconds) {
+  final int safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
+  final int hours = safeSeconds ~/ 3600;
+  final int minutes = (safeSeconds % 3600) ~/ 60;
+  final int seconds = safeSeconds % 60;
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}';
+  }
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${seconds.toString().padLeft(2, '0')}';
+}
+
 class _ChildHomeContent extends StatelessWidget {
   const _ChildHomeContent({
     required this.hasContent,
     required this.hasSchedule,
+    required this.hasNotification,
+    required this.timeSnapshot,
+    required this.remainingSeconds,
+    required this.onNotificationsChanged,
     required this.onDebugToggleSchedule,
   });
 
   final bool hasContent;
   final bool hasSchedule;
+  final bool hasNotification;
+  final _HomeTimeSnapshot? timeSnapshot;
+  final int remainingSeconds;
+  final VoidCallback onNotificationsChanged;
   // Null in release builds — see ChildHomePage build(). Keeps the long-press
   // debug toggle from silently flipping schedule state for end users.
   final VoidCallback? onDebugToggleSchedule;
@@ -117,7 +343,10 @@ class _ChildHomeContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppTokens.mediumGap),
-              _TopBar(hasNotification: hasContent),
+              _TopBar(
+                hasNotification: hasContent && hasNotification,
+                onNotificationsChanged: onNotificationsChanged,
+              ),
               // Figma: topbar bottom y=88, content y=108 (empty) / 118 (v2).
               SizedBox(
                 height: hasContent
@@ -127,6 +356,8 @@ class _ChildHomeContent extends StatelessWidget {
               _TodayTimeSection(
                 hasContent: hasContent,
                 hasSchedule: hasSchedule,
+                timeSnapshot: timeSnapshot,
+                remainingSeconds: remainingSeconds,
                 onDebugToggleSchedule: onDebugToggleSchedule,
               ),
               const SizedBox(height: 50),
@@ -141,9 +372,13 @@ class _ChildHomeContent extends StatelessWidget {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.hasNotification});
+  const _TopBar({
+    required this.hasNotification,
+    required this.onNotificationsChanged,
+  });
 
   final bool hasNotification;
+  final VoidCallback onNotificationsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +390,10 @@ class _TopBar extends StatelessWidget {
           const _MyPageButton(),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => context.push('/child-home/notifications'),
+            onTap: () async {
+              await context.push('/child-home/notifications');
+              onNotificationsChanged();
+            },
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -224,11 +462,15 @@ class _TodayTimeSection extends StatelessWidget {
   const _TodayTimeSection({
     required this.hasContent,
     required this.hasSchedule,
+    required this.timeSnapshot,
+    required this.remainingSeconds,
     required this.onDebugToggleSchedule,
   });
 
   final bool hasContent;
   final bool hasSchedule;
+  final _HomeTimeSnapshot? timeSnapshot;
+  final int remainingSeconds;
   // Null in release builds; long-press becomes a no-op.
   final VoidCallback? onDebugToggleSchedule;
 
@@ -236,7 +478,7 @@ class _TodayTimeSection extends StatelessWidget {
   Widget build(BuildContext context) {
     // Donut + bonus details only when there's actually a registered schedule.
     // All other states fall through to the empty card with a tappable + button.
-    final bool showDonut = hasContent && hasSchedule;
+    final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
 
     return SizedBox(
       height: 223,
@@ -351,7 +593,9 @@ class _TodayTimeSection extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.white,
-                  borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
+                  borderRadius: BorderRadius.circular(
+                    AppTokens.cardRadiusSmall,
+                  ),
                   boxShadow: const [
                     BoxShadow(
                       color: AppTokens.cardShadowColor,
@@ -366,7 +610,10 @@ class _TodayTimeSection extends StatelessWidget {
                 // - hasContent=false (legacy onboarding path): same empty-state
                 //   so the + button is always reachable.
                 child: showDonut
-                    ? const _TimeSummaryContent()
+                    ? _TimeSummaryContent(
+                        snapshot: timeSnapshot!,
+                        remainingSeconds: remainingSeconds,
+                      )
                     : const _ScheduleEmptyState(),
               ),
             ),
@@ -411,17 +658,26 @@ class _ScheduleEmptyState extends StatelessWidget {
 }
 
 class _TimeSummaryContent extends StatelessWidget {
-  const _TimeSummaryContent();
+  const _TimeSummaryContent({
+    required this.snapshot,
+    required this.remainingSeconds,
+  });
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
       child: Row(
-        children: const [
-          _TimeDonutChart(),
-          SizedBox(width: 40),
-          _TimeDetails(),
+        children: [
+          _TimeDonutChart(
+            snapshot: snapshot,
+            remainingSeconds: remainingSeconds,
+          ),
+          const SizedBox(width: 40),
+          _TimeDetails(snapshot: snapshot, remainingSeconds: remainingSeconds),
         ],
       ),
     );
@@ -429,19 +685,38 @@ class _TimeSummaryContent extends StatelessWidget {
 }
 
 class _TimeDonutChart extends StatelessWidget {
-  const _TimeDonutChart();
+  const _TimeDonutChart({
+    required this.snapshot,
+    required this.remainingSeconds,
+  });
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 124,
       height: 124,
-      child: CustomPaint(painter: _TimeDonutChartPainter()),
+      child: CustomPaint(
+        painter: _TimeDonutChartPainter(
+          snapshot: snapshot,
+          remainingSeconds: remainingSeconds,
+        ),
+      ),
     );
   }
 }
 
 class _TimeDonutChartPainter extends CustomPainter {
+  const _TimeDonutChartPainter({
+    required this.snapshot,
+    required this.remainingSeconds,
+  });
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
+
   @override
   void paint(Canvas canvas, Size size) {
     final Offset center = size.center(Offset.zero);
@@ -474,55 +749,63 @@ class _TimeDonutChartPainter extends CustomPainter {
       );
     }
 
+    final int totalSeconds = snapshot.totalMinutes * 60;
+    final double remainingProgress = totalSeconds <= 0
+        ? 0
+        : (remainingSeconds / totalSeconds).clamp(0, 1).toDouble();
+    final double bonusProgress = snapshot.totalMinutes <= 0
+        ? 0
+        : (snapshot.bonusMinutes / snapshot.totalMinutes)
+              .clamp(0, 1)
+              .toDouble();
+
     drawRing(
       radius: 55,
       strokeWidth: 14,
       baseColor: AppColors.gray150,
       progressColor: AppColors.primary,
-      progress: 0.76,
+      progress: remainingProgress,
     );
     drawRing(
       radius: 39,
       strokeWidth: 11,
       baseColor: AppColors.gray150,
       progressColor: AppColors.bonusAmber,
-      progress: 0.78,
+      progress: bonusProgress,
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TimeDonutChartPainter oldDelegate) {
+    return oldDelegate.remainingSeconds != remainingSeconds ||
+        oldDelegate.snapshot != snapshot;
+  }
 }
 
 class _TimeDetails extends StatelessWidget {
-  const _TimeDetails();
+  const _TimeDetails({required this.snapshot, required this.remainingSeconds});
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 101,
       height: 124,
-      child: Stack(
-        children: const [
-          Positioned(
-            left: 0,
-            top: 0,
-            right: 0,
-            child: _TimeDetailGroup(
-              label: '기본시간',
-              value: '01:30',
-              color: AppColors.primary,
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _TimeDetailGroup(
+            label: '남은시간',
+            value: _formatRemainingSeconds(remainingSeconds),
+            color: AppColors.primary,
           ),
-          Positioned(
-            left: 0,
-            top: 72,
-            right: 0,
-            child: _TimeDetailGroup(
-              label: '보너스시간',
-              value: '00:30',
-              color: AppColors.bonusAmber,
-            ),
+          const Spacer(),
+          _TimeDetailGroup(
+            label: '보너스시간',
+            value: _formatMinutes(snapshot.bonusMinutes),
+            color: AppColors.bonusAmber,
           ),
         ],
       ),
@@ -543,32 +826,30 @@ class _TimeDetailGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTypography.labelMedium.copyWith(
-              color: color,
-              fontSize: 14,
-              height: 1.429,
-              letterSpacing: 0.203,
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTypography.labelMedium.copyWith(
+            color: color,
+            fontSize: 14,
+            height: 1.429,
+            letterSpacing: 0.203,
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: AppTypography.heading1SemiBold.copyWith(
-              color: color,
-              fontSize: 24,
-              height: 1.364,
-              letterSpacing: -0.466,
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTypography.heading1SemiBold.copyWith(
+            color: color,
+            fontSize: 24,
+            height: 1.364,
+            letterSpacing: -0.466,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -666,8 +947,8 @@ class _MissionListSectionState extends State<_MissionListSection> {
   }
 
   Future<void> _loadMissions() async {
-    final Result<List<mission_model.Mission>> result =
-        await _repository.listMissions();
+    final Result<List<mission_model.Mission>> result = await _repository
+        .listMissions();
     if (!mounted) return;
     if (result case Success<List<mission_model.Mission>>(data: final fresh)) {
       setState(() {
@@ -961,4 +1242,3 @@ class _ReviewingStatusIcon extends StatelessWidget {
     );
   }
 }
-

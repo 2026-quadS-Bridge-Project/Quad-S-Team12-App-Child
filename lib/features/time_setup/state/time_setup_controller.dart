@@ -83,7 +83,7 @@ class TimeSetupController extends ChangeNotifier
       showPastWeekDim ? _previousWeek?.weeklyTotalMinutesAt(0) ?? 0 : 0;
   int get weeklyDistributionCapMinutes {
     if (!showPastWeekDim) {
-      return _schedule.weeklyTotalCapMinutes;
+      return _schedule.monthlyBudgetMinutes ?? 0;
     }
 
     final int previousMonthCap =
@@ -125,6 +125,7 @@ class TimeSetupController extends ChangeNotifier
       allowedHours: newSet,
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: _schedule.dayAllocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
     );
     notifyListeners();
   }
@@ -158,6 +159,7 @@ class TimeSetupController extends ChangeNotifier
       allowedHours: _schedule.allowedHours,
       weeklyTotals: next,
       dayAllocations: _schedule.dayAllocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
     );
     notifyListeners();
   }
@@ -169,9 +171,11 @@ class TimeSetupController extends ChangeNotifier
       return false;
     }
     if (!showPastWeekDim) {
-      return _schedule.weeklyTotals.every(
+      final bool allWeeksFilled = _schedule.weeklyTotals.every(
         (WeeklyTotal w) => w.totalMinutes > 0,
       );
+      return allWeeksFilled &&
+          editableWeeklyTotalMinutes == weeklyDistributionCapMinutes;
     }
 
     final bool allEditableWeeksFilled = editableWeekIndices.every(
@@ -212,6 +216,7 @@ class TimeSetupController extends ChangeNotifier
       allowedHours: _schedule.allowedHours,
       weeklyTotals: next,
       dayAllocations: _schedule.dayAllocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
     );
     notifyListeners();
   }
@@ -289,6 +294,7 @@ class TimeSetupController extends ChangeNotifier
       allowedHours: _schedule.allowedHours,
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: allocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
     );
     notifyListeners();
   }
@@ -301,6 +307,7 @@ class TimeSetupController extends ChangeNotifier
       allowedHours: _schedule.allowedHours,
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: list,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
     );
     notifyListeners();
   }
@@ -381,6 +388,7 @@ class TimeSetupController extends ChangeNotifier
           WeeklyTotal(weekIndex: weekIndex, hours: 0, minutes: 0),
       ],
       dayAllocations: previousWeek.dayAllocations,
+      monthlyBudgetMinutes: previousWeek.weeklyTotalCapMinutes,
     );
   }
 

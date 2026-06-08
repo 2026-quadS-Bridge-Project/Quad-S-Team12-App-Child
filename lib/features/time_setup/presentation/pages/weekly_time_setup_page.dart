@@ -190,13 +190,7 @@ class WeeklyTimeSetupPage extends StatelessWidget {
     );
   }
 
-  static const List<int> _v2EditableWeekIndices = <int>[1, 2, 3];
-
   int _displayedTotalMinutes(TimeSetupController controller) {
-    if (!controller.showPastWeekDim) {
-      return controller.schedule.weeklyTotalCapMinutes;
-    }
-
     return controller.weeklyDistributionCapMinutes;
   }
 
@@ -217,17 +211,18 @@ class WeeklyTimeSetupPage extends StatelessWidget {
     TimeSetupController controller, {
     required int totalMinutes,
   }) {
-    if (!controller.showPastWeekDim || totalMinutes <= 0) {
+    if (totalMinutes <= 0) {
       return false;
     }
 
+    final List<int> editableWeekIndices = controller.editableWeekIndices;
     final List<int> distributedMinutes = _distributedEditableWeekMinutes(
       totalMinutes,
-      _v2EditableWeekIndices.length,
+      editableWeekIndices.length,
     );
 
-    for (int i = 0; i < _v2EditableWeekIndices.length; i++) {
-      final int weekIndex = _v2EditableWeekIndices[i];
+    for (int i = 0; i < editableWeekIndices.length; i++) {
+      final int weekIndex = editableWeekIndices[i];
       if (controller.schedule.weeklyTotalMinutesAt(weekIndex) !=
           distributedMinutes[i]) {
         return true;

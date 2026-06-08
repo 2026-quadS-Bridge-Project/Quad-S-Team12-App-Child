@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +10,8 @@ import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../../../core/widgets/layout/bridge_day_row.dart';
 import '../../../../core/widgets/layout/bridge_total_time_card.dart';
+import '../../../../core/widgets/mixins/async_error_listener.dart';
+import '../../../time_setup/data/models/time_schedule.dart';
 import '../../data/mock/time_confirm_mock.dart';
 import '../../data/models/time_confirm_data.dart';
 import '../../state/time_confirm_controller.dart';
@@ -18,23 +22,24 @@ import '../../state/time_confirm_controller.dart';
 ///   * empty   — no schedule set by parent → centered text-only empty state
 ///   * filled  — weekly total + per-day allocation rows
 ///
-/// The variant is initialised once in [initState] from the optional
-/// `?variant=empty|filled` query param on `/child-home/time-setup/confirm`.
-/// Default is `filled`.
+/// The optional variant is initialised once in [initState] from
+/// [TimeConfirmPage.variant]. When no variant is provided, the page loads the
+/// active schedule from the repository.
 ///
 /// Spec: docs/figma-specs/10-time-confirm.md
 class TimeConfirmPage extends StatefulWidget {
   const TimeConfirmPage({super.key, this.variant});
 
   /// Optional explicit override of the initial variant. When null, the page
-  /// reads `?variant=...` from the current route. Useful for tests.
+  /// fetches the current schedule from the repository. Useful for tests.
   final String? variant;
 
   @override
   State<TimeConfirmPage> createState() => _TimeConfirmPageState();
 }
 
-class _TimeConfirmPageState extends State<TimeConfirmPage> {
+class _TimeConfirmPageState extends State<TimeConfirmPage>
+    with AsyncErrorListenerMixin<TimeConfirmPage> {
   late final TimeConfirmController _controller;
 
   /// Guards the 수정하기 pill against re-entry / rapid double-tap while the
@@ -45,19 +50,22 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
   @override
   void initState() {
     super.initState();
-    _controller = TimeConfirmController(initial: _resolveInitialData());
+    final TimeConfirmData? initial = _resolveInitialData();
+    _controller = TimeConfirmController(initial: initial);
+    bindAsyncErrorListener(_controller);
+    if (initial == null) {
+      unawaited(_controller.load());
+    }
   }
 
-  TimeConfirmData _resolveInitialData() {
-    final String? raw =
-        widget.variant ??
-        GoRouterState.of(context).uri.queryParameters['variant'];
-    switch (raw) {
+  TimeConfirmData? _resolveInitialData() {
+    switch (widget.variant) {
       case 'empty':
         return TimeConfirmMock.empty;
       case 'filled':
-      default:
         return TimeConfirmMock.filled;
+      default:
+        return null;
     }
   }
 
@@ -101,6 +109,9 @@ class _TimeConfirmPageState extends State<TimeConfirmPage> {
           listenable: _controller,
           builder: (context, _) {
             final TimeConfirmData data = _controller.data;
+            if (_controller.isLoading && data.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
             if (data.isEmpty) {
               return _EmptyVariant(onClose: _handleConfirm);
             }
@@ -167,6 +178,9 @@ class _FilledVariant extends StatelessWidget {
     // schedule is non-null here — `isEmpty` short-circuits in the parent.
     final schedule = data.schedule!;
     final CalendarService calendar = createCalendarService();
+    final int weekIndex = calendar.currentWeekIndex();
+    final int scheduleWeekIndex = weekIndex - 1;
+    final int totalMinutes = _displayTotalMinutes(schedule, scheduleWeekIndex);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -175,10 +189,9 @@ class _FilledVariant extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: BridgeTotalTimeCard(
             variant: BridgeTotalTimeCardVariant.compact,
-            title:
-                '${calendar.currentMonthLabel()} ${calendar.currentWeekIndex()}주 사용 시간',
-            hours: schedule.weeklyHoursAt(0),
-            minutes: schedule.weeklyMinutesAt(0),
+            title: '${calendar.currentMonthLabel()} $weekIndex주 사용 시간',
+            hours: totalMinutes ~/ 60,
+            minutes: totalMinutes % 60,
           ),
         ),
         const SizedBox(height: 28),
@@ -228,6 +241,14 @@ class _FilledVariant extends StatelessWidget {
       ],
     );
   }
+}
+
+int _displayTotalMinutes(TimeSchedule schedule, int weekIndex) {
+  final int exact = schedule.weeklyTotalMinutesAt(weekIndex);
+  if (exact > 0 || schedule.weeklyTotals.length != 1) {
+    return exact;
+  }
+  return schedule.weeklyTotals.first.totalMinutes;
 }
 
 class _RequestEditPill extends StatelessWidget {
