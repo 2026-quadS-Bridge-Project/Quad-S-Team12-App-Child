@@ -37,95 +37,100 @@ and injects `Authorization: Bearer <token>` when present.
 
 ## 2. Per-feature repository catalog
 
-All API impls are wired against the endpoints documented in
-[`api-contract.md`](api-contract.md). Verb/path entries below match
-the impls and are kept here as a quick reference; the contract doc
-is the canonical source.
+All API impls are wired against the deployed AWS Swagger surface at
+`https://leyoung.shop/swagger-ui/index.html`. Verb/path entries below
+match the current implementation. If a feature has no AWS endpoint, the
+API implementation does not call a legacy compatibility path.
 
 ### Mission — [mission_repository.dart](../lib/features/mission/data/repositories/mission_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `listMissions` | `Future<Result<List<Mission>>>` | Returns `MissionMock.all` | `GET /missions` |
-| `fetchMission` | `Future<Result<Mission>>(String id)` | Looks up by id; Failure when absent | `GET /missions/{id}` |
-| `submitMission` | `Future<Result<Mission>>({id, photoPaths})` | Echoes mission with attached `photoUrls`; controller owns status transitions | `POST /missions/{id}/submit` |
+| `listMissions` | `Future<Result<List<Mission>>>` | Returns `MissionMock.all` | `GET /api/v1/missions` |
+| `fetchMission` | `Future<Result<Mission>>(String id)` | Looks up by id; Failure when absent | `GET /api/v1/missions/{missionId}` |
+| `submitMission` | `Future<Result<void>>({id, photoPaths})` | Echoes success | `POST /api/v1/missions/{missionId}/performances` multipart `image` |
 
-Notes: `submitMission` accepts local paths today. After photo upload
-goes live the controller should pass remote URLs returned by
-`PhotoUploadService`.
+Notes: `submitMission` accepts local paths and uploads the first file
+directly to the mission performance endpoint. `PhotoUploadService` remains
+a defer/no-op layer for this flow.
 
 ### TimeSetup — [time_setup_repository.dart](../lib/features/time_setup/data/repositories/time_setup_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `fetchPreviousWeekSchedule` | `Future<Result<TimeSchedule>>` | Returns `TimeScheduleMock.previousWeek` | `GET /time-setup/previous-week` |
-| `fetchCurrentSchedule` | `Future<Result<TimeSchedule?>>` | Returns saved fixture or `null` | `GET /time-setup/current` |
-| `saveSchedule` | `Future<Result<void>>(TimeSchedule)` | Mutates in-memory fixture | `POST /time-setup` |
+| `fetchPreviousWeekSchedule` | `Future<Result<TimeSchedule>>` | Returns `TimeScheduleMock.previousWeek` | `GET /api/v1/schedules/daily?date=<today-7d>` + `GET /api/v1/schedules/routines` |
+| `fetchCurrentSchedule` | `Future<Result<TimeSchedule?>>` | Returns saved fixture or `null` | `GET /api/v1/schedules/daily?date=<today>` + `GET /api/v1/schedules/routines` |
+| `saveSchedule` | `Future<Result<void>>(TimeSchedule)` | Mutates in-memory fixture | `POST /api/v1/schedules/weekly-budgets`, `PUT /api/v1/schedules/templates`, `GET/POST/DELETE /api/v1/schedules/routines` |
 
 ### TimeConfirm — [time_confirm_repository.dart](../lib/features/time_confirm/data/repositories/time_confirm_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `fetchCurrentSchedule` | `Future<Result<TimeConfirmData>>` | Returns `TimeConfirmMock.current` | `GET /time-confirm/current` |
-| `requestModification` | `Future<Result<void>>` | No-op success | `POST /time-confirm/request-modification` |
-| `acknowledgeSchedule` | `Future<Result<void>>` | No-op success | `POST /time-confirm/acknowledge` |
+| `fetchCurrentSchedule` | `Future<Result<TimeConfirmData>>` | Returns `TimeConfirmMock.current` | `GET /api/v1/schedules/daily?date=<today>` |
+| `requestModification` | `Future<Result<void>>` | No-op success | Local-only success; no AWS endpoint |
+| `acknowledgeSchedule` | `Future<Result<void>>` | No-op success | Local-only success; no AWS endpoint |
 
 ### Notification — [notification_repository.dart](../lib/features/notifications/data/repositories/notification_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `listNotifications` | `Future<Result<List<NotificationItem>>>` | Returns `NotificationsMock.all` | `GET /notifications` |
-| `deleteNotification` | `Future<Result<void>>(String id)` | Removes from in-memory list | `DELETE /notifications/{id}` |
-| `markAsRead` | `Future<Result<void>>(String id)` | Flips `isRead` on fixture | `PATCH /notifications/{id}/read` |
+| `listNotifications` | `Future<Result<List<NotificationItem>>>` | Returns `NotificationsMock.all` | `GET /api/v1/notifications` |
+| `deleteNotification` | `Future<Result<void>>(String id)` | Removes from in-memory list | `DELETE /api/v1/notifications/{notificationId}` |
+| `markAsRead` | `Future<Result<void>>(String id)` | Flips `isRead` on fixture | `PATCH /api/v1/notifications/{notificationId}/read` |
 
 ### UsageReport — [usage_report_repository.dart](../lib/features/report/data/repositories/usage_report_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `fetchCurrentWeekReport` | `Future<Result<UsageReport>>` | Returns `UsageReportMock.currentWeek` | `GET /reports/weekly` |
+| `fetchCurrentWeekReport` | `Future<Result<UsageReport>>` | Returns `UsageReportMock.currentWeek` | Derived from seven `GET /api/v1/schedules/daily` calls; no `/reports/weekly` call |
 
 ### MyPage — [my_page_repository.dart](../lib/features/my_page/data/repositories/my_page_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `fetchProfile` | `Future<Result<UserProfile>>` | Returns canned profile | `GET /user/profile` |
-| `changePassword` | `Future<Result<void>>({currentPassword, newPassword})` | Validates against demo password; Failure with `'현재 비밀번호가 일치하지 않아요.'` on mismatch | `PATCH /user/password` |
-| `deleteAccount` | `Future<Result<void>>` | No-op success | `DELETE /user/account` |
+| `fetchProfile` | `Future<Result<UserProfile>>` | Returns canned profile | Local session-derived profile; no AWS profile-read endpoint |
+| `changePassword` | `Future<Result<void>>({currentPassword, newPassword})` | Validates against demo password | `PATCH /api/v1/members/password` |
+| `deleteAccount` | `Future<Result<void>>` | No-op success | `DELETE /api/v1/members` |
 
 ### Auth — [auth_repository.dart](../lib/features/auth/data/repositories/auth_repository.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `login` | `Future<Result<AuthToken>>({username, password})` | Validates against demo creds; Failure messages exposed via `AuthFailureMessages` | `POST /auth/login` |
-| `signup` | `Future<Result<AuthToken>>({username, password})` | Failure with `AuthFailureMessages.duplicatedUsername` on collision | `POST /auth/signup` |
+| `login` | `Future<Result<AuthToken>>({username, password})` | Validates against demo creds | `POST /auth/children/login` body `{email,password}` |
+| `signup` | `Future<Result<AuthToken>>({name, username, password})` | Failure with `AuthFailureMessages.duplicatedUsername` on collision | `POST /auth/children/signup` body `{name,email,password}` |
+| `refreshToken` | `Future<Result<AuthToken>>(refreshToken)` | Rotates mock token | `POST /auth/token/refresh` |
 
 Failure strings live as constants on `AuthFailureMessages` so pages
 match exactly — no substring checks.
 
 ### PhotoUpload — [photo_upload_service.dart](../lib/core/services/photo_upload_service.dart)
 
-| Method | Signature | Mock behavior | Tentative endpoint |
+| Method | Signature | Mock behavior | AWS behavior |
 |---|---|---|---|
-| `uploadPhoto` | `Future<Result<String>>(String localPath)` | Echoes the local path as the remote URL | `POST /uploads/photo` (multipart) |
+| `uploadPhoto` | `Future<Result<String>>(String localPath)` | Echoes the local path | Local defer; mission submission uploads via `POST /api/v1/missions/{missionId}/performances` |
 
 Lives under `core/services` because it crosses feature boundaries
 (mission submission, future profile photo, etc.).
 
 ## 3. How to point the app at a real backend
 
-The Api* repositories are already implemented; switching environments
-is a one-line config change.
+The app now defaults to real API mode in development:
+`currentEnvironment` is `.development()`, `useMocks` defaults to `false`,
+and the base URL defaults to `https://leyoung.shop`.
 
 1. **Confirm the backend contract** — sanity-check
    [api-contract.md](api-contract.md) against the staging server.
    Any drift here surfaces as `Failure` with a server-supplied Korean
    message (see [api_error.dart](../lib/core/network/api_error.dart)).
-2. **Flip the environment toggle** — edit
-   [environment.dart](../lib/core/config/environment.dart) so the
-   top-level `currentEnvironment` points at `.staging()` /
-   `.production()` (both default to `useMocks: false`). No other code
-   changes are required — every feature factory reads this const.
-3. **Verify** — run `flutter test` and exercise the auth → mission →
+2. **Choose the base URL** — no flag is needed for the shared AWS-backed
+   backend. For a local Spring Boot backend on Android emulator, run
+   `flutter run --dart-define=BRIDGE_API_BASE_URL=http://10.0.2.2:8080`.
+   For another remote server, pass that server URL via the same dart-define.
+3. **Use mocks only when needed** — run with
+   `--dart-define=BRIDGE_USE_MOCKS=true` to restore fixture-backed UI.
+   No code changes are required because every feature factory reads
+   `currentEnvironment.useMocks`.
+4. **Verify** — run `flutter test` and exercise the auth → mission →
    time-setup happy paths manually. The 401-refresh interceptor
    already handles token rotation; new failures should originate
    from contract drift, not the client.
@@ -134,8 +139,8 @@ is a one-line config change.
 
 | Area | Current behavior | Action when wired |
 |---|---|---|
-| Mission AI auto-approve | `MissionController` runs a local `Timer` to flip `reviewing → completed` after a short delay | Replace with real polling against `GET /missions/{id}` or a push channel |
-| TimeConfirm 수정하기 SnackBar | Copy reads `'수정 요청은 곧 연결될 예정이에요'` | Update copy and remove the placeholder once `POST /schedules/modification-requests` succeeds |
+| Mission AI auto-approve | Mock listener uses a local `Timer`; real API listener is a no-op so submitted AI missions stay `reviewing` until refreshed | Replace with real polling against `GET /missions/{id}` or a push channel |
+| TimeConfirm 수정하기 SnackBar | No AWS modification-request endpoint exists | Keep local-only success or add a backend endpoint |
 | Home notification badge | Derived from `hasContent` over the local mock list | Use an API-provided unread count |
 | Hardcoded calendar labels | Strings like `'2월'`, `'1주차'` are baked into widgets | Source from a calendar service or backend-provided strings |
 
@@ -166,16 +171,16 @@ and will need follow-up tickets:
 - **WebSocket / real-time listeners** — no push channel exists.
   Mission status changes, notification arrivals, and schedule pushes
   rely on pull-only endpoints + FCM fan-out.
-- **Multipart photo upload** — `ApiPhotoUploadService.uploadPhoto`
-  throws. Wire `MultipartFile.fromFile(localPath)` once the upload
-  endpoint is finalised.
+- **Standalone photo upload service** — mission photo upload is direct to
+  `POST /api/v1/missions/{missionId}/performances`. A standalone upload
+  service is only needed for future profile/photo flows.
 - **End-to-end route walkthrough** — the 53-route Phase 5 verification
   pass from the old plan has not been run against this scaffolding.
 
 **Already done since the original draft:**
 - 401-refresh interceptor is live in
   [dio_config.dart](../lib/core/config/dio_config.dart) — rotates
-  tokens via `/auth/refresh` and replays the failing request.
+  tokens via `/auth/token/refresh` and replays the failing request.
 - FCM client wiring (registration + foreground / background / tap
   handlers + deeplink) is in
   [`core/services/fcm_*`](../lib/core/services/) and
