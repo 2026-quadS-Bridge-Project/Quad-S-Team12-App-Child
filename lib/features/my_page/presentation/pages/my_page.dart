@@ -6,7 +6,6 @@ import '../../../../core/models/result.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
 import '../../data/models/user_profile.dart';
 import '../../data/repositories/my_page_repository.dart';
@@ -78,7 +77,10 @@ class _MyPageState extends State<MyPage> {
                 constraints: const BoxConstraints(maxWidth: 375),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 21),
-                  child: _DeleteAccountDialog(onConfirm: _handleDeleteAccount),
+                  child: _AccountActionDialog(
+                    message: '탈퇴하시겠습니까?',
+                    onConfirm: _handleDeleteAccount,
+                  ),
                 ),
               ),
             ),
@@ -96,6 +98,55 @@ class _MyPageState extends State<MyPage> {
         );
       },
     );
+  }
+
+  Future<void> _showLogoutDialog(BuildContext context) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'logout-dialog',
+      barrierColor: AppColors.scrim,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 375),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 21),
+                  child: _AccountActionDialog(
+                    message: '로그아웃하시겠습니까?',
+                    onConfirm: _handleLogout,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 160),
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ),
+          child: child,
+        );
+      },
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    final GoRouter router = GoRouter.of(context);
+    context.pop();
+    await AuthSession.clearLogin();
+    await AuthSession.clearTokens();
+    if (!mounted) {
+      return;
+    }
+    router.go('/');
   }
 
   Future<void> _handleDeleteAccount() async {
@@ -175,14 +226,25 @@ class _MyPageState extends State<MyPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Align(
                     alignment: Alignment.centerRight,
-                    // 로그아웃 button intentionally absent per Figma 773:11103.
-                    // Only 탈퇴하기 (80×35 chip, node 257:3713) is rendered.
-                    child: BridgeButton(
-                      label: '탈퇴하기',
-                      variant: BridgeButtonVariant.destructive,
-                      size: BridgeButtonSize.small,
-                      fullWidth: false,
-                      onPressed: () => _showDeleteAccountDialog(context),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _MyPageActionButton(
+                          label: '로그아웃',
+                          width: 89,
+                          backgroundColor: const Color(0xFFEDEEF1),
+                          foregroundColor: AppColors.gray600,
+                          onTap: () => _showLogoutDialog(context),
+                        ),
+                        const SizedBox(width: 12),
+                        _MyPageActionButton(
+                          label: '탈퇴하기',
+                          width: 80,
+                          backgroundColor: const Color(0xFFFFD3D3),
+                          foregroundColor: AppColors.destructive,
+                          onTap: () => _showDeleteAccountDialog(context),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -195,8 +257,56 @@ class _MyPageState extends State<MyPage> {
   }
 }
 
-class _DeleteAccountDialog extends StatelessWidget {
-  const _DeleteAccountDialog({required this.onConfirm});
+class _MyPageActionButton extends StatelessWidget {
+  const _MyPageActionButton({
+    required this.label,
+    required this.width,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final double width;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: foregroundColor.withValues(alpha: 0.08),
+        highlightColor: foregroundColor.withValues(alpha: 0.12),
+        splashColor: foregroundColor.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: width,
+          height: 37,
+          child: Center(
+            child: Text(
+              label,
+              style: AppTypography.bodyMedium.copyWith(
+                color: foregroundColor,
+                height: 1.5,
+                letterSpacing: 0.091,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountActionDialog extends StatelessWidget {
+  const _AccountActionDialog({required this.message, required this.onConfirm});
+
+  final String message;
 
   /// Invoked when the user taps 확인. Owner ([_MyPageState]) is responsible
   /// for dismissing the dialog, calling the repository, and routing.
@@ -218,7 +328,7 @@ class _DeleteAccountDialog extends StatelessWidget {
             children: [
               const _WarningBadge(),
               const SizedBox(height: 18),
-              const _DeleteDialogTitle(),
+              _DeleteDialogTitle(message),
               const Spacer(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -296,12 +406,14 @@ class _WarningBadge extends StatelessWidget {
 }
 
 class _DeleteDialogTitle extends StatelessWidget {
-  const _DeleteDialogTitle();
+  const _DeleteDialogTitle(this.message);
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      '탈퇴하시겠습니까?',
+      message,
       style: AppTypography.bodySemiBold.copyWith(
         color: AppColors.gray800,
         decoration: TextDecoration.none,
@@ -401,23 +513,28 @@ class _PasswordRow extends StatelessWidget {
               letterSpacing: 0.091,
             ),
           ),
-          const SizedBox(width: 15),
-          GestureDetector(
-            onTap: () => context.push('/mypage/password'),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              height: 35,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.gray600,
-                borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '수정하기',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.white,
-                  letterSpacing: 0.091,
+          const SizedBox(width: 13),
+          Material(
+            color: const Color(0xFFEDEEF1),
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => context.push('/mypage/password'),
+              hoverColor: AppColors.gray600.withValues(alpha: 0.08),
+              highlightColor: AppColors.gray600.withValues(alpha: 0.12),
+              splashColor: AppColors.gray600.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: 37,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                alignment: Alignment.center,
+                child: Text(
+                  '수정하기',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.gray600,
+                    height: 1.5,
+                    letterSpacing: 0.082,
+                  ),
                 ),
               ),
             ),
