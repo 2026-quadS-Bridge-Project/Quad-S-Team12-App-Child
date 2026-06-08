@@ -43,9 +43,26 @@ void main() {
     expect(find.text('Bridge'), findsNothing);
   });
 
+  testWidgets('time confirm route opens without initState context assertion', (
+    WidgetTester tester,
+  ) async {
+    appRouter.go('/child-home/time-setup/confirm?variant=empty');
+
+    await tester.pumpWidget(const BridgeKApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('시간설정'), findsOneWidget);
+    expect(find.text('이번달 시간규칙이 설정되지 않았습니다.'), findsOneWidget);
+  });
+
   testWidgets('child my page renders account details and actions', (
     WidgetTester tester,
   ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      AuthSession.usernameKey: 'abcd00',
+      AuthSession.childCodeKey: 'XY785eZ',
+    });
+
     await tester.pumpWidget(const MaterialApp(home: MyPage()));
     await tester.pumpAndSettle();
 
@@ -58,13 +75,41 @@ void main() {
     expect(find.text('XY785eZ'), findsOneWidget);
     expect(find.text('비밀번호'), findsOneWidget);
     expect(find.text('수정하기'), findsOneWidget);
+    expect(find.text('로그아웃'), findsOneWidget);
     expect(find.text('탈퇴하기'), findsOneWidget);
-    // 로그아웃 button intentionally absent per Figma 773:11103 (Round 2 fix).
+  });
+
+  testWidgets('child my page logout clears session and returns home', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      AuthSession.loggedInKey: true,
+      AuthSession.usernameKey: 'abcd00',
+      AuthSession.childCodeKey: 'XY785eZ',
+    });
+    await AuthSession.saveTokens(
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+    );
+    appRouter.go('/mypage');
+
+    await tester.pumpWidget(const BridgeKApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('로그아웃'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('로그아웃하시겠습니까?'), findsOneWidget);
+
+    await tester.tap(find.text('확인'));
+    await tester.pumpAndSettle();
+
+    expect(await AuthSession.isLoggedIn(), isFalse);
+    expect(await AuthSession.accessToken(), isNull);
+    expect(await AuthSession.refreshToken(), isNull);
+    expect(find.text('Bridge'), findsOneWidget);
   });
 
   // TODO(test): add 탈퇴하기 happy-path test (tap 탈퇴하기 → 확인 →
   // expect navigation to /mypage/delete-complete and AuthSession cleared).
-  // The standalone logout test was removed because the UI no longer
-  // surfaces a 로그아웃 control per Figma; logout now only happens as a
-  // side effect of account deletion confirmation.
 }

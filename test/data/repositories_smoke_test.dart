@@ -1,25 +1,35 @@
 import 'package:bridge_k/features/auth/data/models/auth_token.dart';
+import 'package:bridge_k/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/mock_auth_repository.dart';
+import 'package:bridge_k/features/mission/data/listeners/api_mission_approval_listener.dart';
+import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
+import 'package:bridge_k/features/mission/data/repositories/api_mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mock_mission_repository.dart';
 import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
+import 'package:bridge_k/features/my_page/data/repositories/api_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/mock_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/my_page_repository.dart';
 import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
+import 'package:bridge_k/features/notifications/data/repositories/api_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/mock_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/notification_repository.dart';
 import 'package:bridge_k/features/report/data/models/usage_report.dart';
+import 'package:bridge_k/features/report/data/repositories/api_usage_report_repository.dart';
 import 'package:bridge_k/features/report/data/repositories/mock_usage_report_repository.dart';
 import 'package:bridge_k/features/report/data/repositories/usage_report_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/models/time_confirm_data.dart';
+import 'package:bridge_k/features/time_confirm/data/repositories/api_time_confirm_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/repositories/mock_time_confirm_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/repositories/time_confirm_repository.dart';
 import 'package:bridge_k/features/time_setup/data/models/time_schedule.dart';
+import 'package:bridge_k/features/time_setup/data/repositories/api_time_setup_repository.dart';
 import 'package:bridge_k/features/time_setup/data/repositories/mock_time_setup_repository.dart';
 import 'package:bridge_k/features/time_setup/data/repositories/time_setup_repository.dart';
 import 'package:bridge_k/core/models/result.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,8 +37,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('mission repository', () {
-    test('createMissionRepository returns Mock in dev', () {
-      expect(createMissionRepository(), isA<MockMissionRepository>());
+    test('createMissionRepository returns Api in dev real-api mode', () {
+      expect(createMissionRepository(), isA<ApiMissionRepository>());
     });
 
     test('listMissions returns Success with non-empty list', () async {
@@ -51,22 +61,39 @@ void main() {
 
     test('submitMission returns Success in mock mode', () async {
       final MissionRepository repo = MockMissionRepository();
-      final Result<void> result = await repo.submitMission(
+      final Result<MissionSubmissionResult> result = await repo.submitMission(
         id: '1',
         photoPaths: const <String>['/tmp/photo1.jpg'],
       );
-      expect(result, isA<Success<void>>());
+      expect(result, isA<Success<MissionSubmissionResult>>());
     });
+
+    test(
+      'createMissionApprovalListener returns Api no-op in real-api mode',
+      () {
+        final MissionApprovalListener listener =
+            createMissionApprovalListener();
+        expect(listener, isA<ApiMissionApprovalListener>());
+
+        final MissionApprovalSubscription subscription = listener.subscribe(
+          missionId: '1',
+          confirmationMethod: ConfirmationMethod.aiAuto,
+          onApproval: (_) => fail('Api listener should stay silent until push'),
+        );
+        subscription.cancel();
+      },
+    );
   });
 
   group('time setup repository', () {
-    test('createTimeSetupRepository returns Mock in dev', () {
-      expect(createTimeSetupRepository(), isA<MockTimeSetupRepository>());
+    test('createTimeSetupRepository returns Api in dev real-api mode', () {
+      expect(createTimeSetupRepository(), isA<ApiTimeSetupRepository>());
     });
 
     test('fetchPreviousWeekSchedule returns Success', () async {
       final TimeSetupRepository repo = MockTimeSetupRepository();
-      final Result<TimeSchedule> result = await repo.fetchPreviousWeekSchedule();
+      final Result<TimeSchedule> result = await repo
+          .fetchPreviousWeekSchedule();
       expect(result, isA<Success<TimeSchedule>>());
     });
 
@@ -95,8 +122,8 @@ void main() {
   });
 
   group('time confirm repository', () {
-    test('createTimeConfirmRepository returns Mock in dev', () {
-      expect(createTimeConfirmRepository(), isA<MockTimeConfirmRepository>());
+    test('createTimeConfirmRepository returns Api in dev real-api mode', () {
+      expect(createTimeConfirmRepository(), isA<ApiTimeConfirmRepository>());
     });
 
     test('fetchCurrentSchedule returns Success', () async {
@@ -104,6 +131,36 @@ void main() {
       final Result<TimeConfirmData> result = await repo.fetchCurrentSchedule();
       expect(result, isA<Success<TimeConfirmData>>());
     });
+
+    test(
+      'api fetchCurrentSchedule maps wrapped daily schedule to target week',
+      () async {
+        final TimeConfirmRepository repo = ApiTimeConfirmRepository(
+          dio: _dioReturning(<String, dynamic>{
+            'isSuccess': true,
+            'data': <String, dynamic>{
+              'targetDate': '2026-06-08',
+              'baseMinutes': 30,
+              'extendedMinutes': 0,
+              'totalAvailableMinutes': 30,
+            },
+          }),
+        );
+
+        final Result<TimeConfirmData> result = await repo
+            .fetchCurrentSchedule();
+
+        switch (result) {
+          case Success<TimeConfirmData>(:final TimeConfirmData data):
+            final TimeSchedule schedule = data.schedule!;
+            expect(schedule.weeklyTotalMinutesAt(1), 30);
+            expect(schedule.dayAllocations.single.daysLabel, '월');
+            expect(schedule.dayAllocations.single.totalMinutes, 30);
+          case Failure<TimeConfirmData>(:final String message):
+            fail('api fetchCurrentSchedule should succeed, got $message');
+        }
+      },
+    );
 
     test('requestModification returns Success', () async {
       final TimeConfirmRepository repo = MockTimeConfirmRepository();
@@ -117,16 +174,18 @@ void main() {
   });
 
   group('notification repository', () {
-    test('createNotificationRepository returns Mock in dev', () {
-      expect(createNotificationRepository(), isA<MockNotificationRepository>());
+    test('createNotificationRepository returns Api in dev real-api mode', () {
+      expect(createNotificationRepository(), isA<ApiNotificationRepository>());
     });
 
     test('listNotifications returns Success with non-empty list', () async {
       final NotificationRepository repo = MockNotificationRepository();
-      final Result<List<NotificationItem>> result =
-          await repo.listNotifications();
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
       switch (result) {
-        case Success<List<NotificationItem>>(:final List<NotificationItem> data):
+        case Success<List<NotificationItem>>(
+          :final List<NotificationItem> data,
+        ):
           expect(data, isNotEmpty);
         case Failure<List<NotificationItem>>():
           fail('listNotifications should not fail in mock mode');
@@ -135,8 +194,10 @@ void main() {
 
     test('deleteNotification returns Success', () async {
       final NotificationRepository repo = MockNotificationRepository();
-      expect(await repo.deleteNotification('weekly-report'),
-          isA<Success<void>>());
+      expect(
+        await repo.deleteNotification('weekly-report'),
+        isA<Success<void>>(),
+      );
     });
 
     test('markAsRead returns Success', () async {
@@ -146,8 +207,8 @@ void main() {
   });
 
   group('usage report repository', () {
-    test('createUsageReportRepository returns Mock in dev', () {
-      expect(createUsageReportRepository(), isA<MockUsageReportRepository>());
+    test('createUsageReportRepository returns Api in dev real-api mode', () {
+      expect(createUsageReportRepository(), isA<ApiUsageReportRepository>());
     });
 
     test('fetchCurrentWeekReport returns Success', () async {
@@ -163,8 +224,8 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
-    test('createMyPageRepository returns Mock in dev', () {
-      expect(createMyPageRepository(), isA<MockMyPageRepository>());
+    test('createMyPageRepository returns Api in dev real-api mode', () {
+      expect(createMyPageRepository(), isA<ApiMyPageRepository>());
     });
 
     test('fetchProfile returns Success', () async {
@@ -173,25 +234,29 @@ void main() {
       expect(result, isA<Success<UserProfile>>());
     });
 
-    test('changePassword with correct current password returns Success',
-        () async {
-      final MyPageRepository repo = MockMyPageRepository();
-      final Result<void> result = await repo.changePassword(
-        currentPassword: 'Gdg123456789!',
-        newPassword: 'NewPass123!',
-      );
-      expect(result, isA<Success<void>>());
-    });
+    test(
+      'changePassword with correct current password returns Success',
+      () async {
+        final MyPageRepository repo = MockMyPageRepository();
+        final Result<void> result = await repo.changePassword(
+          currentPassword: 'Gdg123456789!',
+          newPassword: 'NewPass123!',
+        );
+        expect(result, isA<Success<void>>());
+      },
+    );
 
-    test('changePassword with wrong current password returns Failure',
-        () async {
-      final MyPageRepository repo = MockMyPageRepository();
-      final Result<void> result = await repo.changePassword(
-        currentPassword: 'wrong-password',
-        newPassword: 'NewPass123!',
-      );
-      expect(result, isA<Failure<void>>());
-    });
+    test(
+      'changePassword with wrong current password returns Failure',
+      () async {
+        final MyPageRepository repo = MockMyPageRepository();
+        final Result<void> result = await repo.changePassword(
+          currentPassword: 'wrong-password',
+          newPassword: 'NewPass123!',
+        );
+        expect(result, isA<Failure<void>>());
+      },
+    );
 
     test('deleteAccount returns Success', () async {
       final MyPageRepository repo = MockMyPageRepository();
@@ -200,8 +265,8 @@ void main() {
   });
 
   group('auth repository', () {
-    test('createAuthRepository returns Mock in dev', () {
-      expect(createAuthRepository(), isA<MockAuthRepository>());
+    test('createAuthRepository returns Api in dev real-api mode', () {
+      expect(createAuthRepository(), isA<ApiAuthRepository>());
     });
 
     test('login with correct credentials returns Success', () async {
@@ -247,9 +312,64 @@ void main() {
       }
     });
 
+    test('api login parses AWS ApiResponse-wrapped auth response', () async {
+      final AuthRepository repo = ApiAuthRepository(
+        dio: _dioReturning(<String, dynamic>{
+          'isSuccess': true,
+          'code': 'COMMON200',
+          'message': 'OK',
+          'data': <String, dynamic>{
+            'accessToken': 'access-token',
+            'refreshToken': 'refresh-token',
+            'memberId': 42,
+            'name': 'Child User',
+          },
+        }),
+      );
+      final Result<AuthToken> result = await repo.login(
+        username: 'child@test.com',
+        password: 'Test1234567!',
+      );
+
+      switch (result) {
+        case Success<AuthToken>(:final AuthToken data):
+          expect(data.accessToken, 'access-token');
+          expect(data.refreshToken, 'refresh-token');
+          expect(data.username, 'child@test.com');
+        case Failure<AuthToken>(:final String message):
+          fail('wrapped auth response should parse, got $message');
+      }
+    });
+
+    test('api signup tolerates tokenless success response', () async {
+      final AuthRepository repo = ApiAuthRepository(
+        dio: _dioReturning(<String, dynamic>{
+          'isSuccess': true,
+          'code': 'COMMON200',
+          'message': 'OK',
+          'data': null,
+        }),
+      );
+      final Result<AuthToken> result = await repo.signup(
+        name: 'Brand New',
+        username: 'brand-new-user@test.com',
+        password: 'Whatever123!',
+      );
+
+      switch (result) {
+        case Success<AuthToken>(:final AuthToken data):
+          expect(data.accessToken, isEmpty);
+          expect(data.refreshToken, isNull);
+          expect(data.username, 'brand-new-user@test.com');
+        case Failure<AuthToken>(:final String message):
+          fail('tokenless signup response should not crash, got $message');
+      }
+    });
+
     test('signup with new username returns Success', () async {
       final AuthRepository repo = MockAuthRepository();
       final Result<AuthToken> result = await repo.signup(
+        name: 'Brand New',
         username: 'brand-new-user',
         password: 'Whatever123!',
       );
@@ -264,6 +384,7 @@ void main() {
     test('signup with duplicated username returns Failure', () async {
       final AuthRepository repo = MockAuthRepository();
       final Result<AuthToken> result = await repo.signup(
+        name: 'Duplicate',
         username: 'gdg12',
         password: 'Whatever123!',
       );
@@ -275,4 +396,22 @@ void main() {
       }
     });
   });
+}
+
+Dio _dioReturning(Map<String, dynamic> data) {
+  final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+        handler.resolve(
+          Response<dynamic>(
+            requestOptions: options,
+            statusCode: 200,
+            data: data,
+          ),
+        );
+      },
+    ),
+  );
+  return dio;
 }

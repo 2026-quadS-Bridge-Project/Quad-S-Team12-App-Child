@@ -7,6 +7,7 @@ void main() {
   TimeSchedule scheduleWith({
     List<int> weeklyMinutes = const <int>[60, 60, 60, 60],
     List<DayAllocation> allocations = const <DayAllocation>[],
+    int? monthlyBudgetMinutes,
   }) {
     assert(weeklyMinutes.length == 4);
     return TimeSchedule(
@@ -20,6 +21,7 @@ void main() {
           ),
       ],
       dayAllocations: allocations,
+      monthlyBudgetMinutes: monthlyBudgetMinutes,
     );
   }
 
@@ -122,7 +124,10 @@ void main() {
 
   test('v1 can proceed to step 3 when all four weeks are filled', () {
     final TimeSetupController controller = TimeSetupController(
-      initial: scheduleWith(weeklyMinutes: const <int>[60, 60, 60, 60]),
+      initial: scheduleWith(
+        weeklyMinutes: const <int>[60, 60, 60, 60],
+        monthlyBudgetMinutes: 4 * 60,
+      ),
     );
 
     expect(controller.canProceedToStep3, isTrue);
@@ -131,6 +136,41 @@ void main() {
 
     expect(controller.canProceedToStep3, isFalse);
   });
+
+  test('v1 cannot proceed without a parent monthly budget', () {
+    final TimeSetupController controller = TimeSetupController(
+      initial: scheduleWith(weeklyMinutes: const <int>[60, 60, 60, 60]),
+    );
+
+    expect(controller.weeklyDistributionCapMinutes, 0);
+    expect(controller.editableWeeklyTotalMinutes, 4 * 60);
+    expect(controller.canProceedToStep3, isFalse);
+  });
+
+  test(
+    'v1 weekly distribution must match parent monthly budget when present',
+    () {
+      final TimeSetupController controller = TimeSetupController(
+        initial: scheduleWith(
+          weeklyMinutes: const <int>[120, 120, 720, 1380],
+          monthlyBudgetMinutes: 116 * 60,
+        ),
+      );
+
+      expect(controller.weeklyDistributionCapMinutes, 116 * 60);
+      expect(controller.editableWeeklyTotalMinutes, 39 * 60);
+      expect(controller.canProceedToStep3, isFalse);
+
+      controller.autoDistributeWeeklyTotals();
+
+      expect(controller.schedule.weeklyTotalMinutesAt(0), 29 * 60);
+      expect(controller.schedule.weeklyTotalMinutesAt(1), 29 * 60);
+      expect(controller.schedule.weeklyTotalMinutesAt(2), 29 * 60);
+      expect(controller.schedule.weeklyTotalMinutesAt(3), 29 * 60);
+      expect(controller.editableWeeklyTotalMinutes, 116 * 60);
+      expect(controller.canProceedToStep3, isTrue);
+    },
+  );
 
   test('daily allocation validation counts time once per selected weekday', () {
     final TimeSetupController controller = TimeSetupController(

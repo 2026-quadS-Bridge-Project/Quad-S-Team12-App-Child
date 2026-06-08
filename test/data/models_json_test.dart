@@ -31,8 +31,11 @@ void main() {
       for (final Mission m in MissionMock.all) {
         final Mission decoded = Mission.fromJson(m.toJson());
         expect(decoded.status, m.status, reason: 'status drift for ${m.id}');
-        expect(decoded.confirmationMethod, m.confirmationMethod,
-            reason: 'confirmationMethod drift for ${m.id}');
+        expect(
+          decoded.confirmationMethod,
+          m.confirmationMethod,
+          reason: 'confirmationMethod drift for ${m.id}',
+        );
       }
     });
 
@@ -81,6 +84,26 @@ void main() {
       expect(decoded.weeklyTotalMinutesAt(3), 15 * 60 + 30);
     });
 
+    test('monthly budget cap round-trips separately from weekly rows', () {
+      const TimeSchedule original = TimeSchedule(
+        allowedHours: <HourCell>{},
+        weeklyTotals: <WeeklyTotal>[
+          WeeklyTotal(weekIndex: 0, hours: 2, minutes: 0),
+          WeeklyTotal(weekIndex: 1, hours: 2, minutes: 0),
+          WeeklyTotal(weekIndex: 2, hours: 12, minutes: 0),
+          WeeklyTotal(weekIndex: 3, hours: 23, minutes: 0),
+        ],
+        dayAllocations: <DayAllocation>[],
+        monthlyBudgetMinutes: 116 * 60,
+      );
+
+      final TimeSchedule decoded = TimeSchedule.fromJson(original.toJson());
+
+      expect(decoded.distributedWeeklyTotalMinutes, 39 * 60);
+      expect(decoded.weeklyTotalCapMinutes, 116 * 60);
+      expect(decoded.monthlyBudgetMinutes, 116 * 60);
+    });
+
     test('HourCell round-trips weekday and hour', () {
       const HourCell original = HourCell(weekday: 3, hour: 14);
       final HourCell decoded = HourCell.fromJson(original.toJson());
@@ -94,8 +117,7 @@ void main() {
         hours: 2,
         minutes: 30,
       );
-      final DayAllocation decoded =
-          DayAllocation.fromJson(original.toJson());
+      final DayAllocation decoded = DayAllocation.fromJson(original.toJson());
       expect(decoded.daysLabel, '월,수,금');
       expect(decoded.weekdayIndices, <int>[0, 2, 4]);
       expect(decoded.hours, 2);
@@ -103,8 +125,11 @@ void main() {
     });
 
     test('WeeklyTotal round-trips weekIndex, hours, minutes', () {
-      const WeeklyTotal original =
-          WeeklyTotal(weekIndex: 2, hours: 15, minutes: 30);
+      const WeeklyTotal original = WeeklyTotal(
+        weekIndex: 2,
+        hours: 15,
+        minutes: 30,
+      );
       final WeeklyTotal decoded = WeeklyTotal.fromJson(original.toJson());
       expect(decoded.weekIndex, 2);
       expect(decoded.hours, 15);
@@ -115,20 +140,26 @@ void main() {
   group('TimeConfirmData JSON round-trip', () {
     test('filled fixture preserves nested TimeSchedule', () {
       final TimeConfirmData original = TimeConfirmMock.filled;
-      final TimeConfirmData decoded =
-          TimeConfirmData.fromJson(original.toJson());
+      final TimeConfirmData decoded = TimeConfirmData.fromJson(
+        original.toJson(),
+      );
 
       expect(decoded.isEmpty, isFalse);
-      expect(decoded.schedule?.weeklyTotals.length,
-          original.schedule?.weeklyTotals.length);
-      expect(decoded.schedule?.dayAllocations.length,
-          original.schedule?.dayAllocations.length);
+      expect(
+        decoded.schedule?.weeklyTotals.length,
+        original.schedule?.weeklyTotals.length,
+      );
+      expect(
+        decoded.schedule?.dayAllocations.length,
+        original.schedule?.dayAllocations.length,
+      );
     });
 
     test('empty fixture decodes back to null schedule', () {
       const TimeConfirmData original = TimeConfirmMock.empty;
-      final TimeConfirmData decoded =
-          TimeConfirmData.fromJson(original.toJson());
+      final TimeConfirmData decoded = TimeConfirmData.fromJson(
+        original.toJson(),
+      );
       expect(decoded.isEmpty, isTrue);
     });
   });
@@ -136,8 +167,9 @@ void main() {
   group('NotificationItem JSON round-trip', () {
     test('mock fixture round-trips id, type, createdAt', () {
       final NotificationItem original = NotificationsMock.filled.first;
-      final NotificationItem decoded =
-          NotificationItem.fromJson(original.toJson());
+      final NotificationItem decoded = NotificationItem.fromJson(
+        original.toJson(),
+      );
 
       expect(decoded.id, original.id);
       expect(decoded.type, original.type); // discriminating enum
@@ -149,8 +181,9 @@ void main() {
 
     test('every mock notification preserves its type enum', () {
       for (final NotificationItem item in NotificationsMock.filled) {
-        final NotificationItem decoded =
-            NotificationItem.fromJson(item.toJson());
+        final NotificationItem decoded = NotificationItem.fromJson(
+          item.toJson(),
+        );
         expect(decoded.type, item.type, reason: 'type drift for ${item.id}');
       }
     });
@@ -172,8 +205,10 @@ void main() {
       // AiSuggestionTone is the discriminating enum on each suggestion.
       for (int i = 0; i < original.suggestions.length; i++) {
         expect(decoded.suggestions[i].tone, original.suggestions[i].tone);
-        expect(decoded.suggestions[i].deltaHours,
-            original.suggestions[i].deltaHours);
+        expect(
+          decoded.suggestions[i].deltaHours,
+          original.suggestions[i].deltaHours,
+        );
       }
     });
   });
