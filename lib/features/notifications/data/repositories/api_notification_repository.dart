@@ -27,7 +27,7 @@ class ApiNotificationRepository implements NotificationRepository {
       final dynamic raw = data is List
           ? data
           : data is Map
-          ? data['notifications']
+          ? data['data'] ?? data['notifications']
           : null;
       if (raw is! List) {
         throw const FormatException(

@@ -13,6 +13,7 @@ import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
 import 'package:bridge_k/features/my_page/data/repositories/mock_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/my_page_repository.dart';
 import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
+import 'package:bridge_k/features/notifications/data/repositories/api_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/mock_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/notification_repository.dart';
 import 'package:bridge_k/features/report/data/models/usage_report.dart';
@@ -480,6 +481,68 @@ void main() {
           expect(data, isNotEmpty);
         case Failure<List<NotificationItem>>():
           fail('listNotifications should not fail in mock mode');
+      }
+    });
+
+    test('api listNotifications parses AWS ApiResponse-wrapped inbox', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/notifications') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{
+                        'isSuccess': true,
+                        'data': <Map<String, dynamic>>[
+                          <String, dynamic>{
+                            'notificationId': 17,
+                            'notificationType': 'MISSION_APPROVED',
+                            'title': '미션 승인 완료',
+                            'content': '부모님이 미션을 승인했습니다.',
+                            'createdAt': '2026-06-09T12:30:00',
+                            'isRead': false,
+                            'targetRoute': '/child-home/mission/21',
+                          },
+                        ],
+                      },
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    response: Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 404,
+                    ),
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
+
+      switch (result) {
+        case Success<List<NotificationItem>>(
+          :final List<NotificationItem> data,
+        ):
+          expect(data, hasLength(1));
+          expect(data.single.id, '17');
+          expect(data.single.type, NotificationType.missionCompleted);
+          expect(data.single.deeplink, '/child-home/mission/21');
+          expect(data.single.isRead, isFalse);
+        case Failure<List<NotificationItem>>(:final String message):
+          fail(
+            'api listNotifications should parse wrapped response, got $message',
+          );
       }
     });
 
