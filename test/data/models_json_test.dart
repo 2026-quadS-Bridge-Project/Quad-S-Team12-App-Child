@@ -334,6 +334,23 @@ void main() {
       expect(message.entityId, '21');
       expect(message.deeplink, '/child-home/mission/21');
     });
+
+    test('derives mission route when mission id exists without target route', () {
+      final FcmMessage message = FcmMessage.fromRemoteMessage(
+        const RemoteMessage(
+          data: <String, dynamic>{
+            'notificationType': 'MISSION_APPROVED',
+            'notificationId': 'n-3',
+            'missionId': '22',
+          },
+        ),
+      );
+
+      expect(message.type, 'MISSION_APPROVED');
+      expect(message.notificationId, 'n-3');
+      expect(message.entityId, '22');
+      expect(message.deeplink, '/child-home/mission/22');
+    });
   });
 
   group('UsageReport JSON round-trip', () {
