@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:bridge_k/features/auth/data/models/auth_token.dart';
 import 'package:bridge_k/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/auth_repository.dart';
@@ -70,6 +72,82 @@ void main() {
       );
       expect(result, isA<Success<MissionSubmissionResult>>());
     });
+
+    test(
+      'api submitMission posts image and preserves performance state',
+      () async {
+        final File proof = await File(
+          '${Directory.systemTemp.path}/bridge-proof-${DateTime.now().microsecondsSinceEpoch}.jpg',
+        ).writeAsBytes(<int>[1, 2, 3, 4]);
+        addTearDown(() async {
+          if (await proof.exists()) {
+            await proof.delete();
+          }
+        });
+
+        FormData? postedFormData;
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/missions/42/performances') {
+                    postedFormData = options.data as FormData;
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <String, dynamic>{
+                            'isAccepted': false,
+                            'reason': '부모님 확인 대기중입니다.',
+                            'status': 'PENDING',
+                            'performanceId': 201,
+                          },
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'unexpected ${options.method} ${options.path}',
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<MissionSubmissionResult> result = await repo.submitMission(
+          id: '42',
+          photoPaths: <String>[proof.path],
+        );
+
+        switch (result) {
+          case Success<MissionSubmissionResult>(
+            :final MissionSubmissionResult data,
+          ):
+            expect(postedFormData, isNotNull);
+            expect(postedFormData!.files.single.key, 'image');
+            expect(
+              postedFormData!.files.single.value.filename,
+              proof.uri.pathSegments.last,
+            );
+            expect(data.performanceId, '201');
+            expect(
+              data.statusFor(ConfirmationMethod.parentApproval),
+              MissionStatus.reviewing,
+            );
+          case Failure<MissionSubmissionResult>(:final String message):
+            fail(
+              'api submitMission should parse wrapped response, got $message',
+            );
+        }
+      },
+    );
 
     test(
       'api listMissions parses AWS ApiResponse-wrapped mission list',
