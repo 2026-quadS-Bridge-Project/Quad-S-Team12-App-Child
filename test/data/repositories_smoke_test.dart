@@ -477,6 +477,7 @@ void main() {
                 minutes: 0,
               ),
             ],
+            monthlyBudgetMinutes: 600,
             yearMonth: '2026-08',
           ),
         );
@@ -607,6 +608,7 @@ void main() {
                 minutes: 30,
               ),
             ],
+            monthlyBudgetMinutes: 800,
             yearMonth: '2026-08',
           ),
         );
@@ -643,6 +645,57 @@ void main() {
 
         expect(templateMinutesByWeek, budgetMinutesByWeek);
         expect(requests.last.path, '/api/v1/schedules/complete');
+      },
+    );
+
+    test(
+      'api saveSchedule rejects weekly totals that do not match parent budget before network',
+      () async {
+        bool wasCalled = false;
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  wasCalled = true;
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'network should not be called',
+                    ),
+                  );
+                },
+          ),
+        );
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<void> result = await repo.saveSchedule(
+          const TimeSchedule(
+            allowedHours: <HourCell>{},
+            weeklyTotals: <WeeklyTotal>[
+              WeeklyTotal(weekIndex: 0, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 1, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 2, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 3, hours: 1, minutes: 0),
+            ],
+            dayAllocations: <DayAllocation>[
+              DayAllocation(
+                daysLabel: '월',
+                weekdayIndices: <int>[0],
+                hours: 1,
+                minutes: 0,
+              ),
+            ],
+            monthlyBudgetMinutes: 300,
+            yearMonth: '2026-08',
+          ),
+        );
+
+        expect(result, isA<Failure<void>>());
+        expect(wasCalled, isFalse);
+        if (result case Failure<void>(:final String message)) {
+          expect(message, contains('월 총 시간'));
+        }
       },
     );
   });

@@ -132,6 +132,11 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
 
   @override
   Future<Result<void>> saveSchedule(TimeSchedule schedule) async {
+    final String? validationMessage = _validateScheduleForSave(schedule);
+    if (validationMessage != null) {
+      return Result<void>.failure(validationMessage);
+    }
+
     // The backend has no single /time-setup endpoint; the plan is split across
     // three schedule endpoints (all identified by the child JWT). The backend
     // enforces a strict order — a week's budget must exist before its day
@@ -193,6 +198,40 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     } on DioException catch (e) {
       return failureFromDioException<void>(e);
     }
+  }
+
+  String? _validateScheduleForSave(TimeSchedule schedule) {
+    final int? monthlyBudgetMinutes = schedule.monthlyBudgetMinutes;
+    if (monthlyBudgetMinutes == null || monthlyBudgetMinutes <= 0) {
+      return '부모님이 설정한 이번 달 총 시간을 다시 불러와 주세요.';
+    }
+
+    const Set<int> requiredWeekIndices = <int>{0, 1, 2, 3};
+    final Set<int> weekIndices = schedule.weeklyTotals
+        .map((WeeklyTotal total) => total.weekIndex)
+        .toSet();
+    if (schedule.weeklyTotals.length != requiredWeekIndices.length ||
+        !weekIndices.containsAll(requiredWeekIndices)) {
+      return '1~4주차 시간을 모두 분배해 주세요.';
+    }
+    if (schedule.weeklyTotals.any(
+      (WeeklyTotal total) => total.totalMinutes <= 0,
+    )) {
+      return '1~4주차 시간을 모두 분배해 주세요.';
+    }
+
+    final int distributedMinutes = schedule.weeklyTotals.fold<int>(
+      0,
+      (int sum, WeeklyTotal total) => sum + total.totalMinutes,
+    );
+    if (distributedMinutes != monthlyBudgetMinutes) {
+      return '주별 시간 합계가 부모님이 설정한 월 총 시간과 맞지 않아요.';
+    }
+
+    if (schedule.dayAllocations.isEmpty) {
+      return '요일별 시간 분배를 입력해 주세요.';
+    }
+    return null;
   }
 
   /// Clears the child's existing fixed routines, then re-creates one block per
