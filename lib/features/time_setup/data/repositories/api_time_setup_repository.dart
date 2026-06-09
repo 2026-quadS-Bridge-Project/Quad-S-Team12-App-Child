@@ -24,14 +24,10 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
 
   @override
   Future<Result<TimeSchedule>> fetchPreviousWeekSchedule() async {
-    try {
-      final TimeSchedule schedule = await _fetchDailySchedule(
-        DateTime.now().subtract(const Duration(days: 7)),
-      );
-      return Result<TimeSchedule>.success(schedule);
-    } on DioException catch (e) {
-      return failureFromDioException<TimeSchedule>(e);
-    }
+    // There is no read-only previous-week schedule endpoint yet. Avoid
+    // backfilling this via `/schedules/daily`: that endpoint creates a daily
+    // allocation and deducts the child's available time when no row exists.
+    return Result<TimeSchedule>.failure('이전 주 시간표 조회 API가 아직 준비되지 않았어요.');
   }
 
   @override

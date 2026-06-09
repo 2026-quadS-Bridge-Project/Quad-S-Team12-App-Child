@@ -1129,60 +1129,24 @@ void main() {
       expect(result, isA<Success<UsageReport>>());
     });
 
-    test('api fetchCurrentWeekReport unwraps daily schedule responses', () async {
-      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                if (options.path == '/api/v1/schedules/daily') {
-                  handler.resolve(
-                    Response<dynamic>(
-                      requestOptions: options,
-                      statusCode: 200,
-                      data: <String, dynamic>{
-                        'isSuccess': true,
-                        'data': <String, dynamic>{
-                          'date': options.queryParameters['date'],
-                          'baseMinutes': 60,
-                          'extendedMinutes': 0,
-                          'totalAvailableMinutes': 60,
-                        },
-                      },
-                    ),
-                  );
-                  return;
-                }
-                handler.reject(
-                  DioException(
-                    requestOptions: options,
-                    response: Response<dynamic>(
-                      requestOptions: options,
-                      statusCode: 404,
-                    ),
-                  ),
-                );
-              },
-        ),
-      );
-      final UsageReportRepository repo = ApiUsageReportRepository(dio);
+    test(
+      'api fetchCurrentWeekReport avoids side-effect daily endpoint',
+      () async {
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        final UsageReportRepository repo = ApiUsageReportRepository(dio);
 
-      final Result<UsageReport> result = await repo.fetchCurrentWeekReport();
+        final Result<UsageReport> result = await repo.fetchCurrentWeekReport();
 
-      switch (result) {
-        case Success<UsageReport>(:final UsageReport data):
-          expect(data.dailyRows, hasLength(7));
-          expect(
-            data.dailyRows.every((row) => row.plannedMinutes == 60),
-            isTrue,
-          );
-          expect(data.plan.totalHours, 7);
-        case Failure<UsageReport>(:final String message):
-          fail(
-            'api fetchCurrentWeekReport should parse wrapped daily schedules, got $message',
-          );
-      }
-    });
+        switch (result) {
+          case Success<UsageReport>():
+            fail(
+              'real weekly report should stay disabled until a read-only API exists',
+            );
+          case Failure<UsageReport>(:final String message):
+            expect(message, contains('주간 리포트 API'));
+        }
+      },
+    );
   });
 
   group('my page repository', () {
