@@ -12,6 +12,7 @@ import 'package:bridge_k/features/mission/data/repositories/api_mission_reposito
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mock_mission_repository.dart';
 import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
+import 'package:bridge_k/features/my_page/data/repositories/api_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/mock_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/my_page_repository.dart';
 import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
@@ -714,6 +715,23 @@ void main() {
       final MyPageRepository repo = MockMyPageRepository();
       final Result<UserProfile> result = await repo.fetchProfile();
       expect(result, isA<Success<UserProfile>>());
+    });
+
+    test('api fetchProfile does not invent a child code', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        AuthSession.usernameKey: 'child01',
+      });
+      final MyPageRepository repo = ApiMyPageRepository();
+
+      final Result<UserProfile> result = await repo.fetchProfile();
+
+      switch (result) {
+        case Success<UserProfile>(:final UserProfile data):
+          expect(data.username, 'child01');
+          expect(data.childCode, '-');
+        case Failure<UserProfile>(:final String message):
+          fail('api fetchProfile should derive local profile, got $message');
+      }
     });
 
     test(

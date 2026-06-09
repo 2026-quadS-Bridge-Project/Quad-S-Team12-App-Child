@@ -21,9 +21,9 @@ abstract final class AuthSession {
     final SharedPreferences preferences = await SharedPreferences.getInstance();
     await preferences.setBool(loggedInKey, true);
     await preferences.setString(usernameKey, username);
-    await _saveOptionalString(preferences, memberIdKey, memberId);
-    await _saveOptionalString(preferences, nameKey, name);
-    await _saveOptionalString(preferences, childCodeKey, childCode);
+    await _setOptionalString(preferences, memberIdKey, memberId);
+    await _setOptionalString(preferences, nameKey, name);
+    await _setOptionalString(preferences, childCodeKey, childCode);
   }
 
   static Future<void> saveProfile({
@@ -111,6 +111,18 @@ abstract final class AuthSession {
     String? value,
   ) async {
     if (value == null || value.isEmpty) {
+      return;
+    }
+    await preferences.setString(key, value);
+  }
+
+  static Future<void> _setOptionalString(
+    SharedPreferences preferences,
+    String key,
+    String? value,
+  ) async {
+    if (value == null || value.isEmpty) {
+      await preferences.remove(key);
       return;
     }
     await preferences.setString(key, value);

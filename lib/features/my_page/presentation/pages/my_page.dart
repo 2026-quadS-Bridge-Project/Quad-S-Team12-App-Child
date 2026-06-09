@@ -20,11 +20,11 @@ class MyPage extends StatefulWidget {
 class _MyPageState extends State<MyPage> {
   late final MyPageRepository _repository = createMyPageRepository();
 
-  // Defaults shown while the profile fetch is in flight. They mirror the
-  // canned mock values so the layout never flashes empty strings.
+  // Defaults shown while the profile fetch is in flight. Keep the child code
+  // neutral so a failed real-profile read never exposes a canned mock code.
   String _username = AuthSession.fallbackUsername;
   String _accountType = '자녀회원';
-  String _childCode = 'XY785eZ';
+  String _childCode = '-';
 
   // Guards against double-confirm on the delete-account dialog. The dialog
   // is dismissed immediately on the first confirm tap, but a same-frame
@@ -50,14 +50,16 @@ class _MyPageState extends State<MyPage> {
           _childCode = data.childCode;
         });
       case Failure<UserProfile>():
-        // Fall back to AuthSession username so the screen still shows the
-        // logged-in id even if the profile fetch fails.
+        // Fall back to AuthSession values so the screen still shows the
+        // logged-in id without inventing a child-link code.
         final String username = await AuthSession.username();
+        final String? childCode = await AuthSession.childCode();
         if (!mounted) {
           return;
         }
         setState(() {
           _username = username;
+          _childCode = childCode?.isNotEmpty == true ? childCode! : '-';
         });
     }
   }
