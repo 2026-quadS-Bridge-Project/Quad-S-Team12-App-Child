@@ -629,6 +629,78 @@ void main() {
       }
     });
 
+    test('api deleteNotification calls backend delete endpoint', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                if (options.path == '/api/v1/notifications/17' &&
+                    options.method == 'DELETE') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true, 'data': 'ok'},
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    message: 'unexpected ${options.method} ${options.path}',
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.deleteNotification('17');
+
+      expect(result, isA<Success<void>>());
+      expect(calls, <String>['DELETE /api/v1/notifications/17']);
+    });
+
+    test('api markAsRead calls backend read endpoint', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                if (options.path == '/api/v1/notifications/17/read' &&
+                    options.method == 'PATCH') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true, 'data': 'ok'},
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    message: 'unexpected ${options.method} ${options.path}',
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.markAsRead('17');
+
+      expect(result, isA<Success<void>>());
+      expect(calls, <String>['PATCH /api/v1/notifications/17/read']);
+    });
+
     test('deleteNotification returns Success', () async {
       final NotificationRepository repo = MockNotificationRepository();
       expect(
