@@ -31,8 +31,8 @@ class ApiUsageReportRepository implements UsageReportRepository {
           '/api/v1/schedules/daily',
           queryParameters: <String, dynamic>{'date': _yyyyMmDd(date)},
         );
-        final dynamic data = response.data;
-        if (data is! Map) {
+        final Map<String, dynamic>? data = _responseObject(response.data);
+        if (data == null) {
           throw const FormatException(
             'GET /api/v1/schedules/daily response was not a JSON object.',
           );
@@ -70,8 +70,11 @@ class ApiUsageReportRepository implements UsageReportRepository {
   }
 
   DateTime _mondayOf(DateTime date) {
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: date.weekday - 1));
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: date.weekday - 1));
   }
 
   int _weekOfMonth(DateTime date) => ((date.day - 1) ~/ 7) + 1;
@@ -90,5 +93,15 @@ class ApiUsageReportRepository implements UsageReportRepository {
   int _intValue(Object? value) {
     if (value is num) return value.toInt();
     return 0;
+  }
+
+  Map<String, dynamic>? _responseObject(dynamic data) {
+    if (data is Map && data['data'] is Map) {
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return null;
   }
 }

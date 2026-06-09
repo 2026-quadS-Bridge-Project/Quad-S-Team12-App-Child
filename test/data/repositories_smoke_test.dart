@@ -18,6 +18,7 @@ import 'package:bridge_k/features/notifications/data/repositories/mock_notificat
 import 'package:bridge_k/features/notifications/data/repositories/notification_repository.dart';
 import 'package:bridge_k/features/report/data/models/usage_report.dart';
 import 'package:bridge_k/features/report/data/repositories/mock_usage_report_repository.dart';
+import 'package:bridge_k/features/report/data/repositories/api_usage_report_repository.dart';
 import 'package:bridge_k/features/report/data/repositories/usage_report_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/models/time_confirm_data.dart';
 import 'package:bridge_k/features/time_confirm/data/repositories/api_time_confirm_repository.dart';
@@ -591,6 +592,61 @@ void main() {
       final UsageReportRepository repo = MockUsageReportRepository();
       final Result<UsageReport> result = await repo.fetchCurrentWeekReport();
       expect(result, isA<Success<UsageReport>>());
+    });
+
+    test('api fetchCurrentWeekReport unwraps daily schedule responses', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/schedules/daily') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{
+                        'isSuccess': true,
+                        'data': <String, dynamic>{
+                          'date': options.queryParameters['date'],
+                          'baseMinutes': 60,
+                          'extendedMinutes': 0,
+                          'totalAvailableMinutes': 60,
+                        },
+                      },
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    response: Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 404,
+                    ),
+                  ),
+                );
+              },
+        ),
+      );
+      final UsageReportRepository repo = ApiUsageReportRepository(dio);
+
+      final Result<UsageReport> result = await repo.fetchCurrentWeekReport();
+
+      switch (result) {
+        case Success<UsageReport>(:final UsageReport data):
+          expect(data.dailyRows, hasLength(7));
+          expect(
+            data.dailyRows.every((row) => row.plannedMinutes == 60),
+            isTrue,
+          );
+          expect(data.plan.totalHours, 7);
+        case Failure<UsageReport>(:final String message):
+          fail(
+            'api fetchCurrentWeekReport should parse wrapped daily schedules, got $message',
+          );
+      }
     });
   });
 
