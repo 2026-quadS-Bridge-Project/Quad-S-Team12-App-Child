@@ -43,6 +43,30 @@ void main() {
     expect(controller.mission.performanceId, '201');
     expect(controller.mission.photoUrls, <String>['/tmp/proof.jpg']);
   });
+
+  test('reload updates flow step from backend mission status', () async {
+    final MissionController controller = MissionController(
+      missionId: '42',
+      repository: const _LoadedMissionRepository(
+        Mission(
+          id: '42',
+          title: '알림 미션',
+          rewardHours: 0,
+          rewardMinutes: 30,
+          status: MissionStatus.reviewing,
+          performanceId: '201',
+        ),
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    expect(controller.step, MissionFlowStep.info);
+
+    await controller.reload();
+
+    expect(controller.mission.performanceId, '201');
+    expect(controller.step, MissionFlowStep.submitted);
+  });
 }
 
 class _FailingMissionRepository implements MissionRepository {
@@ -86,6 +110,30 @@ class _SubmissionMissionRepository implements MissionRepository {
     required List<String> photoPaths,
   }) async {
     return Result<MissionSubmissionResult>.success(result);
+  }
+}
+
+class _LoadedMissionRepository implements MissionRepository {
+  const _LoadedMissionRepository(this.mission);
+
+  final Mission mission;
+
+  @override
+  Future<Result<Mission>> fetchMission(String id) async {
+    return Result<Mission>.success(mission);
+  }
+
+  @override
+  Future<Result<List<Mission>>> listMissions() async {
+    return Result<List<Mission>>.success(<Mission>[mission]);
+  }
+
+  @override
+  Future<Result<MissionSubmissionResult>> submitMission({
+    required String id,
+    required List<String> photoPaths,
+  }) async {
+    return Result<MissionSubmissionResult>.failure('미션 제출에 실패했습니다.');
   }
 }
 

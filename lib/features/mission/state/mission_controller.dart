@@ -179,6 +179,7 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
     switch (result) {
       case Success<Mission>(data: final Mission fresh):
         _mission = fresh;
+        _step = _initialStepFor(fresh);
         if (!_disposed) notifyListeners();
       case Failure<Mission>(message: final String message):
         _errorMessage = message;
