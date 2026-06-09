@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/config/dio_config.dart';
+import '../../../../core/config/environment.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/services/device_block_controller.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -108,6 +109,9 @@ class _ChildHomePageState extends State<ChildHomePage> {
   }
 
   Future<_HomeTimeSnapshot?> _fetchHomeTimeSnapshot() async {
+    if (currentEnvironment.useMocks) {
+      return null;
+    }
     final DateTime today = DateTime.now();
     final String dateKey = _yyyyMmDd(today);
     try {
