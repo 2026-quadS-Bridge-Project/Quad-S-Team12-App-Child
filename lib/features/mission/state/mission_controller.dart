@@ -33,7 +33,7 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
     PhotoUploadService? uploadService,
     MissionApprovalListener? approvalListener,
   }) : this._(
-         MissionMock.byId(missionId),
+         _initialMissionFor(missionId),
          repository ?? createMissionRepository(),
          uploadService ?? createPhotoUploadService(),
          approvalListener ?? createMissionApprovalListener(),
@@ -227,5 +227,21 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
       MissionStatus.rejected ||
       MissionStatus.pendingCheck => MissionFlowStep.info,
     };
+  }
+
+  static Mission _initialMissionFor(String missionId) {
+    for (final Mission mission in MissionMock.all) {
+      if (mission.id == missionId) {
+        return mission;
+      }
+    }
+    return Mission(
+      id: missionId,
+      title: '미션 정보를 불러오는 중',
+      rewardHours: 0,
+      rewardMinutes: 0,
+      status: MissionStatus.pendingCheck,
+      description: '미션 상세 정보를 불러오고 있어요.',
+    );
   }
 }
