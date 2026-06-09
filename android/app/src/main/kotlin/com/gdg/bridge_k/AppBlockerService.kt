@@ -38,6 +38,7 @@ class AppBlockerService : AccessibilityService() {
         private const val KEY_ALLOCATED_SECONDS = "screen_time_allocated_seconds"
         private const val KEY_USED_SECONDS = "screen_time_used_seconds"
         private const val KEY_LAST_SCREEN_ON_ELAPSED = "screen_time_last_screen_on_elapsed"
+        private const val ACTION_TRACKER_CONFIGURED = "com.gdg.bridge_k.SCREEN_TIME_TRACKER_CONFIGURED"
 
         /** Flip the device-wide blocking flag the service reads. */
         fun setBlocking(context: Context, active: Boolean) {
@@ -74,6 +75,7 @@ class AppBlockerService : AccessibilityService() {
             }
             editor.apply()
             maybeActivateBlockingIfExpired(context)
+            context.sendBroadcast(Intent(ACTION_TRACKER_CONFIGURED).setPackage(context.packageName))
             return true
         }
 
@@ -182,6 +184,15 @@ class AppBlockerService : AccessibilityService() {
                     recordScreenOff(context)
                     stopScreenTicker()
                 }
+                ACTION_TRACKER_CONFIGURED -> {
+                    refreshScreenTime(context)
+                    if (isScreenInteractive(context) && hasActiveTracker(context)) {
+                        recordScreenOn(context)
+                        startScreenTicker()
+                    } else {
+                        stopScreenTicker()
+                    }
+                }
             }
         }
     }
@@ -200,6 +211,9 @@ class AppBlockerService : AccessibilityService() {
             return
         }
         refreshScreenTime(this)
+        if (isScreenInteractive(this) && hasActiveTracker(this)) {
+            startScreenTicker()
+        }
         if (!isBlocking(this)) return
 
         val pkg = event.packageName?.toString() ?: return
@@ -224,8 +238,13 @@ class AppBlockerService : AccessibilityService() {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(ACTION_TRACKER_CONFIGURED)
         }
-        registerReceiver(screenReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenReceiver, filter)
+        }
         screenReceiverRegistered = true
     }
 
