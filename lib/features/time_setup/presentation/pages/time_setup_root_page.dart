@@ -26,6 +26,7 @@ class TimeSetupRootPage extends StatefulWidget {
 class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
   late final TimeSetupRepository _repository;
   TimeSetupController? _controller;
+  String? _blockedMessage;
 
   @override
   void initState() {
@@ -40,10 +41,12 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
       return;
     }
     setState(() {
-      _controller = TimeSetupController(
-        initial: initial,
-        repository: _repository,
-      );
+      if (_blockedMessage == null) {
+        _controller = TimeSetupController(
+          initial: initial,
+          repository: _repository,
+        );
+      }
     });
   }
 
@@ -52,8 +55,13 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
         .fetchCurrentSchedule();
     return switch (result) {
       Success<TimeSchedule?>(:final data) => data,
-      Failure<TimeSchedule?>() => null,
+      Failure<TimeSchedule?>(:final message) => _setBlocked(message),
     };
+  }
+
+  TimeSchedule? _setBlocked(String message) {
+    _blockedMessage = message;
+    return null;
   }
 
   @override
@@ -80,6 +88,33 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
   @override
   Widget build(BuildContext context) {
     final TimeSetupController? controller = _controller;
+    final String? blockedMessage = _blockedMessage;
+    if (blockedMessage != null) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    blockedMessage,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('확인'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     if (controller == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

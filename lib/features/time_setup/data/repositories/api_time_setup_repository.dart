@@ -36,12 +36,24 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
 
   @override
   Future<Result<TimeSchedule?>> fetchCurrentSchedule() async {
+    final TimeSchedule? policySchedule;
     try {
-      final TimeSchedule? policySchedule = await _fetchPolicySchedule();
-      if (policySchedule != null) {
-        return Result<TimeSchedule?>.success(policySchedule);
+      policySchedule = await _fetchPolicySchedule();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return Result<TimeSchedule?>.failure(
+          '부모님이 아직 이번 달 시간을 설정하지 않았어요.',
+          cause: e,
+        );
       }
+      return failureFromDioException<TimeSchedule?>(e);
+    }
 
+    if (policySchedule != null) {
+      return Result<TimeSchedule?>.success(policySchedule);
+    }
+
+    try {
       final TimeSchedule schedule = await _fetchDailySchedule(DateTime.now());
       return Result<TimeSchedule?>.success(schedule);
     } on DioException catch (e) {
