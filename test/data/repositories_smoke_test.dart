@@ -303,11 +303,33 @@ void main() {
         await repo.deleteNotification('weekly-report'),
         isA<Success<void>>(),
       );
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
+      switch (result) {
+        case Success<List<NotificationItem>>(:final data):
+          expect(
+            data.any((NotificationItem item) => item.id == 'weekly-report'),
+            isFalse,
+          );
+        case Failure<List<NotificationItem>>(:final message):
+          fail('listNotifications should succeed after delete, got $message');
+      }
     });
 
     test('markAsRead returns Success', () async {
       final NotificationRepository repo = MockNotificationRepository();
       expect(await repo.markAsRead('weekly-report'), isA<Success<void>>());
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
+      switch (result) {
+        case Success<List<NotificationItem>>(:final data):
+          final NotificationItem item = data.singleWhere(
+            (NotificationItem item) => item.id == 'weekly-report',
+          );
+          expect(item.isRead, isTrue);
+        case Failure<List<NotificationItem>>(:final message):
+          fail('listNotifications should succeed after read, got $message');
+      }
     });
   });
 
