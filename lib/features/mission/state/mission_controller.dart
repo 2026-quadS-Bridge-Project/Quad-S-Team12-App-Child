@@ -77,12 +77,12 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
     notifyListeners();
   }
 
-  /// Uploads a freshly captured photo via [_uploadService] and, on success,
-  /// appends the returned URL/path to [_capturedPhotoPaths].
+  /// Registers a freshly captured photo via [_uploadService] and, on success,
+  /// appends the returned local path to [_capturedPhotoPaths].
   ///
-  /// Mock builds resolve immediately (echoing the local path), so the UI
-  /// can `await` this without needing a spinner. Real backend uploads will
-  /// surface failures via [errorMessage] without mutating the photo list.
+  /// Mock and api builds currently resolve immediately because the actual
+  /// upload happens when [MissionRepository.submitMission] sends multipart
+  /// form data. Failures surface via [errorMessage] without mutating the list.
   /// The 4-photo cap is enforced before the upload starts to avoid
   /// pointless network work.
   Future<void> addCapturedPhoto(String localPath) async {
@@ -90,8 +90,8 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
     final Result<String> result = await _uploadService.uploadPhoto(localPath);
     if (_disposed) return;
     switch (result) {
-      case Success<String>(data: final String remotePathOrUrl):
-        _capturedPhotoPaths.add(remotePathOrUrl);
+      case Success<String>(data: final String localPath):
+        _capturedPhotoPaths.add(localPath);
         if (_step == MissionFlowStep.cameraPrompt) {
           _step = MissionFlowStep.photoPreview;
         }

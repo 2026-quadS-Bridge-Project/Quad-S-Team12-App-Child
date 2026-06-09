@@ -3,6 +3,7 @@ import 'package:bridge_k/core/services/photo_upload_service.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
 import 'package:bridge_k/features/mission/state/mission_controller.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -43,6 +44,22 @@ void main() {
     expect(controller.mission.performanceId, '201');
     expect(controller.mission.photoUrls, <String>['/tmp/proof.jpg']);
   });
+
+  test(
+    'api photo upload service preserves local path for multipart submit',
+    () async {
+      final ApiPhotoUploadService service = ApiPhotoUploadService(Dio());
+
+      final Result<String> result = await service.uploadPhoto('/tmp/proof.jpg');
+
+      switch (result) {
+        case Success<String>(data: final String path):
+          expect(path, '/tmp/proof.jpg');
+        case Failure<String>(message: final String message):
+          fail('uploadPhoto should preserve the local path, got $message');
+      }
+    },
+  );
 
   test('reload updates flow step from backend mission status', () async {
     final MissionController controller = MissionController(

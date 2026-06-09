@@ -4,7 +4,7 @@ import '../config/dio_config.dart';
 import '../config/environment.dart';
 import '../models/result.dart';
 
-/// Contract for uploading a locally captured photo to remote storage.
+/// Contract for registering a locally captured photo with the mission flow.
 ///
 /// Introduced as a seam between [CameraService] (which produces a
 /// `String? path` pointing at a file on disk) and the mission submission
@@ -12,12 +12,9 @@ import '../models/result.dart';
 /// `MissionRepository.submitMission` via the [List<String> photoPaths]
 /// field).
 ///
-/// In mock builds the local path is echoed back unchanged so the existing
-/// mock submit flow continues to work. Once the backend ships, the api
-/// implementation will upload the file (via `MultipartFile.fromFile`) and
-/// return the remote URL — the mission repo keeps treating the strings
-/// opaquely, so the only real wiring change is in
-/// [ApiPhotoUploadService.uploadPhoto].
+/// Both mock and api builds echo the local path unchanged. The real upload
+/// happens later in [ApiMissionRepository.submitMission], which attaches the
+/// file directly to the backend performance endpoint as multipart form data.
 abstract interface class PhotoUploadService {
   Future<Result<String>> uploadPhoto(String localPath);
 }
@@ -30,10 +27,7 @@ final PhotoUploadService _photoUploadService = currentEnvironment.useMocks
 /// Factory: returns the cached service. Mirrors `createMissionRepository`.
 PhotoUploadService createPhotoUploadService() => _photoUploadService;
 
-/// Mock impl — pretends the local path IS the remote URL.
-///
-/// The mission repo will keep treating the returned string as-is until a
-/// real backend supplies actual URLs.
+/// Mock impl — keeps the captured local path until submit time.
 class MockPhotoUploadService implements PhotoUploadService {
   const MockPhotoUploadService();
 

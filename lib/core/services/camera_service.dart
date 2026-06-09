@@ -10,10 +10,9 @@ class CameraService {
   /// or null if the user cancelled or permission was denied.
   /// IMPORTANT: This intentionally does NOT use ImageSource.gallery.
   ///
-  /// The returned path points at a file on disk; callers that need a
-  /// remote URL (e.g. mission submission) should pipe the path through
-  /// `PhotoUploadService.uploadPhoto` rather than uploading from here, so
-  /// capture and upload remain decoupled.
+  /// The returned path points at a file on disk; mission submission keeps
+  /// that path and attaches the file to the backend multipart endpoint at
+  /// submit time.
   static Future<String?> capturePhoto({
     int imageQuality = 85,
     double? maxWidth = 1920,
