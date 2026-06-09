@@ -40,7 +40,7 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     try {
       policySchedule = await _fetchPolicySchedule();
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
+      if (_isMissingPolicyError(e)) {
         return Result<TimeSchedule?>.failure(
           '부모님이 아직 이번 달 시간을 설정하지 않았어요.',
           cause: e,
@@ -348,6 +348,32 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
       for (int weekIndex = 0; weekIndex < 4; weekIndex++)
         WeeklyTotal(weekIndex: weekIndex, hours: 0, minutes: 0),
     ];
+  }
+
+  bool _isMissingPolicyError(DioException e) {
+    final int? statusCode = e.response?.statusCode;
+    if (statusCode == 404) {
+      return true;
+    }
+    if (statusCode != 400) {
+      return false;
+    }
+    final String message = _responseMessage(e.response?.data);
+    return message.contains('시간 정책') || message.contains('정책이 없습니다');
+  }
+
+  String _responseMessage(dynamic data) {
+    if (data is Map) {
+      final Object? dataMessage = data['data'];
+      if (dataMessage is String && dataMessage.isNotEmpty) {
+        return dataMessage;
+      }
+      final Object? message = data['message'];
+      if (message is String && message.isNotEmpty) {
+        return message;
+      }
+    }
+    return '';
   }
 
   int _intValue(Object? value) {

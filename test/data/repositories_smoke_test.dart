@@ -366,6 +366,58 @@ void main() {
       },
     );
 
+    test(
+      'api fetchCurrentSchedule maps missing policy 400 to blocked message',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        await AuthSession.saveLogin(username: 'child', memberId: '22');
+
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/children/22/policies') {
+                    handler.reject(
+                      DioException(
+                        requestOptions: options,
+                        response: Response<dynamic>(
+                          requestOptions: options,
+                          statusCode: 400,
+                          data: <String, dynamic>{
+                            'isSuccess': false,
+                            'code': 'COMMON400',
+                            'message': 'BAD_REQUEST',
+                            'data': '이번 달에 설정된 시간 정책이 없습니다.',
+                          },
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'unexpected ${options.method} ${options.path}',
+                    ),
+                  );
+                },
+          ),
+        );
+
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<TimeSchedule?> result = await repo.fetchCurrentSchedule();
+
+        switch (result) {
+          case Success<TimeSchedule?>():
+            fail('fetchCurrentSchedule should block when policy is missing');
+          case Failure<TimeSchedule?>(:final String message):
+            expect(message, '부모님이 아직 이번 달 시간을 설정하지 않았어요.');
+        }
+      },
+    );
+
     test('saveSchedule returns Success', () async {
       final TimeSetupRepository repo = MockTimeSetupRepository();
       final Result<void> result = await repo.saveSchedule(
