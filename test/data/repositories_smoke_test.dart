@@ -941,6 +941,35 @@ void main() {
       expect(calls, <String>['DELETE /api/v1/notifications/17']);
     });
 
+    test('api deleteNotification rejects invalid id before network', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                handler.resolve(
+                  Response<dynamic>(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: <String, dynamic>{'isSuccess': true},
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.deleteNotification(
+        'weekly-report',
+      );
+
+      expect(result, isA<Failure<void>>());
+      expect((result as Failure<void>).message, '알림 정보를 다시 불러와 주세요.');
+      expect(calls, isEmpty);
+    });
+
     test('api markAsRead calls backend read endpoint', () async {
       final List<String> calls = <String>[];
       final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
@@ -975,6 +1004,33 @@ void main() {
 
       expect(result, isA<Success<void>>());
       expect(calls, <String>['PATCH /api/v1/notifications/17/read']);
+    });
+
+    test('api markAsRead rejects invalid id before network', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                handler.resolve(
+                  Response<dynamic>(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: <String, dynamic>{'isSuccess': true},
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.markAsRead(' ');
+
+      expect(result, isA<Failure<void>>());
+      expect((result as Failure<void>).message, '알림 정보를 다시 불러와 주세요.');
+      expect(calls, isEmpty);
     });
 
     test('deleteNotification returns Success', () async {

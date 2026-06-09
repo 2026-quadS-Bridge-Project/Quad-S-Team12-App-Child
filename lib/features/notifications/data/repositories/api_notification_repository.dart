@@ -46,8 +46,12 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<Result<void>> deleteNotification(String id) async {
+    final int? notificationId = _positiveNumericId(id);
+    if (notificationId == null) {
+      return Result<void>.failure('알림 정보를 다시 불러와 주세요.');
+    }
     try {
-      await _dio.delete<dynamic>('/api/v1/notifications/$id');
+      await _dio.delete<dynamic>('/api/v1/notifications/$notificationId');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);
@@ -56,11 +60,23 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<Result<void>> markAsRead(String id) async {
+    final int? notificationId = _positiveNumericId(id);
+    if (notificationId == null) {
+      return Result<void>.failure('알림 정보를 다시 불러와 주세요.');
+    }
     try {
-      await _dio.patch<dynamic>('/api/v1/notifications/$id/read');
+      await _dio.patch<dynamic>('/api/v1/notifications/$notificationId/read');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);
     }
+  }
+
+  int? _positiveNumericId(String id) {
+    final int? parsed = int.tryParse(id.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
   }
 }
