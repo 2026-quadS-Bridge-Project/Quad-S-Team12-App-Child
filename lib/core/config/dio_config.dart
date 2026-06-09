@@ -59,10 +59,14 @@ class DioConfig {
               !body.containsKey('error') &&
               body.containsKey('code') &&
               body.containsKey('message')) {
+            final Object? detail = body['data'];
+            final String? detailMessage = detail is String && detail.isNotEmpty
+                ? detail
+                : null;
             error.response!.data = <String, dynamic>{
               'error': <String, dynamic>{
                 'code': body['code'],
-                'message': body['message'],
+                'message': detailMessage ?? body['message'],
               },
             };
           }
