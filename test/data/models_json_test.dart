@@ -187,6 +187,36 @@ void main() {
         expect(decoded.type, item.type, reason: 'type drift for ${item.id}');
       }
     });
+
+    test('parses backend targetRoute and payload deeplink fields', () {
+      final NotificationItem fromTargetRoute =
+          NotificationItem.fromJson(<String, dynamic>{
+            'notificationId': 17,
+            'notificationType': 'MISSION_APPROVED',
+            'title': '미션 승인 완료',
+            'content': '부모님이 미션을 승인했습니다.',
+            'createdAt': '2026-06-09T12:30:00',
+            'targetRoute': '/child-home/mission/21',
+          });
+
+      expect(fromTargetRoute.id, '17');
+      expect(fromTargetRoute.type, NotificationType.missionCompleted);
+      expect(fromTargetRoute.deeplink, '/child-home/mission/21');
+
+      final NotificationItem fromPayload = NotificationItem.fromJson(
+        <String, dynamic>{
+          'notificationId': 18,
+          'notificationType': 'MISSION_REJECTED',
+          'title': '미션 거절',
+          'content': '부모님이 미션을 거절했습니다.',
+          'createdAt': '2026-06-09T12:31:00',
+          'payload': <String, dynamic>{'deeplink': '/child-home/mission/22'},
+        },
+      );
+
+      expect(fromPayload.type, NotificationType.missionRejected);
+      expect(fromPayload.deeplink, '/child-home/mission/22');
+    });
   });
 
   group('UsageReport JSON round-trip', () {
