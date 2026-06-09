@@ -120,7 +120,7 @@ const Map<String, String> _backendCodeAliases = <String, String>{
   'MEMBER404': 'USER_NOT_FOUND',
   'MEMBER409': 'DUPLICATE_USERNAME',
   'MISSION404': 'MISSION_NOT_FOUND',
-  'MISSION400': 'INVALID_MISSION_STATE',
+  'MISSION400': 'MISSION_ALREADY_COMPLETED',
 };
 
 /// Returns the `error.code` from a [DioException] response body (translated to
