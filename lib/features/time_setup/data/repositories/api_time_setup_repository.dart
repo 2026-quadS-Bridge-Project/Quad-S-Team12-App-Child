@@ -183,6 +183,10 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
       }
 
       await _replaceRoutines(schedule.allowedHours);
+      await _dio.post<dynamic>(
+        '/api/v1/schedules/complete',
+        queryParameters: <String, dynamic>{'yearMonth': yearMonth},
+      );
 
       return Result<void>.success(null);
     } on DioException catch (e) {

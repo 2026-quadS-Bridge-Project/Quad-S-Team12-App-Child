@@ -2,22 +2,18 @@ import 'package:bridge_k/features/auth/data/models/auth_token.dart';
 import 'package:bridge_k/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/mock_auth_repository.dart';
-import 'package:bridge_k/features/mission/data/listeners/api_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
+import 'package:bridge_k/features/mission/data/listeners/mock_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
-import 'package:bridge_k/features/mission/data/repositories/api_mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mock_mission_repository.dart';
 import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
-import 'package:bridge_k/features/my_page/data/repositories/api_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/mock_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/my_page_repository.dart';
 import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
-import 'package:bridge_k/features/notifications/data/repositories/api_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/mock_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/notification_repository.dart';
 import 'package:bridge_k/features/report/data/models/usage_report.dart';
-import 'package:bridge_k/features/report/data/repositories/api_usage_report_repository.dart';
 import 'package:bridge_k/features/report/data/repositories/mock_usage_report_repository.dart';
 import 'package:bridge_k/features/report/data/repositories/usage_report_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/models/time_confirm_data.dart';
@@ -37,8 +33,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('mission repository', () {
-    test('createMissionRepository returns Api in dev real-api mode', () {
-      expect(createMissionRepository(), isA<ApiMissionRepository>());
+    test('createMissionRepository returns Mock in dev mock mode', () {
+      expect(createMissionRepository(), isA<MockMissionRepository>());
     });
 
     test('listMissions returns Success with non-empty list', () async {
@@ -68,26 +64,22 @@ void main() {
       expect(result, isA<Success<MissionSubmissionResult>>());
     });
 
-    test(
-      'createMissionApprovalListener returns Api no-op in real-api mode',
-      () {
-        final MissionApprovalListener listener =
-            createMissionApprovalListener();
-        expect(listener, isA<ApiMissionApprovalListener>());
+    test('createMissionApprovalListener returns Mock in dev mock mode', () {
+      final MissionApprovalListener listener = createMissionApprovalListener();
+      expect(listener, isA<MockMissionApprovalListener>());
 
-        final MissionApprovalSubscription subscription = listener.subscribe(
-          missionId: '1',
-          confirmationMethod: ConfirmationMethod.aiAuto,
-          onApproval: (_) => fail('Api listener should stay silent until push'),
-        );
-        subscription.cancel();
-      },
-    );
+      final MissionApprovalSubscription subscription = listener.subscribe(
+        missionId: '1',
+        confirmationMethod: ConfirmationMethod.parentApproval,
+        onApproval: (_) => fail('parent-approval mock should stay silent'),
+      );
+      subscription.cancel();
+    });
   });
 
   group('time setup repository', () {
-    test('createTimeSetupRepository returns Api in dev real-api mode', () {
-      expect(createTimeSetupRepository(), isA<ApiTimeSetupRepository>());
+    test('createTimeSetupRepository returns Mock in dev mock mode', () {
+      expect(createTimeSetupRepository(), isA<MockTimeSetupRepository>());
     });
 
     test('fetchPreviousWeekSchedule returns Success', () async {
@@ -119,11 +111,59 @@ void main() {
       );
       expect(result, isA<Success<void>>());
     });
+
+    test('api saveSchedule notifies backend after plan is complete', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                handler.resolve(
+                  Response<dynamic>(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: options.path.endsWith('/routines')
+                        ? const <Map<String, dynamic>>[]
+                        : null,
+                  ),
+                );
+              },
+        ),
+      );
+      final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+      final Result<void> result = await repo.saveSchedule(
+        const TimeSchedule(
+          allowedHours: <HourCell>{},
+          weeklyTotals: <WeeklyTotal>[
+            WeeklyTotal(weekIndex: 0, hours: 1, minutes: 0),
+          ],
+          dayAllocations: <DayAllocation>[
+            DayAllocation(
+              daysLabel: '월',
+              weekdayIndices: <int>[0],
+              hours: 1,
+              minutes: 0,
+            ),
+          ],
+        ),
+      );
+
+      expect(result, isA<Success<void>>());
+      expect(calls, <String>[
+        'POST /api/v1/schedules/weekly-budgets',
+        'PUT /api/v1/schedules/templates',
+        'GET /api/v1/schedules/routines',
+        'POST /api/v1/schedules/complete',
+      ]);
+    });
   });
 
   group('time confirm repository', () {
-    test('createTimeConfirmRepository returns Api in dev real-api mode', () {
-      expect(createTimeConfirmRepository(), isA<ApiTimeConfirmRepository>());
+    test('createTimeConfirmRepository returns Mock in dev mock mode', () {
+      expect(createTimeConfirmRepository(), isA<MockTimeConfirmRepository>());
     });
 
     test('fetchCurrentSchedule returns Success', () async {
@@ -174,8 +214,8 @@ void main() {
   });
 
   group('notification repository', () {
-    test('createNotificationRepository returns Api in dev real-api mode', () {
-      expect(createNotificationRepository(), isA<ApiNotificationRepository>());
+    test('createNotificationRepository returns Mock in dev mock mode', () {
+      expect(createNotificationRepository(), isA<MockNotificationRepository>());
     });
 
     test('listNotifications returns Success with non-empty list', () async {
@@ -207,8 +247,8 @@ void main() {
   });
 
   group('usage report repository', () {
-    test('createUsageReportRepository returns Api in dev real-api mode', () {
-      expect(createUsageReportRepository(), isA<ApiUsageReportRepository>());
+    test('createUsageReportRepository returns Mock in dev mock mode', () {
+      expect(createUsageReportRepository(), isA<MockUsageReportRepository>());
     });
 
     test('fetchCurrentWeekReport returns Success', () async {
@@ -224,8 +264,8 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
-    test('createMyPageRepository returns Api in dev real-api mode', () {
-      expect(createMyPageRepository(), isA<ApiMyPageRepository>());
+    test('createMyPageRepository returns Mock in dev mock mode', () {
+      expect(createMyPageRepository(), isA<MockMyPageRepository>());
     });
 
     test('fetchProfile returns Success', () async {
@@ -265,8 +305,8 @@ void main() {
   });
 
   group('auth repository', () {
-    test('createAuthRepository returns Api in dev real-api mode', () {
-      expect(createAuthRepository(), isA<ApiAuthRepository>());
+    test('createAuthRepository returns Mock in dev mock mode', () {
+      expect(createAuthRepository(), isA<MockAuthRepository>());
     });
 
     test('login with correct credentials returns Success', () async {
