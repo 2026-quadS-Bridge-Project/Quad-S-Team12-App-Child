@@ -162,23 +162,25 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
         ],
       );
 
-      // dayAllocations carry no week dimension, so the per-weekday base time is
-      // replicated across every week present in the budget. Each week's sum is
-      // validated against that week's budget server-side.
       for (final WeeklyTotal w in schedule.weeklyTotals) {
         final int weekNumber = w.weekIndex + 1;
-        for (final DayAllocation a in schedule.dayAllocations) {
-          for (final int weekday in a.weekdayIndices) {
-            await _dio.put<dynamic>(
-              '/api/v1/schedules/templates',
-              data: <String, dynamic>{
-                'yearMonth': yearMonth,
-                'weekNumber': weekNumber,
-                'dayOfWeek': _dayOfWeekName(weekday),
-                'baseMinutes': a.totalMinutes,
-              },
-            );
+        final Map<int, int> templateMinutes = _templateMinutesForWeek(
+          schedule: schedule,
+          weeklyTotal: w,
+        );
+        for (final MapEntry<int, int> entry in templateMinutes.entries) {
+          if (entry.value <= 0) {
+            continue;
           }
+          await _dio.put<dynamic>(
+            '/api/v1/schedules/templates',
+            data: <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': weekNumber,
+              'dayOfWeek': _dayOfWeekName(entry.key),
+              'baseMinutes': entry.value,
+            },
+          );
         }
       }
 
@@ -249,6 +251,48 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     }
     ranges.add((start, prev + 1));
     return ranges;
+  }
+
+  Map<int, int> _templateMinutesForWeek({
+    required TimeSchedule schedule,
+    required WeeklyTotal weeklyTotal,
+  }) {
+    final Map<int, int> baseMinutesByWeekday = _baseTemplateMinutes(schedule);
+    final int baseTotal = baseMinutesByWeekday.values.fold<int>(
+      0,
+      (int sum, int minutes) => sum + minutes,
+    );
+    final int targetTotal = weeklyTotal.totalMinutes;
+    if (baseTotal <= 0 || targetTotal <= 0) {
+      return const <int, int>{};
+    }
+    if (baseTotal == targetTotal) {
+      return baseMinutesByWeekday;
+    }
+
+    final List<int> weekdays = baseMinutesByWeekday.keys.toList()..sort();
+    final Map<int, int> scaled = <int, int>{};
+    int remaining = targetTotal;
+    for (int i = 0; i < weekdays.length; i++) {
+      final int weekday = weekdays[i];
+      final int minutes = i == weekdays.length - 1
+          ? remaining
+          : (baseMinutesByWeekday[weekday]! * targetTotal) ~/ baseTotal;
+      scaled[weekday] = minutes;
+      remaining -= minutes;
+    }
+    return scaled;
+  }
+
+  Map<int, int> _baseTemplateMinutes(TimeSchedule schedule) {
+    final Map<int, int> minutesByWeekday = <int, int>{};
+    for (final DayAllocation allocation in schedule.dayAllocations) {
+      for (final int weekday in allocation.weekdayIndices) {
+        minutesByWeekday[weekday] =
+            (minutesByWeekday[weekday] ?? 0) + allocation.totalMinutes;
+      }
+    }
+    return minutesByWeekday;
   }
 
   /// app weekday index (0 = 월 … 6 = 일) → `java.time.DayOfWeek` name.

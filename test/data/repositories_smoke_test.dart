@@ -205,19 +205,19 @@ void main() {
               'yearMonth': yearMonth,
               'weekNumber': 2,
               'dayOfWeek': 'MONDAY',
-              'baseMinutes': 60,
+              'baseMinutes': 120,
             },
             <String, dynamic>{
               'yearMonth': yearMonth,
               'weekNumber': 3,
               'dayOfWeek': 'MONDAY',
-              'baseMinutes': 60,
+              'baseMinutes': 180,
             },
             <String, dynamic>{
               'yearMonth': yearMonth,
               'weekNumber': 4,
               'dayOfWeek': 'MONDAY',
-              'baseMinutes': 60,
+              'baseMinutes': 240,
             },
           ],
         );
