@@ -21,9 +21,11 @@ import '../../../notifications/data/models/notification_item.dart';
 import '../../../notifications/data/repositories/notification_repository.dart';
 
 class ChildHomePage extends StatefulWidget {
-  const ChildHomePage({super.key, this.showContent = true});
+  const ChildHomePage({super.key, this.showContent = true, this.dio});
 
   final bool showContent;
+  @visibleForTesting
+  final Dio? dio;
 
   @override
   State<ChildHomePage> createState() => _ChildHomePageState();
@@ -31,7 +33,8 @@ class ChildHomePage extends StatefulWidget {
 
 class _ChildHomePageState extends State<ChildHomePage>
     with WidgetsBindingObserver {
-  final Dio _dio = DioConfig.create();
+  late final Dio _dio = widget.dio ?? DioConfig.create();
+  bool get _ownsDio => widget.dio == null;
   late final NotificationRepository _notificationRepository =
       createNotificationRepository();
 
@@ -58,7 +61,9 @@ class _ChildHomePageState extends State<ChildHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
-    _dio.close(force: true);
+    if (_ownsDio) {
+      _dio.close(force: true);
+    }
     super.dispose();
   }
 
@@ -126,7 +131,7 @@ class _ChildHomePageState extends State<ChildHomePage>
   }
 
   Future<_HomeTimeSnapshot?> _fetchHomeTimeSnapshot() async {
-    if (currentEnvironment.useMocks) {
+    if (currentEnvironment.useMocks && widget.dio == null) {
       return null;
     }
     final DateTime today = DateTime.now();
@@ -180,10 +185,8 @@ class _ChildHomePageState extends State<ChildHomePage>
       }
       return _intValue(policy['accumulatedRewardTime']);
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        return 0;
-      }
-      rethrow;
+      debugPrint('Child home reward pool load failed: ${e.message}');
+      return 0;
     }
   }
 
@@ -931,21 +934,29 @@ class _TimeDetails extends StatelessWidget {
     return SizedBox(
       width: 101,
       height: 124,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _TimeDetailGroup(
-            label: '남은시간',
-            value: _formatRemainingSeconds(remainingSeconds),
-            color: AppColors.primary,
+      child: FittedBox(
+        alignment: Alignment.centerLeft,
+        fit: BoxFit.scaleDown,
+        child: SizedBox(
+          width: 101,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TimeDetailGroup(
+                label: '남은시간',
+                value: _formatRemainingSeconds(remainingSeconds),
+                color: AppColors.primary,
+              ),
+              const SizedBox(height: 14),
+              _TimeDetailGroup(
+                label: '보너스시간',
+                value: _formatMinutes(snapshot.bonusMinutes),
+                color: AppColors.bonusAmber,
+              ),
+            ],
           ),
-          const Spacer(),
-          _TimeDetailGroup(
-            label: '보너스시간',
-            value: _formatMinutes(snapshot.bonusMinutes),
-            color: AppColors.bonusAmber,
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bridge_k/app/app.dart';
 import 'package:bridge_k/app/router/app_router.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
+import 'package:bridge_k/features/child_home/presentation/pages/child_home_page.dart';
 import 'package:bridge_k/features/mission/presentation/pages/mission_info_page.dart';
 import 'package:bridge_k/features/my_page/presentation/pages/my_page.dart';
+import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -42,6 +44,66 @@ void main() {
     expect(find.text('오늘의 시간'), findsOneWidget);
     expect(find.text('오늘의 미션'), findsOneWidget);
     expect(find.text('Bridge'), findsNothing);
+  });
+
+  testWidgets('child home keeps today time when reward pool load fails', (
+    WidgetTester tester,
+  ) async {
+    await AuthSession.saveLogin(username: 'child', memberId: '22');
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          if (options.path == '/api/v1/schedules/daily') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'targetDate': '2026-06-09',
+                  'baseMinutes': 60,
+                  'extendedMinutes': 0,
+                  'totalAvailableMinutes': 60,
+                },
+              ),
+            );
+            return;
+          }
+          if (options.path == '/api/v1/children/22/policies') {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                response: Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 500,
+                  data: <String, dynamic>{
+                    'code': 'COMMON500',
+                    'message': '서버 내부 오류가 발생했습니다.',
+                  },
+                ),
+              ),
+            );
+            return;
+          }
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              message: 'unexpected ${options.method} ${options.path}',
+            ),
+          );
+        },
+      ),
+    );
+    addTearDown(() => dio.close(force: true));
+
+    await tester.pumpWidget(MaterialApp(home: ChildHomePage(dio: dio)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(find.text('남은시간'), findsOneWidget);
+    expect(find.text('01:00'), findsOneWidget);
+    expect(find.text('보너스시간'), findsOneWidget);
+    expect(find.text('00:00'), findsOneWidget);
   });
 
   testWidgets('time confirm route opens without initState context assertion', (
