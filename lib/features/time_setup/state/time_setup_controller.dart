@@ -126,6 +126,7 @@ class TimeSetupController extends ChangeNotifier
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: _schedule.dayAllocations,
       monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -160,6 +161,7 @@ class TimeSetupController extends ChangeNotifier
       weeklyTotals: next,
       dayAllocations: _schedule.dayAllocations,
       monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -217,6 +219,7 @@ class TimeSetupController extends ChangeNotifier
       weeklyTotals: next,
       dayAllocations: _schedule.dayAllocations,
       monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -295,6 +298,7 @@ class TimeSetupController extends ChangeNotifier
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: allocations,
       monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -308,6 +312,7 @@ class TimeSetupController extends ChangeNotifier
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: list,
       monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -394,6 +399,7 @@ class TimeSetupController extends ChangeNotifier
       ],
       dayAllocations: previousWeek.dayAllocations,
       monthlyBudgetMinutes: previousWeek.weeklyTotalCapMinutes,
+      yearMonth: previousWeek.yearMonth,
     );
   }
 

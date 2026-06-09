@@ -85,12 +85,14 @@ class TimeSchedule {
     required this.weeklyTotals,
     required this.dayAllocations,
     this.monthlyBudgetMinutes,
+    this.yearMonth,
   });
 
   final Set<HourCell> allowedHours; // from 스케쥴 등록 grid
   final List<WeeklyTotal> weeklyTotals; // one entry per 주차 (typically 4)
   final List<DayAllocation> dayAllocations;
   final int? monthlyBudgetMinutes;
+  final String? yearMonth;
 
   /// JSON shape:
   /// `{"allowedHours": [HourCell...], "weeklyTotals": [WeeklyTotal...],
@@ -111,6 +113,7 @@ class TimeSchedule {
     monthlyBudgetMinutes: json['monthlyBudgetMinutes'] is num
         ? (json['monthlyBudgetMinutes'] as num).toInt()
         : null,
+    yearMonth: json['yearMonth'] is String ? json['yearMonth'] as String : null,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -125,6 +128,7 @@ class TimeSchedule {
     ],
     if (monthlyBudgetMinutes != null)
       'monthlyBudgetMinutes': monthlyBudgetMinutes,
+    if (yearMonth != null) 'yearMonth': yearMonth,
   };
 
   /// Sum of the child-entered weekly rows.
@@ -183,6 +187,9 @@ TimeSchedule dailyScheduleToTimeSchedule(
 }) {
   final DateTime targetDate =
       DateTime.tryParse(json['targetDate']?.toString() ?? '') ?? DateTime.now();
+  final String yearMonth =
+      '${targetDate.year.toString().padLeft(4, '0')}-'
+      '${targetDate.month.toString().padLeft(2, '0')}';
   final int weekday = targetDate.weekday - 1;
   final int weekIndex = (targetDate.day - 1) ~/ 7;
   final int baseMinutes = _intValue(json['baseMinutes']);
@@ -206,6 +213,7 @@ TimeSchedule dailyScheduleToTimeSchedule(
               minutes: baseMinutes % 60,
             ),
           ],
+    yearMonth: yearMonth,
   );
 }
 

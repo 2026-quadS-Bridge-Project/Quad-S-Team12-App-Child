@@ -148,6 +148,7 @@ void main() {
         ],
         dayAllocations: <DayAllocation>[],
         monthlyBudgetMinutes: 116 * 60,
+        yearMonth: '2026-06',
       );
 
       final TimeSchedule decoded = TimeSchedule.fromJson(original.toJson());
@@ -155,6 +156,7 @@ void main() {
       expect(decoded.distributedWeeklyTotalMinutes, 39 * 60);
       expect(decoded.weeklyTotalCapMinutes, 116 * 60);
       expect(decoded.monthlyBudgetMinutes, 116 * 60);
+      expect(decoded.yearMonth, '2026-06');
     });
 
     test('HourCell round-trips weekday and hour', () {
@@ -335,22 +337,25 @@ void main() {
       expect(message.deeplink, '/child-home/mission/21');
     });
 
-    test('derives mission route when mission id exists without target route', () {
-      final FcmMessage message = FcmMessage.fromRemoteMessage(
-        const RemoteMessage(
-          data: <String, dynamic>{
-            'notificationType': 'MISSION_APPROVED',
-            'notificationId': 'n-3',
-            'missionId': '22',
-          },
-        ),
-      );
+    test(
+      'derives mission route when mission id exists without target route',
+      () {
+        final FcmMessage message = FcmMessage.fromRemoteMessage(
+          const RemoteMessage(
+            data: <String, dynamic>{
+              'notificationType': 'MISSION_APPROVED',
+              'notificationId': 'n-3',
+              'missionId': '22',
+            },
+          ),
+        );
 
-      expect(message.type, 'MISSION_APPROVED');
-      expect(message.notificationId, 'n-3');
-      expect(message.entityId, '22');
-      expect(message.deeplink, '/child-home/mission/22');
-    });
+        expect(message.type, 'MISSION_APPROVED');
+        expect(message.notificationId, 'n-3');
+        expect(message.entityId, '22');
+        expect(message.deeplink, '/child-home/mission/22');
+      },
+    );
   });
 
   group('UsageReport JSON round-trip', () {

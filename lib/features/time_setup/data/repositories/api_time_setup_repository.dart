@@ -95,6 +95,7 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     final int baseTime = _intValue(data['baseTime']);
     final int totalAvailableTime = _intValue(data['totalAvailableTime']);
     final int accumulatedRewardTime = _intValue(data['accumulatedRewardTime']);
+    final String? yearMonth = _stringValue(data['yearMonth']);
     final int monthlyBudgetMinutes = baseTime > 0
         ? baseTime
         : totalAvailableTime - accumulatedRewardTime;
@@ -107,6 +108,7 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
       weeklyTotals: _emptyWeeklyTotals(),
       dayAllocations: const <DayAllocation>[],
       monthlyBudgetMinutes: monthlyBudgetMinutes,
+      yearMonth: yearMonth ?? _currentYearMonth(),
     );
   }
 
@@ -145,7 +147,7 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     // "...총량을 초과할 수 없습니다.", "정책이 없습니다."). The last means the
     // parent has not set this month's baseTime yet — a parent-side prerequisite
     // this app cannot create, only report.
-    final String yearMonth = _currentYearMonth();
+    final String yearMonth = schedule.yearMonth ?? _currentYearMonth();
     try {
       await _dio.post<dynamic>(
         '/api/v1/schedules/weekly-budgets',
@@ -381,5 +383,12 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
       return value.toInt();
     }
     return 0;
+  }
+
+  String? _stringValue(Object? value) {
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+    return null;
   }
 }

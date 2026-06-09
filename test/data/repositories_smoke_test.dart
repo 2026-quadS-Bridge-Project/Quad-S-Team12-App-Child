@@ -307,6 +307,7 @@ void main() {
                         requestOptions: options,
                         statusCode: 200,
                         data: <String, dynamic>{
+                          'yearMonth': '2026-07',
                           'totalAvailableTime': 720,
                           'accumulatedRewardTime': 120,
                         },
@@ -353,6 +354,7 @@ void main() {
             expect(data, isNotNull);
             expect(data!.monthlyBudgetMinutes, 600);
             expect(data.weeklyTotalCapMinutes, 600);
+            expect(data.yearMonth, '2026-07');
             expect(
               data.allowedHours,
               containsAll(<HourCell>[
@@ -475,6 +477,7 @@ void main() {
                 minutes: 0,
               ),
             ],
+            yearMonth: '2026-08',
           ),
         );
 
@@ -497,7 +500,7 @@ void main() {
         final RequestOptions budgetRequest = requests.first;
         final String yearMonth = budgetRequest.queryParameters['yearMonth']
             .toString();
-        expect(yearMonth, matches(RegExp(r'^\d{4}-\d{2}$')));
+        expect(yearMonth, '2026-08');
         expect(budgetRequest.data, <Map<String, dynamic>>[
           <String, dynamic>{'weekNumber': 1, 'allocatedMinutes': 60},
           <String, dynamic>{'weekNumber': 2, 'allocatedMinutes': 120},
