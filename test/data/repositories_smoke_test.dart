@@ -7,8 +7,8 @@ import 'package:bridge_k/features/auth/data/repositories/mock_auth_repository.da
 import 'package:bridge_k/core/auth/auth_session.dart';
 import 'package:bridge_k/features/devices/data/repositories/api_device_repository.dart';
 import 'package:bridge_k/features/devices/data/repositories/device_repository.dart';
+import 'package:bridge_k/features/mission/data/listeners/api_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
-import 'package:bridge_k/features/mission/data/listeners/mock_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
 import 'package:bridge_k/features/mission/data/repositories/api_mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
@@ -42,8 +42,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('mission repository', () {
-    test('createMissionRepository returns Mock in dev mock mode', () {
-      expect(createMissionRepository(), isA<MockMissionRepository>());
+    test('createMissionRepository returns Api in dev real API mode', () {
+      expect(createMissionRepository(), isA<ApiMissionRepository>());
     });
 
     test('listMissions returns Success with non-empty list', () async {
@@ -326,22 +326,23 @@ void main() {
       },
     );
 
-    test('createMissionApprovalListener returns Mock in dev mock mode', () {
+    test('createMissionApprovalListener returns Api in dev real API mode', () {
       final MissionApprovalListener listener = createMissionApprovalListener();
-      expect(listener, isA<MockMissionApprovalListener>());
+      expect(listener, isA<ApiMissionApprovalListener>());
 
       final MissionApprovalSubscription subscription = listener.subscribe(
         missionId: '1',
         confirmationMethod: ConfirmationMethod.parentApproval,
-        onApproval: (_) => fail('parent-approval mock should stay silent'),
+        onApproval: (_) =>
+            fail('real API listener placeholder should stay silent'),
       );
       subscription.cancel();
     });
   });
 
   group('time setup repository', () {
-    test('createTimeSetupRepository returns Mock in dev mock mode', () {
-      expect(createTimeSetupRepository(), isA<MockTimeSetupRepository>());
+    test('createTimeSetupRepository returns Api in dev real API mode', () {
+      expect(createTimeSetupRepository(), isA<ApiTimeSetupRepository>());
     });
 
     test('fetchPreviousWeekSchedule returns Success', () async {
@@ -773,8 +774,8 @@ void main() {
   });
 
   group('time confirm repository', () {
-    test('createTimeConfirmRepository returns Mock in dev mock mode', () {
-      expect(createTimeConfirmRepository(), isA<MockTimeConfirmRepository>());
+    test('createTimeConfirmRepository returns Api in dev real API mode', () {
+      expect(createTimeConfirmRepository(), isA<ApiTimeConfirmRepository>());
     });
 
     test('fetchCurrentSchedule returns Success', () async {
@@ -825,8 +826,8 @@ void main() {
   });
 
   group('notification repository', () {
-    test('createNotificationRepository returns Mock in dev mock mode', () {
-      expect(createNotificationRepository(), isA<MockNotificationRepository>());
+    test('createNotificationRepository returns Api in dev real API mode', () {
+      expect(createNotificationRepository(), isA<ApiNotificationRepository>());
     });
 
     test('listNotifications returns Success with non-empty list', () async {
@@ -1118,8 +1119,8 @@ void main() {
   });
 
   group('usage report repository', () {
-    test('createUsageReportRepository returns Mock in dev mock mode', () {
-      expect(createUsageReportRepository(), isA<MockUsageReportRepository>());
+    test('createUsageReportRepository returns Api in dev real API mode', () {
+      expect(createUsageReportRepository(), isA<ApiUsageReportRepository>());
     });
 
     test('fetchCurrentWeekReport returns Success', () async {
@@ -1190,8 +1191,8 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
-    test('createMyPageRepository returns Mock in dev mock mode', () {
-      expect(createMyPageRepository(), isA<MockMyPageRepository>());
+    test('createMyPageRepository returns Api in dev real API mode', () {
+      expect(createMyPageRepository(), isA<ApiMyPageRepository>());
     });
 
     test('fetchProfile returns Success', () async {
@@ -1248,8 +1249,8 @@ void main() {
   });
 
   group('auth repository', () {
-    test('createAuthRepository returns Mock in dev mock mode', () {
-      expect(createAuthRepository(), isA<MockAuthRepository>());
+    test('createAuthRepository returns Api in dev real API mode', () {
+      expect(createAuthRepository(), isA<ApiAuthRepository>());
     });
 
     test('login with correct credentials returns Success', () async {
