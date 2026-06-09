@@ -5,6 +5,7 @@ import 'package:bridge_k/features/mission/data/models/mission.dart';
 import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
 import 'package:bridge_k/features/notifications/data/mock/notifications_mock.dart';
 import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
+import 'package:bridge_k/features/notifications/presentation/models/notification_route.dart';
 import 'package:bridge_k/features/report/data/mock/usage_report_mock.dart';
 import 'package:bridge_k/features/report/data/models/usage_report.dart';
 import 'package:bridge_k/features/time_confirm/data/mock/time_confirm_mock.dart';
@@ -247,6 +248,30 @@ void main() {
 
       expect(fromPayload.type, NotificationType.missionRejected);
       expect(fromPayload.deeplink, '/child-home/mission/22');
+    });
+  });
+
+  group('child notification fallback route', () {
+    test('keeps mock time policy notification on time setup start', () {
+      final NotificationItem item = NotificationsMock.filled.firstWhere(
+        (NotificationItem item) => item.type == NotificationType.timeConfigured,
+      );
+
+      expect(item.deeplink, '/child-home/time-setup');
+    });
+
+    test('sends time policy notifications to time setup start', () {
+      expect(
+        childNotificationFallbackRoute(NotificationType.timeConfigured),
+        '/child-home/time-setup',
+      );
+    });
+
+    test('keeps mission fallback on home when no mission id route exists', () {
+      expect(
+        childNotificationFallbackRoute(NotificationType.missionRejected),
+        '/child-home',
+      );
     });
   });
 

@@ -10,12 +10,12 @@ import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/models/notification_item.dart';
 import '../../data/repositories/notification_repository.dart';
+import '../models/notification_route.dart';
 import '../widgets/notification_card.dart';
 
 /// 알림 (Notifications) screen.
 ///
-/// Child notification surface. State is held inline via `StatefulWidget.setState`
-/// until the real notification service lands.
+/// Child notification surface. State is held inline via `StatefulWidget.setState`.
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
 
@@ -55,31 +55,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  /// Maps a notification to a sensible default route. Used when the item has
-  /// no explicit `deeplink` override.
-  // TODO: once the notifications service ships, prefer backend deeplinks and
-  // remove the type-based fallback below.
-  String _defaultRouteFor(NotificationType type) {
-    switch (type) {
-      case NotificationType.weeklyReport:
-        return '/child-home/report';
-      case NotificationType.timeConfigured:
-        return '/child-home/time-setup/confirm';
-      case NotificationType.missionCompleted:
-        return '/child-home';
-      case NotificationType.missionConfirmationRequested:
-        return '/child-home';
-      case NotificationType.missionRejected:
-        return '/child-home';
-    }
-  }
-
   void _handleCardTap(NotificationItem item) {
     // Fire-and-forget: the route push runs synchronously below, so we don't
     // await the repository here. Any failure is silent for now; surface via
     // SnackBar once the backend ships and read-state matters to the user.
     unawaited(_repository.markAsRead(item.id));
-    final String route = item.deeplink ?? _defaultRouteFor(item.type);
+    final String route =
+        item.deeplink ?? childNotificationFallbackRoute(item.type);
     context.push(route);
   }
 
