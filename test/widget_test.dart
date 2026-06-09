@@ -172,6 +172,98 @@ void main() {
     expect(find.text('00:30'), findsOneWidget);
   });
 
+  testWidgets('child home configures native ledger with child date key', (
+    WidgetTester tester,
+  ) async {
+    await AuthSession.saveLogin(username: 'child', memberId: '22');
+    DeviceBlockController.debugIsSupportedOverride = true;
+    const MethodChannel channel = MethodChannel(
+      'com.gdg.bridge_k/device_block',
+    );
+    final List<MethodCall> channelCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+          channelCalls.add(call);
+          return switch (call.method) {
+            'configureScreenTime' => true,
+            'remainingScreenTimeSeconds' => 75 * 60,
+            'hasPermission' => true,
+            'setBlocked' => true,
+            _ => null,
+          };
+        });
+    addTearDown(() {
+      DeviceBlockController.debugIsSupportedOverride = null;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          if (options.path == '/api/v1/schedules/daily') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'isSuccess': true,
+                  'data': <String, dynamic>{
+                    'targetDate': '2026-06-09',
+                    'baseMinutes': 60,
+                    'extendedMinutes': 15,
+                    'totalAvailableMinutes': 75,
+                  },
+                },
+              ),
+            );
+            return;
+          }
+          if (options.path == '/api/v1/children/22/policies') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'isSuccess': true,
+                  'data': <String, dynamic>{'accumulatedRewardTime': 30},
+                },
+              ),
+            );
+            return;
+          }
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              message: 'unexpected ${options.method} ${options.path}',
+            ),
+          );
+        },
+      ),
+    );
+    addTearDown(() => dio.close(force: true));
+
+    await tester.pumpWidget(MaterialApp(home: ChildHomePage(dio: dio)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    final MethodCall configureCall = channelCalls.firstWhere(
+      (MethodCall call) => call.method == 'configureScreenTime',
+    );
+    final Map<Object?, Object?> arguments =
+        configureCall.arguments as Map<Object?, Object?>;
+    final DateTime today = DateTime.now();
+    final String dateKey =
+        '${today.year.toString().padLeft(4, '0')}-'
+        '${today.month.toString().padLeft(2, '0')}-'
+        '${today.day.toString().padLeft(2, '0')}';
+
+    expect(arguments['key'], '22:$dateKey:today-screen-time');
+    expect(arguments['allocatedSeconds'], 75 * 60);
+    expect(find.text('01:15'), findsOneWidget);
+  });
+
   testWidgets('child home keeps zero-minute daily schedule as spent time', (
     WidgetTester tester,
   ) async {
