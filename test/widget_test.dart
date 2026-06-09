@@ -3,9 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bridge_k/app/app.dart';
 import 'package:bridge_k/app/router/app_router.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
+import 'package:bridge_k/core/models/result.dart';
 import 'package:bridge_k/features/child_home/presentation/pages/child_home_page.dart';
 import 'package:bridge_k/features/mission/presentation/pages/mission_info_page.dart';
 import 'package:bridge_k/features/my_page/presentation/pages/my_page.dart';
+import 'package:bridge_k/features/time_setup/data/models/time_schedule.dart';
+import 'package:bridge_k/features/time_setup/data/repositories/time_setup_repository.dart';
+import 'package:bridge_k/features/time_setup/presentation/pages/time_setup_root_page.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -178,6 +182,22 @@ void main() {
     expect(find.text('이번달 시간규칙이 설정되지 않았습니다.'), findsOneWidget);
   });
 
+  testWidgets('time setup blocks when parent monthly policy is missing', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TimeSetupRootPage(
+          repository: _MissingPolicyTimeSetupRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('부모님이 아직 이번 달 시간을 설정하지 않았어요.'), findsOneWidget);
+    expect(find.text('확인'), findsOneWidget);
+  });
+
   testWidgets('rejected mission can re-enter perform flow', (
     WidgetTester tester,
   ) async {
@@ -256,4 +276,21 @@ void main() {
 
   // TODO(test): add 탈퇴하기 happy-path test (tap 탈퇴하기 → 확인 →
   // expect navigation to /mypage/delete-complete and AuthSession cleared).
+}
+
+class _MissingPolicyTimeSetupRepository implements TimeSetupRepository {
+  @override
+  Future<Result<TimeSchedule?>> fetchCurrentSchedule() async {
+    return Result<TimeSchedule?>.failure('부모님이 아직 이번 달 시간을 설정하지 않았어요.');
+  }
+
+  @override
+  Future<Result<TimeSchedule>> fetchPreviousWeekSchedule() async {
+    return Result<TimeSchedule>.failure('부모님이 아직 이번 달 시간을 설정하지 않았어요.');
+  }
+
+  @override
+  Future<Result<void>> saveSchedule(TimeSchedule schedule) async {
+    return Result<void>.failure('부모님이 아직 이번 달 시간을 설정하지 않았어요.');
+  }
 }

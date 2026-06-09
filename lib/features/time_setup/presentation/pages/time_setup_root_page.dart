@@ -15,9 +15,10 @@ import 'weekly_time_setup_page.dart';
 /// Wizard shell that owns the [TimeSetupController] and renders the current
 /// step. Sub-pages read the controller via [TimeSetupScope.of].
 class TimeSetupRootPage extends StatefulWidget {
-  const TimeSetupRootPage({super.key, this.initial});
+  const TimeSetupRootPage({super.key, this.initial, this.repository});
 
   final TimeSchedule? initial;
+  final TimeSetupRepository? repository;
 
   @override
   State<TimeSetupRootPage> createState() => _TimeSetupRootPageState();
@@ -31,7 +32,7 @@ class _TimeSetupRootPageState extends State<TimeSetupRootPage> {
   @override
   void initState() {
     super.initState();
-    _repository = createTimeSetupRepository();
+    _repository = widget.repository ?? createTimeSetupRepository();
     _loadInitialSchedule();
   }
 
