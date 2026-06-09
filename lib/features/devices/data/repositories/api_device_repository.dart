@@ -18,15 +18,17 @@ class ApiDeviceRepository implements DeviceRepository {
     try {
       final Response<dynamic> response = await _dio.post<dynamic>(
         '/api/v1/fcm/token',
-        data: <String, dynamic>{
-          'fcmToken': fcmToken,
-        },
+        data: <String, dynamic>{'fcmToken': fcmToken},
       );
       final Object? body = response.data;
       if (body is String) {
         return Result.success(body);
       }
       if (body is Map<String, dynamic>) {
+        final Object? data = body['data'];
+        if (data is String && data.isNotEmpty) {
+          return Result.success(data);
+        }
         final String? id = body['id'] as String?;
         if (id != null) return Result.success(id);
       }

@@ -3,6 +3,8 @@ import 'package:bridge_k/features/auth/data/repositories/api_auth_repository.dar
 import 'package:bridge_k/features/auth/data/repositories/auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/mock_auth_repository.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
+import 'package:bridge_k/features/devices/data/repositories/api_device_repository.dart';
+import 'package:bridge_k/features/devices/data/repositories/device_repository.dart';
 import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/listeners/mock_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
@@ -579,6 +581,54 @@ void main() {
           expect(item.isRead, isTrue);
         case Failure<List<NotificationItem>>(:final message):
           fail('listNotifications should succeed after read, got $message');
+      }
+    });
+  });
+
+  group('device repository', () {
+    test('api registerDevice unwraps FCM token response data', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/fcm/token') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{
+                        'isSuccess': true,
+                        'data': 'FCM 토큰 저장 완료',
+                      },
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    response: Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 404,
+                    ),
+                  ),
+                );
+              },
+        ),
+      );
+      final DeviceRepository repo = ApiDeviceRepository(dio: dio);
+
+      final Result<String> result = await repo.registerDevice(
+        fcmToken: 'token-1',
+        platform: 'android',
+      );
+
+      switch (result) {
+        case Success<String>(:final String data):
+          expect(data, 'FCM 토큰 저장 완료');
+        case Failure<String>(:final String message):
+          fail('registerDevice should parse wrapped response, got $message');
       }
     });
   });
