@@ -62,9 +62,7 @@ class FcmBootstrap {
     //    time the user opens it. Could be expanded with an in-app toast.
     await _foregroundSub?.cancel();
     _foregroundSub = messaging.onForegroundMessage.listen((FcmMessage msg) {
-      debugPrint(
-        '[fcm] foreground: type=${msg.type} deeplink=${msg.deeplink}',
-      );
+      debugPrint('[fcm] foreground: type=${msg.type} deeplink=${msg.deeplink}');
     });
 
     // 5. Tap-from-background → deeplink. Router is already mounted by
@@ -130,6 +128,9 @@ class FcmBootstrap {
   }
 
   static void _navigate(String deeplink) {
+    if (!deeplink.startsWith('/')) {
+      return;
+    }
     try {
       appRouter.go(deeplink);
     } catch (e) {
