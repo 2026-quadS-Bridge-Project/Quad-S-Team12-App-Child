@@ -212,6 +212,7 @@ void main() {
       expect(decoded.title, original.title);
       expect(decoded.message, original.message);
       expect(decoded.createdAt, original.createdAt); // ISO date
+      expect(decoded.isRead, original.isRead);
       expect(decoded.deeplink, original.deeplink);
     });
 
@@ -232,11 +233,13 @@ void main() {
             'title': '미션 승인 완료',
             'content': '부모님이 미션을 승인했습니다.',
             'createdAt': '2026-06-09T12:30:00',
+            'isRead': true,
             'targetRoute': '/child-home/mission/21',
           });
 
       expect(fromTargetRoute.id, '17');
       expect(fromTargetRoute.type, NotificationType.missionCompleted);
+      expect(fromTargetRoute.isRead, isTrue);
       expect(fromTargetRoute.deeplink, '/child-home/mission/21');
 
       final NotificationItem fromPayload = NotificationItem.fromJson(
@@ -246,11 +249,13 @@ void main() {
           'title': '미션 거절',
           'content': '부모님이 미션을 거절했습니다.',
           'createdAt': '2026-06-09T12:31:00',
+          'isRead': 'false',
           'payload': <String, dynamic>{'deeplink': '/child-home/mission/22'},
         },
       );
 
       expect(fromPayload.type, NotificationType.missionRejected);
+      expect(fromPayload.isRead, isFalse);
       expect(fromPayload.deeplink, '/child-home/mission/22');
     });
   });

@@ -60,6 +60,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
     // await the repository here. Any failure is silent for now; surface via
     // SnackBar once the backend ships and read-state matters to the user.
     unawaited(_repository.markAsRead(item.id));
+    setState(() {
+      _notifications = _notifications
+          .map(
+            (NotificationItem candidate) => candidate.id == item.id
+                ? candidate.copyWith(isRead: true)
+                : candidate,
+          )
+          .toList(growable: false);
+    });
     final String route =
         item.deeplink ?? childNotificationFallbackRoute(item.type);
     context.push(route);

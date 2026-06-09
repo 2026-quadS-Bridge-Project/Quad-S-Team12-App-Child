@@ -13,6 +13,7 @@ class NotificationItem {
     required this.title,
     required this.message,
     required this.createdAt,
+    this.isRead = false,
     this.actionLabel = '확인하러 가기',
     this.deeplink,
   });
@@ -31,8 +32,22 @@ class NotificationItem {
       createdAt:
           DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
+      isRead: _boolValue(json['isRead']),
       actionLabel: json['actionLabel'] as String? ?? '확인하러 가기',
       deeplink: _deeplinkFromJson(json),
+    );
+  }
+
+  NotificationItem copyWith({bool? isRead}) {
+    return NotificationItem(
+      id: id,
+      type: type,
+      title: title,
+      message: message,
+      createdAt: createdAt,
+      isRead: isRead ?? this.isRead,
+      actionLabel: actionLabel,
+      deeplink: deeplink,
     );
   }
 
@@ -48,6 +63,16 @@ class NotificationItem {
       }
     }
     return null;
+  }
+
+  static bool _boolValue(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is String) {
+      return value.toLowerCase() == 'true';
+    }
+    return false;
   }
 
   /// Resolve [NotificationType] from a wire name. Matches the app enum names
@@ -79,6 +104,7 @@ class NotificationItem {
   final String title;
   final String message;
   final DateTime createdAt;
+  final bool isRead;
   final String actionLabel;
 
   /// Optional per-item override for tap routing. When `null`, the page falls
@@ -95,6 +121,7 @@ class NotificationItem {
       'title': title,
       'content': message,
       'createdAt': createdAt.toIso8601String(),
+      'isRead': isRead,
       'actionLabel': actionLabel,
       'deeplink': deeplink,
     };

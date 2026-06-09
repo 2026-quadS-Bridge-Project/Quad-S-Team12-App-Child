@@ -104,7 +104,8 @@ class _ChildHomePageState extends State<ChildHomePage> {
     }
     setState(() {
       _hasNotification =
-          result is Success<List<NotificationItem>> && result.data.isNotEmpty;
+          result is Success<List<NotificationItem>> &&
+          result.data.any((NotificationItem item) => !item.isRead);
     });
   }
 
