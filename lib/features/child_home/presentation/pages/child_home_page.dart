@@ -39,6 +39,7 @@ class _ChildHomePageState extends State<ChildHomePage> {
   int _remainingSeconds = 0;
   Timer? _countdownTimer;
   bool _appliedExpiryBlock = false;
+  bool _isReadingRemainingSeconds = false;
 
   @override
   void initState() {
@@ -59,15 +60,23 @@ class _ChildHomePageState extends State<ChildHomePage> {
   Future<void> _loadHomeTime() async {
     try {
       final _HomeTimeSnapshot? snapshot = await _fetchHomeTimeSnapshot();
+      final int remainingSeconds = snapshot == null
+          ? 0
+          : await _configureScreenTimeAndReadRemaining(snapshot);
       if (!mounted) {
         return;
       }
       setState(() {
         _timeSnapshot = snapshot;
         _hasSchedule = snapshot != null && snapshot.totalMinutes > 0;
-        _remainingSeconds = (snapshot?.totalMinutes ?? 0) * 60;
+        _remainingSeconds = remainingSeconds;
         _appliedExpiryBlock = false;
       });
+      if (snapshot == null) {
+        _countdownTimer?.cancel();
+        unawaited(DeviceBlockController.instance.setBlocked(false));
+        return;
+      }
       _syncDeviceBlocker();
       _restartCountdown();
     } on DioException catch (e) {
@@ -80,6 +89,7 @@ class _ChildHomePageState extends State<ChildHomePage> {
         _timeSnapshot = null;
         _remainingSeconds = 0;
       });
+      unawaited(DeviceBlockController.instance.setBlocked(false));
     } on FormatException catch (e) {
       debugPrint('Child home time parse failed: ${e.message}');
     }
@@ -98,37 +108,45 @@ class _ChildHomePageState extends State<ChildHomePage> {
   }
 
   Future<_HomeTimeSnapshot?> _fetchHomeTimeSnapshot() async {
-    _HomeTimeSnapshot? dailySnapshot;
+    final DateTime today = DateTime.now();
+    final String dateKey = _yyyyMmDd(today);
     try {
       final Response<dynamic> dailyResponse = await _dio.get<dynamic>(
         '/api/v1/schedules/daily',
-        queryParameters: <String, dynamic>{'date': _yyyyMmDd(DateTime.now())},
+        queryParameters: <String, dynamic>{'date': dateKey},
       );
       final Map<String, dynamic>? daily = _jsonMap(dailyResponse.data);
       if (daily != null) {
-        dailySnapshot = _HomeTimeSnapshot(
+        final int baseMinutes = _intValue(daily['baseMinutes']);
+        final int extendedMinutes = _intValue(daily['extendedMinutes']);
+        final int totalMinutes = _intValue(
+          daily['totalAvailableMinutes'],
+          fallback: baseMinutes + extendedMinutes,
+        );
+        if (totalMinutes <= 0) {
+          return null;
+        }
+        return _HomeTimeSnapshot(
+          dateKey: dateKey,
           baseMinutes: _intValue(daily['baseMinutes']),
-          bonusMinutes: _intValue(daily['extendedMinutes']),
-          totalMinutes: _intValue(
-            daily['totalAvailableMinutes'],
-            fallback:
-                _intValue(daily['baseMinutes']) +
-                _intValue(daily['extendedMinutes']),
-          ),
+          bonusMinutes: await _fetchRewardPoolMinutes(),
+          totalMinutes: totalMinutes,
         );
       }
-    } on DioException {
-      // Use the child policy only as a fallback. When today's daily schedule
-      // exists, it is the source of truth for the home countdown.
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
     }
 
-    if (dailySnapshot != null) {
-      return dailySnapshot;
-    }
+    return null;
+  }
 
+  Future<int> _fetchRewardPoolMinutes() async {
     final String? memberId = await AuthSession.memberId();
     if (memberId == null || memberId.isEmpty) {
-      return dailySnapshot;
+      return 0;
     }
 
     try {
@@ -137,28 +155,30 @@ class _ChildHomePageState extends State<ChildHomePage> {
       );
       final Map<String, dynamic>? policy = _jsonMap(policyResponse.data);
       if (policy == null) {
-        return dailySnapshot;
+        return 0;
       }
-      return _HomeTimeSnapshot(
-        baseMinutes: _intValue(
-          policy['baseTime'],
-          fallback: dailySnapshot?.baseMinutes ?? 0,
-        ),
-        bonusMinutes: _intValue(
-          policy['accumulatedRewardTime'],
-          fallback: dailySnapshot?.bonusMinutes ?? 0,
-        ),
-        totalMinutes: _intValue(
-          policy['totalAvailableTime'],
-          fallback: dailySnapshot?.totalMinutes ?? 0,
-        ),
-      );
+      return _intValue(policy['accumulatedRewardTime']);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        return dailySnapshot;
+        return 0;
       }
       rethrow;
     }
+  }
+
+  Future<int> _configureScreenTimeAndReadRemaining(
+    _HomeTimeSnapshot snapshot,
+  ) async {
+    final String? memberId = await AuthSession.memberId();
+    final String trackerKey =
+        '${memberId ?? 'child'}:${snapshot.dateKey}:today-screen-time';
+    final int allocatedSeconds = snapshot.totalMinutes * 60;
+    await DeviceBlockController.instance.configureScreenTime(
+      key: trackerKey,
+      allocatedSeconds: allocatedSeconds,
+    );
+    return await DeviceBlockController.instance.remainingScreenTimeSeconds() ??
+        allocatedSeconds;
   }
 
   void _restartCountdown() {
@@ -166,13 +186,26 @@ class _ChildHomePageState extends State<ChildHomePage> {
     if (_remainingSeconds <= 0) {
       return;
     }
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!mounted) {
         return;
       }
+      if (_isReadingRemainingSeconds) {
+        return;
+      }
+      _isReadingRemainingSeconds = true;
+      final int? nativeRemaining = await DeviceBlockController.instance
+          .remainingScreenTimeSeconds();
+      if (!mounted) {
+        _isReadingRemainingSeconds = false;
+        return;
+      }
       setState(() {
-        _remainingSeconds = _remainingSeconds > 0 ? _remainingSeconds - 1 : 0;
+        _remainingSeconds =
+            nativeRemaining ??
+            (_remainingSeconds > 0 ? _remainingSeconds - 1 : 0);
       });
+      _isReadingRemainingSeconds = false;
       _syncDeviceBlocker();
       if (_remainingSeconds <= 0) {
         _countdownTimer?.cancel();
@@ -199,7 +232,8 @@ class _ChildHomePageState extends State<ChildHomePage> {
     setState(() {
       _hasSchedule = !_hasSchedule;
       if (_hasSchedule && _timeSnapshot == null) {
-        _timeSnapshot = const _HomeTimeSnapshot(
+        _timeSnapshot = _HomeTimeSnapshot(
+          dateKey: _yyyyMmDd(DateTime.now()),
           baseMinutes: 90,
           bonusMinutes: 30,
           totalMinutes: 120,
@@ -245,11 +279,13 @@ class _ChildHomePageState extends State<ChildHomePage> {
 
 class _HomeTimeSnapshot {
   const _HomeTimeSnapshot({
+    required this.dateKey,
     required this.baseMinutes,
     required this.bonusMinutes,
     required this.totalMinutes,
   });
 
+  final String dateKey;
   final int baseMinutes;
   final int bonusMinutes;
   final int totalMinutes;
@@ -291,13 +327,8 @@ String _formatRemainingSeconds(int totalSeconds) {
   final int safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
   final int hours = safeSeconds ~/ 3600;
   final int minutes = (safeSeconds % 3600) ~/ 60;
-  final int seconds = safeSeconds % 60;
-  if (hours > 0) {
-    return '${hours.toString().padLeft(2, '0')}:'
-        '${minutes.toString().padLeft(2, '0')}';
-  }
-  return '${minutes.toString().padLeft(2, '0')}:'
-      '${seconds.toString().padLeft(2, '0')}';
+  return '${hours.toString().padLeft(2, '0')}:'
+      '${minutes.toString().padLeft(2, '0')}';
 }
 
 class _ChildHomeContent extends StatelessWidget {

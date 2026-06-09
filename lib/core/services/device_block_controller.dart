@@ -22,8 +22,9 @@ class DeviceBlockController {
   /// Shared instance — the native side keeps a single blocking state.
   static final DeviceBlockController instance = DeviceBlockController._();
 
-  static const MethodChannel _channel =
-      MethodChannel('com.gdg.bridge_k/device_block');
+  static const MethodChannel _channel = MethodChannel(
+    'com.gdg.bridge_k/device_block',
+  );
 
   bool get _isSupportedPlatform =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
@@ -69,6 +70,35 @@ class DeviceBlockController {
       return false;
     } on MissingPluginException {
       return false;
+    }
+  }
+
+  Future<bool> configureScreenTime({
+    required String key,
+    required int allocatedSeconds,
+  }) async {
+    if (!_isSupportedPlatform) return false;
+    try {
+      final bool? ok = await _channel.invokeMethod<bool>(
+        'configureScreenTime',
+        <String, dynamic>{'key': key, 'allocatedSeconds': allocatedSeconds},
+      );
+      return ok ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  Future<int?> remainingScreenTimeSeconds() async {
+    if (!_isSupportedPlatform) return null;
+    try {
+      return await _channel.invokeMethod<int>('remainingScreenTimeSeconds');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
     }
   }
 

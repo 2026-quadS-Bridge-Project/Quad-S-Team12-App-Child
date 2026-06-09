@@ -35,6 +35,20 @@ class MainActivity : FlutterActivity() {
                         AppBlockerService.setBlocking(this, blocked)
                         result.success(true)
                     }
+                    "configureScreenTime" -> {
+                        val key = call.argument<String>("key") ?: ""
+                        val allocatedSeconds = call.argument<Int>("allocatedSeconds") ?: 0
+                        result.success(
+                            AppBlockerService.configureScreenTime(
+                                this,
+                                key,
+                                allocatedSeconds,
+                            )
+                        )
+                    }
+                    "remainingScreenTimeSeconds" -> {
+                        result.success(AppBlockerService.remainingScreenTimeSeconds(this))
+                    }
                     else -> result.notImplemented()
                 }
             }
