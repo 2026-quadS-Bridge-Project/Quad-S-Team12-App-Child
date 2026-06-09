@@ -112,53 +112,118 @@ void main() {
       expect(result, isA<Success<void>>());
     });
 
-    test('api saveSchedule notifies backend after plan is complete', () async {
-      final List<String> calls = <String>[];
-      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest:
-              (RequestOptions options, RequestInterceptorHandler handler) {
-                calls.add('${options.method} ${options.path}');
-                handler.resolve(
-                  Response<dynamic>(
-                    requestOptions: options,
-                    statusCode: 200,
-                    data: options.path.endsWith('/routines')
-                        ? const <Map<String, dynamic>>[]
-                        : null,
-                  ),
-                );
-              },
-        ),
-      );
-      final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+    test(
+      'api saveSchedule posts budgets, templates, then completion',
+      () async {
+        final List<RequestOptions> requests = <RequestOptions>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  requests.add(options);
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: options.path.endsWith('/routines')
+                          ? const <Map<String, dynamic>>[]
+                          : null,
+                    ),
+                  );
+                },
+          ),
+        );
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
 
-      final Result<void> result = await repo.saveSchedule(
-        const TimeSchedule(
-          allowedHours: <HourCell>{},
-          weeklyTotals: <WeeklyTotal>[
-            WeeklyTotal(weekIndex: 0, hours: 1, minutes: 0),
-          ],
-          dayAllocations: <DayAllocation>[
-            DayAllocation(
-              daysLabel: '월',
-              weekdayIndices: <int>[0],
-              hours: 1,
-              minutes: 0,
-            ),
-          ],
-        ),
-      );
+        final Result<void> result = await repo.saveSchedule(
+          const TimeSchedule(
+            allowedHours: <HourCell>{},
+            weeklyTotals: <WeeklyTotal>[
+              WeeklyTotal(weekIndex: 0, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 1, hours: 2, minutes: 0),
+              WeeklyTotal(weekIndex: 2, hours: 3, minutes: 0),
+              WeeklyTotal(weekIndex: 3, hours: 4, minutes: 0),
+            ],
+            dayAllocations: <DayAllocation>[
+              DayAllocation(
+                daysLabel: '월',
+                weekdayIndices: <int>[0],
+                hours: 1,
+                minutes: 0,
+              ),
+            ],
+          ),
+        );
 
-      expect(result, isA<Success<void>>());
-      expect(calls, <String>[
-        'POST /api/v1/schedules/weekly-budgets',
-        'PUT /api/v1/schedules/templates',
-        'GET /api/v1/schedules/routines',
-        'POST /api/v1/schedules/complete',
-      ]);
-    });
+        expect(result, isA<Success<void>>());
+        expect(
+          requests.map((RequestOptions options) {
+            return '${options.method} ${options.path}';
+          }).toList(),
+          <String>[
+            'POST /api/v1/schedules/weekly-budgets',
+            'PUT /api/v1/schedules/templates',
+            'PUT /api/v1/schedules/templates',
+            'PUT /api/v1/schedules/templates',
+            'PUT /api/v1/schedules/templates',
+            'GET /api/v1/schedules/routines',
+            'POST /api/v1/schedules/complete',
+          ],
+        );
+
+        final RequestOptions budgetRequest = requests.first;
+        final String yearMonth = budgetRequest.queryParameters['yearMonth']
+            .toString();
+        expect(yearMonth, matches(RegExp(r'^\d{4}-\d{2}$')));
+        expect(budgetRequest.data, <Map<String, dynamic>>[
+          <String, dynamic>{'weekNumber': 1, 'allocatedMinutes': 60},
+          <String, dynamic>{'weekNumber': 2, 'allocatedMinutes': 120},
+          <String, dynamic>{'weekNumber': 3, 'allocatedMinutes': 180},
+          <String, dynamic>{'weekNumber': 4, 'allocatedMinutes': 240},
+        ]);
+
+        final List<RequestOptions> templateRequests = requests
+            .where(
+              (RequestOptions options) =>
+                  options.method == 'PUT' &&
+                  options.path == '/api/v1/schedules/templates',
+            )
+            .toList();
+        expect(
+          templateRequests
+              .map((RequestOptions options) => options.data)
+              .toList(),
+          <Map<String, dynamic>>[
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 1,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 60,
+            },
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 2,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 60,
+            },
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 3,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 60,
+            },
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 4,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 60,
+            },
+          ],
+        );
+        expect(requests.last.queryParameters['yearMonth'], yearMonth);
+      },
+    );
   });
 
   group('time confirm repository', () {
