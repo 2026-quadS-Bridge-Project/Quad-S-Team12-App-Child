@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bridge_k/app/app.dart';
 import 'package:bridge_k/app/router/app_router.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
 import 'package:bridge_k/core/models/result.dart';
+import 'package:bridge_k/core/services/device_block_controller.dart';
 import 'package:bridge_k/features/child_home/presentation/pages/child_home_page.dart';
 import 'package:bridge_k/features/mission/presentation/pages/mission_info_page.dart';
 import 'package:bridge_k/features/my_page/presentation/pages/my_page.dart';
@@ -229,6 +231,105 @@ void main() {
     expect(find.text('00:00'), findsNWidgets(2));
     expect(find.text('아직 등록된 시간 계획이 없어요.'), findsNothing);
   });
+
+  testWidgets(
+    'child home applies blocker after permission grant at zero time',
+    (WidgetTester tester) async {
+      await AuthSession.saveLogin(username: 'child', memberId: '22');
+      DeviceBlockController.debugIsSupportedOverride = true;
+      const MethodChannel channel = MethodChannel(
+        'com.gdg.bridge_k/device_block',
+      );
+      final List<MethodCall> channelCalls = <MethodCall>[];
+      bool hasPermission = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (MethodCall call) async {
+            channelCalls.add(call);
+            return switch (call.method) {
+              'hasPermission' => hasPermission,
+              'requestPermission' => null,
+              'setBlocked' => true,
+              'configureScreenTime' => true,
+              'remainingScreenTimeSeconds' => 0,
+              _ => null,
+            };
+          });
+      addTearDown(() {
+        DeviceBlockController.debugIsSupportedOverride = null;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/schedules/daily') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{
+                        'targetDate': '2026-06-09',
+                        'baseMinutes': 0,
+                        'extendedMinutes': 0,
+                        'totalAvailableMinutes': 0,
+                      },
+                    ),
+                  );
+                  return;
+                }
+                if (options.path == '/api/v1/children/22/policies') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'accumulatedRewardTime': 0},
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    message: 'unexpected ${options.method} ${options.path}',
+                  ),
+                );
+              },
+        ),
+      );
+      addTearDown(() => dio.close(force: true));
+
+      await tester.pumpWidget(MaterialApp(home: ChildHomePage(dio: dio)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('화면 시간 차감을 위해 접근성 권한을 켜주세요.'), findsOneWidget);
+      expect(
+        channelCalls.any(
+          (MethodCall call) =>
+              call.method == 'setBlocked' &&
+              (call.arguments as Map<Object?, Object?>?)?['blocked'] == true,
+        ),
+        isFalse,
+      );
+
+      hasPermission = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(
+        channelCalls.any(
+          (MethodCall call) =>
+              call.method == 'setBlocked' &&
+              (call.arguments as Map<Object?, Object?>?)?['blocked'] == true,
+        ),
+        isTrue,
+      );
+    },
+  );
 
   testWidgets(
     'child home does not fall back to monthly policy when daily schedule is missing',

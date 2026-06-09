@@ -70,7 +70,7 @@ class _ChildHomePageState extends State<ChildHomePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _timeSnapshot != null) {
-      unawaited(_refreshBlockerPermissionPrompt());
+      unawaited(_refreshBlockerPermissionPrompt(syncExpiredBlock: true));
     }
   }
 
@@ -202,7 +202,9 @@ class _ChildHomePageState extends State<ChildHomePage>
         allocatedSeconds;
   }
 
-  Future<void> _refreshBlockerPermissionPrompt() async {
+  Future<void> _refreshBlockerPermissionPrompt({
+    bool syncExpiredBlock = false,
+  }) async {
     if (!DeviceBlockController.instance.isSupported || _timeSnapshot == null) {
       if (mounted && _showBlockerPermissionPrompt) {
         setState(() {
@@ -216,14 +218,21 @@ class _ChildHomePageState extends State<ChildHomePage>
     if (!mounted) {
       return;
     }
+    final bool canApplyExpiredBlock = hasPermission && _remainingSeconds <= 0;
     setState(() {
       _showBlockerPermissionPrompt = !hasPermission;
+      if (canApplyExpiredBlock) {
+        _appliedExpiryBlock = false;
+      }
     });
+    if (syncExpiredBlock && canApplyExpiredBlock) {
+      _syncDeviceBlocker();
+    }
   }
 
   Future<void> _openBlockerPermissionSettings() async {
     await DeviceBlockController.instance.requestPermission();
-    await _refreshBlockerPermissionPrompt();
+    await _refreshBlockerPermissionPrompt(syncExpiredBlock: true);
   }
 
   void _restartCountdown() {

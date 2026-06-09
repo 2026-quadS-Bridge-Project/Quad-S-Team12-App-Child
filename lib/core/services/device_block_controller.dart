@@ -26,8 +26,12 @@ class DeviceBlockController {
     'com.gdg.bridge_k/device_block',
   );
 
+  @visibleForTesting
+  static bool? debugIsSupportedOverride;
+
   bool get _isSupportedPlatform =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+      debugIsSupportedOverride ??
+      (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
 
   /// Whether this runtime can use the native blocker/screen-time channel.
   ///
