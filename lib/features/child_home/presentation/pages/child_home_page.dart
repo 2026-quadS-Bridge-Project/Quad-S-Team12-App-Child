@@ -29,7 +29,8 @@ class ChildHomePage extends StatefulWidget {
   State<ChildHomePage> createState() => _ChildHomePageState();
 }
 
-class _ChildHomePageState extends State<ChildHomePage> {
+class _ChildHomePageState extends State<ChildHomePage>
+    with WidgetsBindingObserver {
   final Dio _dio = DioConfig.create();
   late final NotificationRepository _notificationRepository =
       createNotificationRepository();
@@ -41,10 +42,12 @@ class _ChildHomePageState extends State<ChildHomePage> {
   Timer? _countdownTimer;
   bool _appliedExpiryBlock = false;
   bool _isReadingRemainingSeconds = false;
+  bool _showBlockerPermissionPrompt = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.showContent) {
       unawaited(_loadHomeTime());
       unawaited(_loadNotificationIndicator());
@@ -53,9 +56,17 @@ class _ChildHomePageState extends State<ChildHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
     _dio.close(force: true);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _timeSnapshot != null) {
+      unawaited(_refreshBlockerPermissionPrompt());
+    }
   }
 
   Future<void> _loadHomeTime() async {
@@ -72,12 +83,16 @@ class _ChildHomePageState extends State<ChildHomePage> {
         _hasSchedule = snapshot != null && snapshot.totalMinutes > 0;
         _remainingSeconds = remainingSeconds;
         _appliedExpiryBlock = false;
+        if (snapshot == null) {
+          _showBlockerPermissionPrompt = false;
+        }
       });
       if (snapshot == null) {
         _countdownTimer?.cancel();
         unawaited(DeviceBlockController.instance.setBlocked(false));
         return;
       }
+      unawaited(_refreshBlockerPermissionPrompt());
       _syncDeviceBlocker();
       _restartCountdown();
     } on DioException catch (e) {
@@ -89,6 +104,7 @@ class _ChildHomePageState extends State<ChildHomePage> {
         _hasSchedule = false;
         _timeSnapshot = null;
         _remainingSeconds = 0;
+        _showBlockerPermissionPrompt = false;
       });
       unawaited(DeviceBlockController.instance.setBlocked(false));
     } on FormatException catch (e) {
@@ -186,6 +202,30 @@ class _ChildHomePageState extends State<ChildHomePage> {
         allocatedSeconds;
   }
 
+  Future<void> _refreshBlockerPermissionPrompt() async {
+    if (!DeviceBlockController.instance.isSupported || _timeSnapshot == null) {
+      if (mounted && _showBlockerPermissionPrompt) {
+        setState(() {
+          _showBlockerPermissionPrompt = false;
+        });
+      }
+      return;
+    }
+    final bool hasPermission = await DeviceBlockController.instance
+        .hasPermission();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _showBlockerPermissionPrompt = !hasPermission;
+    });
+  }
+
+  Future<void> _openBlockerPermissionSettings() async {
+    await DeviceBlockController.instance.requestPermission();
+    await _refreshBlockerPermissionPrompt();
+  }
+
   void _restartCountdown() {
     _countdownTimer?.cancel();
     if (_remainingSeconds <= 0) {
@@ -268,6 +308,8 @@ class _ChildHomePageState extends State<ChildHomePage> {
                 hasNotification: _hasNotification,
                 timeSnapshot: _timeSnapshot,
                 remainingSeconds: _remainingSeconds,
+                showBlockerPermissionPrompt: _showBlockerPermissionPrompt,
+                onRequestBlockerPermission: _openBlockerPermissionSettings,
                 onNotificationsChanged: () =>
                     unawaited(_loadNotificationIndicator()),
                 onDebugToggleSchedule: kDebugMode
@@ -343,6 +385,8 @@ class _ChildHomeContent extends StatelessWidget {
     required this.hasNotification,
     required this.timeSnapshot,
     required this.remainingSeconds,
+    required this.showBlockerPermissionPrompt,
+    required this.onRequestBlockerPermission,
     required this.onNotificationsChanged,
     required this.onDebugToggleSchedule,
   });
@@ -352,6 +396,8 @@ class _ChildHomeContent extends StatelessWidget {
   final bool hasNotification;
   final _HomeTimeSnapshot? timeSnapshot;
   final int remainingSeconds;
+  final bool showBlockerPermissionPrompt;
+  final VoidCallback onRequestBlockerPermission;
   final VoidCallback onNotificationsChanged;
   // Null in release builds — see ChildHomePage build(). Keeps the long-press
   // debug toggle from silently flipping schedule state for end users.
@@ -394,6 +440,8 @@ class _ChildHomeContent extends StatelessWidget {
                 hasSchedule: hasSchedule,
                 timeSnapshot: timeSnapshot,
                 remainingSeconds: remainingSeconds,
+                showBlockerPermissionPrompt: showBlockerPermissionPrompt,
+                onRequestBlockerPermission: onRequestBlockerPermission,
                 onDebugToggleSchedule: onDebugToggleSchedule,
               ),
               const SizedBox(height: 50),
@@ -500,6 +548,8 @@ class _TodayTimeSection extends StatelessWidget {
     required this.hasSchedule,
     required this.timeSnapshot,
     required this.remainingSeconds,
+    required this.showBlockerPermissionPrompt,
+    required this.onRequestBlockerPermission,
     required this.onDebugToggleSchedule,
   });
 
@@ -507,6 +557,8 @@ class _TodayTimeSection extends StatelessWidget {
   final bool hasSchedule;
   final _HomeTimeSnapshot? timeSnapshot;
   final int remainingSeconds;
+  final bool showBlockerPermissionPrompt;
+  final VoidCallback onRequestBlockerPermission;
   // Null in release builds; long-press becomes a no-op.
   final VoidCallback? onDebugToggleSchedule;
 
@@ -517,7 +569,7 @@ class _TodayTimeSection extends StatelessWidget {
     final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
 
     return SizedBox(
-      height: 223,
+      height: showBlockerPermissionPrompt ? 275 : 223,
       child: Stack(
         children: [
           Positioned(
@@ -654,7 +706,57 @@ class _TodayTimeSection extends StatelessWidget {
               ),
             ),
           ),
+          if (showBlockerPermissionPrompt)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 235,
+              child: _BlockerPermissionBanner(
+                onTap: onRequestBlockerPermission,
+              ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _BlockerPermissionBanner extends StatelessWidget {
+  const _BlockerPermissionBanner({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
+        border: Border.all(color: AppColors.primaryLight),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.lock_clock_rounded,
+              size: 20,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '화면 시간 차감을 위해 접근성 권한을 켜주세요.',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.gray700,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            TextButton(onPressed: onTap, child: const Text('설정')),
+          ],
+        ),
       ),
     );
   }

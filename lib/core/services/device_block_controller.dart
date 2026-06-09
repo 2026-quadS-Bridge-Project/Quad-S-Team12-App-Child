@@ -29,6 +29,12 @@ class DeviceBlockController {
   bool get _isSupportedPlatform =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
+  /// Whether this runtime can use the native blocker/screen-time channel.
+  ///
+  /// Desktop tests and web builds intentionally return false, so UI can avoid
+  /// showing mobile-only permission prompts in unsupported environments.
+  bool get isSupported => _isSupportedPlatform;
+
   /// Whether the user has granted the OS-level permission the blocker needs
   /// (Android: Accessibility service enabled; iOS: Family Controls approved).
   Future<bool> hasPermission() async {
