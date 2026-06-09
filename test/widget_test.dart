@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bridge_k/app/app.dart';
 import 'package:bridge_k/app/router/app_router.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
+import 'package:bridge_k/features/mission/presentation/pages/mission_info_page.dart';
 import 'package:bridge_k/features/my_page/presentation/pages/my_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,6 +54,27 @@ void main() {
 
     expect(find.text('시간설정'), findsOneWidget);
     expect(find.text('이번달 시간규칙이 설정되지 않았습니다.'), findsOneWidget);
+  });
+
+  testWidgets('rejected mission can re-enter perform flow', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: MissionInfoPage(missionId: '2')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수행정보'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('미션이 반려되었어요.'), findsOneWidget);
+    expect(find.text('다시 수행하기'), findsOneWidget);
+
+    await tester.tap(find.text('다시 수행하기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('미션수행'), findsOneWidget);
+    expect(find.text('사진을 업로드해주세요'), findsOneWidget);
   });
 
   testWidgets('child my page renders account details and actions', (

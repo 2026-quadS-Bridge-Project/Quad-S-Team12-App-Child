@@ -220,6 +220,8 @@ class _MissionPerformInfoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isRejected = controller.mission.status == MissionStatus.rejected;
+
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.itemGap, bottom: 24),
       child: Column(
@@ -228,7 +230,7 @@ class _MissionPerformInfoTab extends StatelessWidget {
           Expanded(
             child: Center(
               child: Text(
-                '미션이 아직 수행되지 않았어요.',
+                isRejected ? '미션이 반려되었어요.' : '미션이 아직 수행되지 않았어요.',
                 style: AppTypography.headlineMedium.copyWith(
                   color: AppColors.gray300,
                 ),
@@ -237,17 +239,13 @@ class _MissionPerformInfoTab extends StatelessWidget {
             ),
           ),
           BridgeButton(
-            label: '수행하기',
+            label: isRejected ? '다시 수행하기' : '수행하기',
             variant: BridgeButtonVariant.primary,
             size: BridgeButtonSize.large,
             fullWidth: true,
-            // No rejected-detail node exists in Figma — disable the CTA so
-            // rejected missions can't enter the perform flow until a retry
-            // design is supplied. Also disabled while the controller is
-            // mid-async (e.g. submit in flight) to prevent re-entry.
-            onPressed:
-                controller.mission.status == MissionStatus.rejected ||
-                        controller.isLoading
+            // Backend accepts a new performance after REJECTED; keep the retry
+            // path open and only guard against in-flight async re-entry.
+            onPressed: controller.isLoading
                 ? null
                 : controller.goToCameraPrompt,
           ),
@@ -276,7 +274,9 @@ class _ChipRowSection extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
+          style: AppTypography.headlineSemiBold.copyWith(
+            color: AppColors.gray800,
+          ),
         ),
         const SizedBox(height: AppTokens.smallGap),
         Wrap(
@@ -367,7 +367,9 @@ class _DescriptionSection extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
+          style: AppTypography.headlineSemiBold.copyWith(
+            color: AppColors.gray800,
+          ),
         ),
         const SizedBox(height: AppTokens.smallGap),
         Container(
@@ -420,9 +422,7 @@ class _RewardChip extends StatelessWidget {
     }
     if (minutes > 0) {
       if (spans.isNotEmpty) {
-        spans.add(
-          const WidgetSpan(child: SizedBox(width: AppTokens.smallGap)),
-        );
+        spans.add(const WidgetSpan(child: SizedBox(width: AppTokens.smallGap)));
       }
       spans.add(
         TextSpan(text: minutes.toString().padLeft(2, '0'), style: numberStyle),
