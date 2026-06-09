@@ -275,6 +275,21 @@ void main() {
       expect(fromPayload.isRead, isFalse);
       expect(fromPayload.deeplink, '/child-home/mission/22');
     });
+
+    test('derives mission route from mission id when route is absent', () {
+      final NotificationItem item = NotificationItem.fromJson(<String, dynamic>{
+        'notificationId': 19,
+        'notificationType': 'MISSION_CREATED',
+        'title': '새 미션',
+        'content': '미션이 생성되었습니다.',
+        'createdAt': '2026-06-09T12:32:00',
+        'isRead': false,
+        'missionId': 23,
+      });
+
+      expect(item.type, NotificationType.missionConfirmationRequested);
+      expect(item.deeplink, '/child-home/mission/23');
+    });
   });
 
   group('child notification fallback route', () {

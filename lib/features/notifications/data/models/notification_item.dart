@@ -62,6 +62,13 @@ class NotificationItem {
         return value.toString();
       }
     }
+
+    final Object? missionId =
+        json['missionId'] ??
+        (json['payload'] is Map ? (json['payload'] as Map)['missionId'] : null);
+    if (missionId != null && missionId.toString().isNotEmpty) {
+      return '/child-home/mission/${missionId.toString()}';
+    }
     return null;
   }
 

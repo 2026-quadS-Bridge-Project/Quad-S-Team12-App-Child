@@ -1246,8 +1246,6 @@ class _MissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Mission detail route `/child-home/mission/:id` lands in Phase 6;
-    // until then go_router surfaces its default 404 on tap.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => context.push('/child-home/mission/${data.id}'),
