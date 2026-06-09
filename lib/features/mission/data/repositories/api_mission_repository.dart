@@ -27,10 +27,17 @@ class ApiMissionRepository implements MissionRepository {
       final Response<dynamic> response = await _dio.get<dynamic>(
         '/api/v1/missions',
       );
+      final List<dynamic> entries = _jsonList(response.data);
       final List<Mission> missions = <Mission>[];
-      for (final Map<String, dynamic> entry
-          in (response.data as List).cast<Map<String, dynamic>>()) {
-        missions.add(await _hydrateMission(Mission.fromJson(entry)));
+      for (final dynamic entry in entries) {
+        if (entry is! Map) {
+          continue;
+        }
+        missions.add(
+          await _hydrateMission(
+            Mission.fromJson(Map<String, dynamic>.from(entry)),
+          ),
+        );
       }
       return Result<List<Mission>>.success(missions);
     } on DioException catch (e) {
@@ -162,5 +169,15 @@ class ApiMissionRepository implements MissionRepository {
       return Map<String, dynamic>.from(data);
     }
     return const <String, dynamic>{};
+  }
+
+  static List<dynamic> _jsonList(dynamic data) {
+    if (data is Map && data['data'] is List) {
+      return List<dynamic>.from(data['data'] as List);
+    }
+    if (data is List) {
+      return List<dynamic>.from(data);
+    }
+    return const <dynamic>[];
   }
 }

@@ -6,6 +6,7 @@ import 'package:bridge_k/core/auth/auth_session.dart';
 import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/listeners/mock_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
+import 'package:bridge_k/features/mission/data/repositories/api_mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mock_mission_repository.dart';
 import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
@@ -64,6 +65,110 @@ void main() {
       );
       expect(result, isA<Success<MissionSubmissionResult>>());
     });
+
+    test(
+      'api listMissions parses AWS ApiResponse-wrapped mission list',
+      () async {
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/missions') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <Map<String, dynamic>>[
+                            <String, dynamic>{
+                              'missionId': 42,
+                              'title': '방 청소하기',
+                              'category': 'CLEANING',
+                              'reward': 90,
+                            },
+                          ],
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  if (options.path == '/api/v1/missions/42') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <String, dynamic>{
+                            'missionId': 42,
+                            'title': '방 청소하기',
+                            'category': 'CLEANING',
+                            'resetCycle': 'WEEKLY',
+                            'verificationType': 'PARENT',
+                            'reward': 90,
+                            'description': '방 정리 인증',
+                          },
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  if (options.path == '/api/v1/missions/42/performance') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <String, dynamic>{
+                            'performanceId': 201,
+                            'status': 'PENDING',
+                            'proofImageUrl': 'https://test.local/proof.jpg',
+                          },
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      response: Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 404,
+                      ),
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<List<Mission>> result = await repo.listMissions();
+
+        switch (result) {
+          case Success<List<Mission>>(:final List<Mission> data):
+            expect(data, hasLength(1));
+            expect(data.single.id, '42');
+            expect(data.single.category, '청소');
+            expect(data.single.resetCycle, '일주일');
+            expect(
+              data.single.confirmationMethod,
+              ConfirmationMethod.parentApproval,
+            );
+            expect(data.single.status, MissionStatus.reviewing);
+            expect(data.single.photoUrls, <String>[
+              'https://test.local/proof.jpg',
+            ]);
+          case Failure<List<Mission>>(:final String message):
+            fail(
+              'api listMissions should parse wrapped response, got $message',
+            );
+        }
+      },
+    );
 
     test('createMissionApprovalListener returns Mock in dev mock mode', () {
       final MissionApprovalListener listener = createMissionApprovalListener();
