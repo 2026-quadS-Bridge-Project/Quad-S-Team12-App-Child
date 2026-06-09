@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 import '../../../../core/models/result.dart';
@@ -64,8 +66,16 @@ class ApiMissionRepository implements MissionRepository {
     required String id,
     required List<String> photoPaths,
   }) async {
+    final int? missionId = _positiveNumericId(id);
+    if (missionId == null) {
+      return Result<MissionSubmissionResult>.failure('미션을 찾을 수 없어요.');
+    }
     if (photoPaths.isEmpty) {
       return Result<MissionSubmissionResult>.failure('제출할 사진이 없어요.');
+    }
+    final String path = photoPaths.first.trim();
+    if (path.isEmpty || !await File(path).exists()) {
+      return Result<MissionSubmissionResult>.failure('제출할 사진을 찾을 수 없어요.');
     }
     try {
       // Upload the captured photo file directly as multipart to the existing
@@ -73,12 +83,11 @@ class ApiMissionRepository implements MissionRepository {
       // server-side — see backend-handoff §3.2. The backend returns an
       // AiVerificationResponse; the controller owns the UI status transition,
       // so a success signal is all this layer needs.
-      final String path = photoPaths.first;
       final FormData formData = FormData.fromMap(<String, dynamic>{
         'image': await MultipartFile.fromFile(path, filename: _basename(path)),
       });
       final Response<dynamic> response = await _dio.post<dynamic>(
-        '/api/v1/missions/$id/performances',
+        '/api/v1/missions/$missionId/performances',
         data: formData,
         options: Options(contentType: 'multipart/form-data'),
       );
@@ -180,5 +189,13 @@ class ApiMissionRepository implements MissionRepository {
       return List<dynamic>.from(data);
     }
     return const <dynamic>[];
+  }
+
+  static int? _positiveNumericId(String id) {
+    final int? parsed = int.tryParse(id.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
   }
 }

@@ -150,6 +150,78 @@ void main() {
     );
 
     test(
+      'api submitMission rejects non-numeric mission id before network',
+      () async {
+        final List<String> calls = <String>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  calls.add('${options.method} ${options.path}');
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true},
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<MissionSubmissionResult> result = await repo.submitMission(
+          id: 'mission-42',
+          photoPaths: const <String>['/tmp/bridge-missing-proof.jpg'],
+        );
+
+        expect(result, isA<Failure<MissionSubmissionResult>>());
+        expect(
+          (result as Failure<MissionSubmissionResult>).message,
+          '미션을 찾을 수 없어요.',
+        );
+        expect(calls, isEmpty);
+      },
+    );
+
+    test(
+      'api submitMission rejects missing proof image before network',
+      () async {
+        final List<String> calls = <String>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  calls.add('${options.method} ${options.path}');
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true},
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<MissionSubmissionResult> result = await repo.submitMission(
+          id: '42',
+          photoPaths: const <String>['/tmp/bridge-missing-proof.jpg'],
+        );
+
+        expect(result, isA<Failure<MissionSubmissionResult>>());
+        expect(
+          (result as Failure<MissionSubmissionResult>).message,
+          '제출할 사진을 찾을 수 없어요.',
+        );
+        expect(calls, isEmpty);
+      },
+    );
+
+    test(
       'api listMissions parses AWS ApiResponse-wrapped mission list',
       () async {
         final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
