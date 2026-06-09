@@ -330,6 +330,11 @@ class TimeSetupController extends ChangeNotifier
     if (_isSaving) {
       return;
     }
+    if (!canProceedToStep3 || !isAllocationBalanced) {
+      _errorMessage = '월 총 시간과 일별 시간 분배를 다시 확인해 주세요.';
+      notifyListeners();
+      return;
+    }
     _isSaving = true;
     _errorMessage = null;
     notifyListeners();

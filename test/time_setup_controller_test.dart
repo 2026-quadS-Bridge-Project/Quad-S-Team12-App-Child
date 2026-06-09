@@ -1,6 +1,8 @@
 import 'package:bridge_k/features/time_setup/data/models/time_schedule.dart';
 import 'package:bridge_k/features/time_setup/data/mock/time_schedule_mock.dart';
+import 'package:bridge_k/features/time_setup/data/repositories/time_setup_repository.dart';
 import 'package:bridge_k/features/time_setup/state/time_setup_controller.dart';
+import 'package:bridge_k/core/models/result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -198,6 +200,35 @@ void main() {
     expect(controller.isAllocationBalanced, isTrue);
   });
 
+  test('submit does not call repository when draft is not valid', () async {
+    final _RecordingTimeSetupRepository repository =
+        _RecordingTimeSetupRepository();
+    final TimeSetupController controller = TimeSetupController(
+      initial: scheduleWith(
+        weeklyMinutes: const <int>[60, 60, 60, 60],
+        monthlyBudgetMinutes: 4 * 60,
+        allocations: const <DayAllocation>[
+          DayAllocation(
+            daysLabel: '월',
+            weekdayIndices: <int>[0],
+            hours: 0,
+            minutes: 30,
+          ),
+        ],
+      ),
+      repository: repository,
+    );
+
+    expect(controller.canProceedToStep3, isTrue);
+    expect(controller.isAllocationBalanced, isFalse);
+
+    await controller.submit();
+
+    expect(repository.saveCount, 0);
+    expect(controller.step, TimeSetupStep.intro);
+    expect(controller.errorMessage, contains('다시 확인'));
+  });
+
   test('adding time splits and regroups weekdays by resulting total', () {
     final TimeSetupController controller = TimeSetupController(
       initial: scheduleWith(
@@ -243,4 +274,22 @@ void main() {
     expect(controller.schedule.dayAllocations[0].daysLabel, '화');
     expect(controller.schedule.dayAllocations[1].daysLabel, '수,목,금');
   });
+}
+
+class _RecordingTimeSetupRepository implements TimeSetupRepository {
+  int saveCount = 0;
+
+  @override
+  Future<Result<TimeSchedule?>> fetchCurrentSchedule() async =>
+      Result<TimeSchedule?>.success(null);
+
+  @override
+  Future<Result<TimeSchedule>> fetchPreviousWeekSchedule() async =>
+      Result<TimeSchedule>.success(TimeScheduleMock.empty);
+
+  @override
+  Future<Result<void>> saveSchedule(TimeSchedule schedule) async {
+    saveCount += 1;
+    return Result<void>.success(null);
+  }
 }
