@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/config/dio_config.dart';
@@ -45,6 +46,7 @@ class _ChildHomePageState extends State<ChildHomePage>
   Timer? _countdownTimer;
   bool _appliedExpiryBlock = false;
   bool _isReadingRemainingSeconds = false;
+  bool _isSettlingUsage = false;
   bool _showBlockerPermissionPrompt = false;
 
   @override
@@ -191,15 +193,136 @@ class _ChildHomePageState extends State<ChildHomePage>
     _HomeTimeSnapshot snapshot,
   ) async {
     final String? memberId = await AuthSession.memberId();
+    final String memberKey = memberId ?? 'child';
+    await _settlePreviousTrackerIfNeeded(
+      memberKey: memberKey,
+      todayDateKey: snapshot.dateKey,
+    );
     final String trackerKey =
-        '${memberId ?? 'child'}:${snapshot.dateKey}:today-screen-time';
+        '$memberKey:${snapshot.dateKey}:today-screen-time';
     final int allocatedSeconds = snapshot.totalMinutes * 60;
     await DeviceBlockController.instance.configureScreenTime(
       key: trackerKey,
       allocatedSeconds: allocatedSeconds,
     );
+    await _storeActiveTrackerMetadata(memberKey: memberKey, snapshot: snapshot);
     return await DeviceBlockController.instance.remainingScreenTimeSeconds() ??
         allocatedSeconds;
+  }
+
+  Future<void> _storeActiveTrackerMetadata({
+    required String memberKey,
+    required _HomeTimeSnapshot snapshot,
+  }) async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _screenTimeDateKey(memberKey),
+      snapshot.dateKey,
+    );
+    await preferences.setInt(
+      _screenTimeAllocatedMinutesKey(memberKey),
+      snapshot.totalMinutes,
+    );
+  }
+
+  Future<void> _settlePreviousTrackerIfNeeded({
+    required String memberKey,
+    required String todayDateKey,
+  }) async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    final String? previousDateKey = preferences.getString(
+      _screenTimeDateKey(memberKey),
+    );
+    if (previousDateKey == null || previousDateKey == todayDateKey) {
+      return;
+    }
+    if (preferences.getString(_screenTimeSettledDateKey(memberKey)) ==
+        previousDateKey) {
+      return;
+    }
+    final int allocatedMinutes =
+        preferences.getInt(_screenTimeAllocatedMinutesKey(memberKey)) ?? 0;
+    if (allocatedMinutes <= 0) {
+      return;
+    }
+
+    final int? nativeRemainingSeconds = await DeviceBlockController.instance
+        .remainingScreenTimeSeconds();
+    if (nativeRemainingSeconds == null) {
+      return;
+    }
+    final int allocatedSeconds = allocatedMinutes * 60;
+    final int usedSeconds = (allocatedSeconds - nativeRemainingSeconds).clamp(
+      0,
+      allocatedSeconds,
+    );
+    final int actualUsedMinutes = (usedSeconds + 59) ~/ 60;
+    final bool settled = await _settleUsage(
+      dateKey: previousDateKey,
+      actualUsedMinutes: actualUsedMinutes,
+    );
+    if (settled) {
+      await preferences.setString(
+        _screenTimeSettledDateKey(memberKey),
+        previousDateKey,
+      );
+    }
+  }
+
+  Future<void> _settleCurrentUsageIfNeeded() async {
+    if (_isSettlingUsage) {
+      return;
+    }
+    final _HomeTimeSnapshot? snapshot = _timeSnapshot;
+    if (snapshot == null || snapshot.totalMinutes <= 0) {
+      return;
+    }
+    _isSettlingUsage = true;
+    try {
+      final String? memberId = await AuthSession.memberId();
+      final String memberKey = memberId ?? 'child';
+      final SharedPreferences preferences =
+          await SharedPreferences.getInstance();
+      if (preferences.getString(_screenTimeSettledDateKey(memberKey)) ==
+          snapshot.dateKey) {
+        return;
+      }
+
+      final bool settled = await _settleUsage(
+        dateKey: snapshot.dateKey,
+        actualUsedMinutes: snapshot.totalMinutes,
+      );
+      if (settled) {
+        await preferences.setString(
+          _screenTimeSettledDateKey(memberKey),
+          snapshot.dateKey,
+        );
+      }
+    } finally {
+      _isSettlingUsage = false;
+    }
+  }
+
+  Future<bool> _settleUsage({
+    required String dateKey,
+    required int actualUsedMinutes,
+  }) async {
+    if (currentEnvironment.useMocks && widget.dio == null) {
+      return false;
+    }
+    try {
+      await _dio.post<dynamic>(
+        '/api/v1/schedules/settle',
+        queryParameters: <String, dynamic>{
+          'date': dateKey,
+          'actualUsed': actualUsedMinutes,
+        },
+      );
+      return true;
+    } on DioException catch (e) {
+      debugPrint('Child home usage settle failed: ${e.message}');
+      return false;
+    }
   }
 
   Future<void> _refreshBlockerPermissionPrompt({
@@ -276,6 +399,7 @@ class _ChildHomePageState extends State<ChildHomePage>
         return;
       }
       _appliedExpiryBlock = true;
+      unawaited(_settleCurrentUsageIfNeeded());
     }
     unawaited(
       DeviceBlockController.instance.applyForRemainingMinutes(remainingMinutes),
@@ -370,6 +494,15 @@ String _yyyyMmDd(DateTime date) {
   final String day = date.day.toString().padLeft(2, '0');
   return '$year-$month-$day';
 }
+
+String _screenTimeDateKey(String memberKey) =>
+    'child_home.screen_time.$memberKey.date';
+
+String _screenTimeAllocatedMinutesKey(String memberKey) =>
+    'child_home.screen_time.$memberKey.allocated_minutes';
+
+String _screenTimeSettledDateKey(String memberKey) =>
+    'child_home.screen_time.$memberKey.settled_date';
 
 String _formatMinutes(int totalMinutes) {
   final int safeMinutes = totalMinutes < 0 ? 0 : totalMinutes;

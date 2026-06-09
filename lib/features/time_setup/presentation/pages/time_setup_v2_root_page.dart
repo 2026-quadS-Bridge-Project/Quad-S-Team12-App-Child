@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../data/mock/time_schedule_mock.dart';
+import '../../../../core/models/result.dart';
+import '../../data/models/time_schedule.dart';
+import '../../data/repositories/time_setup_repository.dart';
 import '../../state/time_setup_controller.dart';
 import '../../state/time_setup_scope.dart';
 import 'daily_time_setup_page.dart';
@@ -22,26 +24,48 @@ import 'weekly_time_setup_page.dart';
 /// past-week dim treatment via `controller.showPastWeekDim`, remove this note.
 /// Until then the v2 entry still delivers the prefilled edit flow correctly.
 class TimeSetupV2RootPage extends StatefulWidget {
-  const TimeSetupV2RootPage({super.key});
+  const TimeSetupV2RootPage({super.key, this.repository});
+
+  final TimeSetupRepository? repository;
 
   @override
   State<TimeSetupV2RootPage> createState() => _TimeSetupV2RootPageState();
 }
 
 class _TimeSetupV2RootPageState extends State<TimeSetupV2RootPage> {
-  late final TimeSetupController _controller;
+  late final TimeSetupRepository _repository;
+  TimeSetupController? _controller;
+  String? _blockedMessage;
 
   @override
   void initState() {
     super.initState();
-    _controller = TimeSetupController.v2NextWeek(
-      previousWeek: TimeScheduleMock.sampleV2PreviousWeek,
-    );
+    _repository = widget.repository ?? createTimeSetupRepository();
+    _loadPreviousWeekSchedule();
+  }
+
+  Future<void> _loadPreviousWeekSchedule() async {
+    final Result<TimeSchedule> result = await _repository
+        .fetchPreviousWeekSchedule();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      switch (result) {
+        case Success<TimeSchedule>(:final data):
+          _controller = TimeSetupController.v2NextWeek(
+            previousWeek: data,
+            repository: _repository,
+          );
+        case Failure<TimeSchedule>(:final message):
+          _blockedMessage = message;
+      }
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -58,21 +82,53 @@ class _TimeSetupV2RootPageState extends State<TimeSetupV2RootPage> {
 
   @override
   Widget build(BuildContext context) {
+    final TimeSetupController? controller = _controller;
+    final String? blockedMessage = _blockedMessage;
+    if (blockedMessage != null) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    blockedMessage,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('확인'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (controller == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return TimeSetupScope(
-      controller: _controller,
+      controller: controller,
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: controller,
         builder: (context, _) {
-          final TimeSetupStep? previous = _previousStep(_controller.step);
+          final TimeSetupStep? previous = _previousStep(controller.step);
           return PopScope(
             canPop: previous == null,
             onPopInvokedWithResult: (bool didPop, Object? _) {
               if (didPop) return;
               if (previous != null) {
-                _controller.goToStep(previous);
+                controller.goToStep(previous);
               }
             },
-            child: switch (_controller.step) {
+            child: switch (controller.step) {
               TimeSetupStep.intro => const TimeSetupIntroPage(),
               TimeSetupStep.scheduleRegister => const ScheduleRegisterPage(),
               TimeSetupStep.weeklyTotal => const WeeklyTimeSetupPage(),

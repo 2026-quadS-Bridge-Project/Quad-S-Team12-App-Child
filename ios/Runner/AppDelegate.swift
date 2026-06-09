@@ -54,6 +54,27 @@ import ManagedSettings
         } else {
           result(false)
         }
+      case "configureScreenTime":
+        if #available(iOS 16.0, *) {
+          let args = call.arguments as? [String: Any]
+          let key = (args?["key"] as? String) ?? ""
+          let allocatedSeconds = (args?["allocatedSeconds"] as? Int) ?? 0
+          result(AppBlocker.configureScreenTime(key: key, allocatedSeconds: allocatedSeconds))
+        } else {
+          result(false)
+        }
+      case "remainingScreenTimeSeconds":
+        if #available(iOS 16.0, *) {
+          result(AppBlocker.remainingScreenTimeSeconds())
+        } else {
+          result(nil)
+        }
+      case "clearScreenTime":
+        if #available(iOS 16.0, *) {
+          result(AppBlocker.clearScreenTime())
+        } else {
+          result(false)
+        }
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -75,6 +96,10 @@ enum AppBlocker {
   #if canImport(FamilyControls)
   private static let store = ManagedSettingsStore()
   #endif
+  private static let trackerKey = "bridge_k_screen_time_tracker_key"
+  private static let allocatedSecondsKey = "bridge_k_screen_time_allocated_seconds"
+  private static let usedSecondsKey = "bridge_k_screen_time_used_seconds"
+  private static let lastTickKey = "bridge_k_screen_time_last_tick"
 
   /// Whether the user has approved Family Controls authorization.
   static func hasPermission() -> Bool {
@@ -106,5 +131,88 @@ enum AppBlocker {
       store.shield.webDomainCategories = nil
     }
     #endif
+  }
+
+  static func configureScreenTime(key: String, allocatedSeconds: Int) -> Bool {
+    guard !key.isEmpty, allocatedSeconds >= 0 else {
+      return false
+    }
+
+    let defaults = UserDefaults.standard
+    let previousKey = defaults.string(forKey: trackerKey)
+    let previousUsed = defaults.integer(forKey: usedSecondsKey)
+    let nextUsed = previousKey == key ? min(previousUsed, allocatedSeconds) : 0
+
+    defaults.set(key, forKey: trackerKey)
+    defaults.set(allocatedSeconds, forKey: allocatedSecondsKey)
+    defaults.set(nextUsed, forKey: usedSecondsKey)
+    if nextUsed < allocatedSeconds {
+      defaults.set(Date().timeIntervalSince1970, forKey: lastTickKey)
+    } else {
+      defaults.removeObject(forKey: lastTickKey)
+    }
+    maybeActivateBlockingIfExpired()
+    return true
+  }
+
+  static func remainingScreenTimeSeconds() -> Int? {
+    guard UserDefaults.standard.string(forKey: trackerKey) != nil else {
+      return nil
+    }
+    refreshScreenTime()
+    let defaults = UserDefaults.standard
+    let allocatedSeconds = defaults.integer(forKey: allocatedSecondsKey)
+    let usedSeconds = defaults.integer(forKey: usedSecondsKey)
+    return max(0, allocatedSeconds - usedSeconds)
+  }
+
+  static func clearScreenTime() -> Bool {
+    let defaults = UserDefaults.standard
+    defaults.removeObject(forKey: trackerKey)
+    defaults.removeObject(forKey: allocatedSecondsKey)
+    defaults.removeObject(forKey: usedSecondsKey)
+    defaults.removeObject(forKey: lastTickKey)
+    setBlocked(false)
+    return true
+  }
+
+  private static func refreshScreenTime() {
+    let defaults = UserDefaults.standard
+    guard defaults.string(forKey: trackerKey) != nil else {
+      return
+    }
+
+    let now = Date().timeIntervalSince1970
+    let lastTick = defaults.double(forKey: lastTickKey)
+    if lastTick <= 0 {
+      defaults.set(now, forKey: lastTickKey)
+      return
+    }
+
+    let elapsedSeconds = max(0, Int(now - lastTick))
+    if elapsedSeconds <= 0 {
+      return
+    }
+
+    let allocatedSeconds = defaults.integer(forKey: allocatedSecondsKey)
+    let usedSeconds = min(
+      allocatedSeconds,
+      defaults.integer(forKey: usedSecondsKey) + elapsedSeconds
+    )
+    defaults.set(usedSeconds, forKey: usedSecondsKey)
+    defaults.set(now, forKey: lastTickKey)
+    maybeActivateBlockingIfExpired()
+  }
+
+  private static func maybeActivateBlockingIfExpired() {
+    let defaults = UserDefaults.standard
+    guard defaults.string(forKey: trackerKey) != nil else {
+      return
+    }
+    let allocatedSeconds = defaults.integer(forKey: allocatedSecondsKey)
+    let usedSeconds = defaults.integer(forKey: usedSecondsKey)
+    if allocatedSeconds - usedSeconds <= 0 {
+      setBlocked(true)
+    }
   }
 }
