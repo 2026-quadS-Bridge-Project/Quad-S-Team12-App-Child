@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -17,7 +15,10 @@ import '../widgets/notification_card.dart';
 ///
 /// Child notification surface. State is held inline via `StatefulWidget.setState`.
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key});
+  const NotificationsPage({super.key, NotificationRepository? repository})
+    : _repository = repository;
+
+  final NotificationRepository? _repository;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -25,7 +26,7 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   late final NotificationRepository _repository =
-      createNotificationRepository();
+      widget._repository ?? createNotificationRepository();
 
   List<NotificationItem> _notifications = <NotificationItem>[];
 
@@ -55,23 +56,30 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  void _handleCardTap(NotificationItem item) {
-    // Fire-and-forget: the route push runs synchronously below, so we don't
-    // await the repository here. Any failure is silent for now; surface via
-    // SnackBar once the backend ships and read-state matters to the user.
-    unawaited(_repository.markAsRead(item.id));
-    setState(() {
-      _notifications = _notifications
-          .map(
-            (NotificationItem candidate) => candidate.id == item.id
-                ? candidate.copyWith(isRead: true)
-                : candidate,
-          )
-          .toList(growable: false);
-    });
+  Future<void> _handleCardTap(NotificationItem item) async {
     final String route =
         item.deeplink ?? childNotificationFallbackRoute(item.type);
-    context.push(route);
+    final GoRouter router = GoRouter.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final Result<void> result = await _repository.markAsRead(item.id);
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Success<void>():
+        setState(() {
+          _notifications = _notifications
+              .map(
+                (NotificationItem candidate) => candidate.id == item.id
+                    ? candidate.copyWith(isRead: true)
+                    : candidate,
+              )
+              .toList(growable: false);
+        });
+      case Failure<void>(:final String message):
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+    router.push(route);
   }
 
   Future<void> _confirmDelete(NotificationItem item) async {

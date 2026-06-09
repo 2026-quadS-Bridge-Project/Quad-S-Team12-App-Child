@@ -18,16 +18,16 @@ abstract interface class NotificationRepository {
   /// truth; the page mirrors the removal in local state on success.
   Future<Result<void>> deleteNotification(String id);
 
-  /// Mark the notification identified by [id] as read. Fire-and-forget from
-  /// the page; failures surface via the returned [Result] for future hooks.
+  /// Mark the notification identified by [id] as read. The page waits for the
+  /// returned [Result] so backend failures do not look like local success.
   Future<Result<void>> markAsRead(String id);
 }
 
 /// Cached singleton — lazy-initialized at first access.
 final NotificationRepository _notificationRepository =
     currentEnvironment.useMocks
-        ? MockNotificationRepository()
-        : ApiNotificationRepository();
+    ? MockNotificationRepository()
+    : ApiNotificationRepository();
 
 /// Factory that returns the cached repo for the current environment.
 NotificationRepository createNotificationRepository() =>
