@@ -30,6 +30,23 @@ void main() {
       expect(decoded.rewardMinutes, original.rewardMinutes);
     });
 
+    test('preserves backend performance id', () {
+      final Mission decoded = Mission.fromJson(<String, dynamic>{
+        'missionId': 42,
+        'title': '방 청소하기',
+        'reward': 30,
+        'status': 'PENDING',
+        'performanceId': 201,
+      });
+
+      expect(decoded.performanceId, '201');
+      expect(Mission.fromJson(decoded.toJson()).performanceId, '201');
+      expect(
+        decoded.copyWith(status: MissionStatus.reviewing).performanceId,
+        '201',
+      );
+    });
+
     test('every mock mission preserves status + confirmation method', () {
       for (final Mission m in MissionMock.all) {
         final Mission decoded = Mission.fromJson(m.toJson());

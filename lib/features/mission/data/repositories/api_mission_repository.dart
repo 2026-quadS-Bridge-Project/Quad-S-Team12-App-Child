@@ -130,6 +130,7 @@ class ApiMissionRepository implements MissionRepository {
         mission.confirmationMethod,
       ),
       photoUrls: photoUrls.isEmpty ? mission.photoUrls : photoUrls,
+      performanceId: json['performanceId']?.toString(),
     );
   }
 

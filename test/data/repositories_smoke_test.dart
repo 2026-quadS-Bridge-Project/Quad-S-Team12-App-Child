@@ -164,6 +164,7 @@ void main() {
               ConfirmationMethod.parentApproval,
             );
             expect(data.single.status, MissionStatus.reviewing);
+            expect(data.single.performanceId, '201');
             expect(data.single.photoUrls, <String>[
               'https://test.local/proof.jpg',
             ]);

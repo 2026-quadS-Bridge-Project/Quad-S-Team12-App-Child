@@ -173,6 +173,7 @@ class Mission {
     this.description,
     this.assignedBy = 'parent', // 'parent' or 'ai'
     this.photoUrls = const [],
+    this.performanceId,
     this.deadline,
     this.category = '루틴',
     this.categoryOptions = const <String>['루틴', '학습', '운동', '청소', '심부름'],
@@ -196,6 +197,7 @@ class Mission {
   final String? description;
   final String assignedBy;
   final List<String> photoUrls;
+  final String? performanceId;
   final DateTime? deadline;
 
   /// Mission info section fields (frame 746-11392 — 5 chip rows).
@@ -226,7 +228,11 @@ class Mission {
     return '$rewardMinutes분 지급';
   }
 
-  Mission copyWith({MissionStatus? status, List<String>? photoUrls}) => Mission(
+  Mission copyWith({
+    MissionStatus? status,
+    List<String>? photoUrls,
+    String? performanceId,
+  }) => Mission(
     id: id,
     title: title,
     rewardHours: rewardHours,
@@ -235,6 +241,7 @@ class Mission {
     description: description,
     assignedBy: assignedBy,
     photoUrls: photoUrls ?? this.photoUrls,
+    performanceId: performanceId ?? this.performanceId,
     deadline: deadline,
     category: category,
     categoryOptions: categoryOptions,
@@ -307,6 +314,7 @@ class Mission {
       description: json['description']?.toString(),
       assignedBy: (json['assignedBy'] ?? 'parent').toString(),
       photoUrls: photoUrls,
+      performanceId: json['performanceId']?.toString(),
       deadline: deadline,
       category: _categoryFromWire(json['category']),
       categoryOptions: categoryOptions,
@@ -331,6 +339,7 @@ class Mission {
     'description': description,
     'assignedBy': assignedBy,
     'photoUrls': photoUrls,
+    'performanceId': performanceId,
     'deadline': deadline?.toIso8601String(),
     'category': category,
     'categoryOptions': categoryOptions,

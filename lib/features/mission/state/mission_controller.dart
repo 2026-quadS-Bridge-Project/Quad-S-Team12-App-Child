@@ -138,6 +138,7 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
           _mission = _mission.copyWith(
             status: nextStatus,
             photoUrls: List.of(_capturedPhotoPaths),
+            performanceId: submission.performanceId,
           );
           _step = MissionFlowStep.submitted;
 
