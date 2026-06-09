@@ -549,6 +549,102 @@ void main() {
         expect(requests.last.queryParameters['yearMonth'], yearMonth);
       },
     );
+
+    test(
+      'api saveSchedule scales template totals to each weekly budget',
+      () async {
+        final List<RequestOptions> requests = <RequestOptions>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  requests.add(options);
+                  final Object? data = options.path.endsWith('/routines')
+                      ? <String, dynamic>{
+                          'isSuccess': true,
+                          'data': const <Map<String, dynamic>>[],
+                        }
+                      : null;
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: data,
+                    ),
+                  );
+                },
+          ),
+        );
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<void> result = await repo.saveSchedule(
+          const TimeSchedule(
+            allowedHours: <HourCell>{},
+            weeklyTotals: <WeeklyTotal>[
+              WeeklyTotal(weekIndex: 0, hours: 1, minutes: 40),
+              WeeklyTotal(weekIndex: 1, hours: 3, minutes: 5),
+              WeeklyTotal(weekIndex: 2, hours: 3, minutes: 30),
+              WeeklyTotal(weekIndex: 3, hours: 5, minutes: 5),
+            ],
+            dayAllocations: <DayAllocation>[
+              DayAllocation(
+                daysLabel: '월',
+                weekdayIndices: <int>[0],
+                hours: 0,
+                minutes: 20,
+              ),
+              DayAllocation(
+                daysLabel: '수',
+                weekdayIndices: <int>[2],
+                hours: 0,
+                minutes: 40,
+              ),
+              DayAllocation(
+                daysLabel: '일',
+                weekdayIndices: <int>[6],
+                hours: 0,
+                minutes: 30,
+              ),
+            ],
+            yearMonth: '2026-08',
+          ),
+        );
+
+        expect(result, isA<Success<void>>());
+
+        final RequestOptions budgetRequest = requests.singleWhere(
+          (RequestOptions options) =>
+              options.method == 'POST' &&
+              options.path == '/api/v1/schedules/weekly-budgets',
+        );
+        final List<Map<String, dynamic>> budgets =
+            (budgetRequest.data as List<dynamic>)
+                .cast<Map<String, dynamic>>()
+                .toList(growable: false);
+        final Map<int, int> budgetMinutesByWeek = <int, int>{
+          for (final Map<String, dynamic> budget in budgets)
+            budget['weekNumber'] as int: budget['allocatedMinutes'] as int,
+        };
+
+        final Map<int, int> templateMinutesByWeek = <int, int>{};
+        for (final RequestOptions request in requests.where(
+          (RequestOptions options) =>
+              options.method == 'PUT' &&
+              options.path == '/api/v1/schedules/templates',
+        )) {
+          final Map<String, dynamic> data =
+              request.data as Map<String, dynamic>;
+          final int weekNumber = data['weekNumber'] as int;
+          final int baseMinutes = data['baseMinutes'] as int;
+          templateMinutesByWeek[weekNumber] =
+              (templateMinutesByWeek[weekNumber] ?? 0) + baseMinutes;
+        }
+
+        expect(templateMinutesByWeek, budgetMinutesByWeek);
+        expect(requests.last.path, '/api/v1/schedules/complete');
+      },
+    );
   });
 
   group('time confirm repository', () {
