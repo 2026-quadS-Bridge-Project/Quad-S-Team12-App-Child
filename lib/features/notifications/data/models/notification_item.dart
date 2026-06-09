@@ -32,8 +32,22 @@ class NotificationItem {
           DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
       actionLabel: json['actionLabel'] as String? ?? '확인하러 가기',
-      deeplink: json['deeplink'] as String?,
+      deeplink: _deeplinkFromJson(json),
     );
+  }
+
+  static String? _deeplinkFromJson(Map<String, dynamic> json) {
+    for (final Object? value in <Object?>[
+      json['deeplink'],
+      json['targetRoute'],
+      if (json['payload'] is Map) (json['payload'] as Map)['deeplink'],
+      if (json['payload'] is Map) (json['payload'] as Map)['targetRoute'],
+    ]) {
+      if (value != null && value.toString().startsWith('/')) {
+        return value.toString();
+      }
+    }
+    return null;
   }
 
   /// Resolve [NotificationType] from a wire name. Matches the app enum names
@@ -52,6 +66,7 @@ class NotificationItem {
       case 'MISSION_REJECTED':
         return NotificationType.missionRejected;
       case 'MISSION_CREATED':
+      case 'MISSION_REQUESTED':
         return NotificationType.missionConfirmationRequested;
       case 'GENERAL':
       default:
