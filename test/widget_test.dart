@@ -427,6 +427,25 @@ void main() {
     'child home does not fall back to monthly policy when daily schedule is missing',
     (WidgetTester tester) async {
       await AuthSession.saveLogin(username: 'child', memberId: '22');
+      DeviceBlockController.debugIsSupportedOverride = true;
+      const MethodChannel channel = MethodChannel(
+        'com.gdg.bridge_k/device_block',
+      );
+      final List<MethodCall> channelCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (MethodCall call) async {
+            channelCalls.add(call);
+            return switch (call.method) {
+              'clearScreenTime' => true,
+              _ => null,
+            };
+          });
+      addTearDown(() {
+        DeviceBlockController.debugIsSupportedOverride = null;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
       final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
       dio.interceptors.add(
         InterceptorsWrapper(
@@ -466,6 +485,10 @@ void main() {
       expect(find.text('아직 등록된 시간 계획이 없어요.'), findsOneWidget);
       expect(find.text('남은시간'), findsNothing);
       expect(find.text('10:00'), findsNothing);
+      expect(
+        channelCalls.any((MethodCall call) => call.method == 'clearScreenTime'),
+        isTrue,
+      );
     },
   );
 
