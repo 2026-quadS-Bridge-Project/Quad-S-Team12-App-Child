@@ -235,7 +235,17 @@ void main() {
                       Response<dynamic>(
                         requestOptions: options,
                         statusCode: 200,
-                        data: const <Map<String, dynamic>>[],
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': const <Map<String, dynamic>>[
+                            <String, dynamic>{
+                              'id': 1,
+                              'dayOfWeek': 'MONDAY',
+                              'startTime': '09:00:00',
+                              'endTime': '11:00:00',
+                            },
+                          ],
+                        },
                       ),
                     );
                     return;
@@ -259,6 +269,13 @@ void main() {
             expect(data, isNotNull);
             expect(data!.monthlyBudgetMinutes, 600);
             expect(data.weeklyTotalCapMinutes, 600);
+            expect(
+              data.allowedHours,
+              containsAll(<HourCell>[
+                const HourCell(weekday: 0, hour: 9),
+                const HourCell(weekday: 0, hour: 10),
+              ]),
+            );
           case Failure<TimeSchedule?>():
             fail('fetchCurrentSchedule should parse policy fallback');
         }
@@ -287,13 +304,17 @@ void main() {
             onRequest:
                 (RequestOptions options, RequestInterceptorHandler handler) {
                   requests.add(options);
+                  final Object? data = options.path.endsWith('/routines')
+                      ? <String, dynamic>{
+                          'isSuccess': true,
+                          'data': const <Map<String, dynamic>>[],
+                        }
+                      : null;
                   handler.resolve(
                     Response<dynamic>(
                       requestOptions: options,
                       statusCode: 200,
-                      data: options.path.endsWith('/routines')
-                          ? const <Map<String, dynamic>>[]
-                          : null,
+                      data: data,
                     ),
                   );
                 },

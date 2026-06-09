@@ -114,11 +114,7 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     final Response<dynamic> response = await _dio.get<dynamic>(
       '/api/v1/schedules/routines',
     );
-    final dynamic data = response.data;
-    if (data is! List) {
-      return const <Map<String, dynamic>>[];
-    }
-    return data
+    return _jsonList(response.data)
         .whereType<Map>()
         .map((Map value) => Map<String, dynamic>.from(value))
         .toList(growable: false);
@@ -204,13 +200,10 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     final Response<dynamic> listResp = await _dio.get<dynamic>(
       '/api/v1/schedules/routines',
     );
-    final dynamic existing = listResp.data;
-    if (existing is List) {
-      for (final dynamic routine in existing) {
-        final Object? id = routine is Map ? routine['id'] : null;
-        if (id != null) {
-          await _dio.delete<dynamic>('/api/v1/schedules/routines/$id');
-        }
+    for (final dynamic routine in _jsonList(listResp.data)) {
+      final Object? id = routine is Map ? routine['id'] : null;
+      if (id != null) {
+        await _dio.delete<dynamic>('/api/v1/schedules/routines/$id');
       }
     }
 
@@ -338,6 +331,16 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
       return Map<String, dynamic>.from(data);
     }
     return null;
+  }
+
+  List<dynamic> _jsonList(dynamic data) {
+    if (data is Map && data['data'] is List) {
+      return List<dynamic>.from(data['data'] as List);
+    }
+    if (data is List) {
+      return List<dynamic>.from(data);
+    }
+    return const <dynamic>[];
   }
 
   List<WeeklyTotal> _emptyWeeklyTotals() {
