@@ -72,6 +72,35 @@ void main() {
       expect(decoded.confirmationMethod, ConfirmationMethod.parentApproval);
       expect(decoded.rewardMinutes, 45);
     });
+
+    test('submission response prefers backend performance status', () {
+      final MissionSubmissionResult pending =
+          MissionSubmissionResult.fromJson(<String, dynamic>{
+            'isAccepted': false,
+            'reason': '부모님 확인 대기중입니다.',
+            'status': 'PENDING',
+            'performanceId': 201,
+          });
+
+      expect(pending.performanceId, '201');
+      expect(
+        pending.statusFor(ConfirmationMethod.aiAuto),
+        MissionStatus.reviewing,
+      );
+
+      final MissionSubmissionResult rejected = MissionSubmissionResult.fromJson(
+        <String, dynamic>{
+          'isAccepted': false,
+          'reason': '사진이 맞지 않습니다.',
+          'status': 'REJECTED',
+        },
+      );
+
+      expect(
+        rejected.statusFor(ConfirmationMethod.aiAuto),
+        MissionStatus.rejected,
+      );
+    });
   });
 
   group('TimeSchedule JSON round-trip', () {

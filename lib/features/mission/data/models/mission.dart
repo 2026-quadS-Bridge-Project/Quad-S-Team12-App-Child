@@ -6,19 +6,32 @@ enum MissionStatus {
 }
 
 class MissionSubmissionResult {
-  const MissionSubmissionResult({this.isAccepted, this.reason});
+  const MissionSubmissionResult({
+    this.isAccepted,
+    this.reason,
+    this.status,
+    this.performanceId,
+  });
 
   final bool? isAccepted;
   final String? reason;
+  final MissionStatus? status;
+  final String? performanceId;
 
   factory MissionSubmissionResult.fromJson(Map<String, dynamic> json) {
     return MissionSubmissionResult(
       isAccepted: json['isAccepted'] as bool?,
       reason: json['reason'] as String?,
+      status: _missionStatusFromNameOrNull(json['status']?.toString()),
+      performanceId: json['performanceId']?.toString(),
     );
   }
 
   MissionStatus statusFor(ConfirmationMethod confirmationMethod) {
+    final MissionStatus? submittedStatus = status;
+    if (submittedStatus != null) {
+      return submittedStatus;
+    }
     switch (confirmationMethod) {
       case ConfirmationMethod.childSelf:
         return MissionStatus.completed;
@@ -80,7 +93,11 @@ enum ConfirmationMethod {
 /// JSON name lookup for [MissionStatus]; defaults to
 /// [MissionStatus.pendingCheck] when [name] is null or unknown.
 MissionStatus _missionStatusFromName(String? name) {
-  if (name == null) return MissionStatus.pendingCheck;
+  return _missionStatusFromNameOrNull(name) ?? MissionStatus.pendingCheck;
+}
+
+MissionStatus? _missionStatusFromNameOrNull(String? name) {
+  if (name == null) return null;
   switch (name.toUpperCase()) {
     case 'PENDING':
       return MissionStatus.reviewing;
@@ -92,7 +109,7 @@ MissionStatus _missionStatusFromName(String? name) {
   for (final MissionStatus s in MissionStatus.values) {
     if (s.name == name) return s;
   }
-  return MissionStatus.pendingCheck;
+  return null;
 }
 
 /// Backend mission category enum (`CLEANING`/`STUDY`/…) → the Korean label the
