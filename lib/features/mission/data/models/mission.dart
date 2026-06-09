@@ -81,6 +81,14 @@ enum ConfirmationMethod {
 /// [MissionStatus.pendingCheck] when [name] is null or unknown.
 MissionStatus _missionStatusFromName(String? name) {
   if (name == null) return MissionStatus.pendingCheck;
+  switch (name.toUpperCase()) {
+    case 'PENDING':
+      return MissionStatus.reviewing;
+    case 'ACCEPTED':
+      return MissionStatus.completed;
+    case 'REJECTED':
+      return MissionStatus.rejected;
+  }
   for (final MissionStatus s in MissionStatus.values) {
     if (s.name == name) return s;
   }

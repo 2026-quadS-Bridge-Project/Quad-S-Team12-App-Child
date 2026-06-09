@@ -27,10 +27,11 @@ class ApiMissionRepository implements MissionRepository {
       final Response<dynamic> response = await _dio.get<dynamic>(
         '/api/v1/missions',
       );
-      final List<Mission> missions = (response.data as List)
-          .cast<Map<String, dynamic>>()
-          .map(Mission.fromJson)
-          .toList();
+      final List<Mission> missions = <Mission>[];
+      for (final Map<String, dynamic> entry
+          in (response.data as List).cast<Map<String, dynamic>>()) {
+        missions.add(await _hydrateMission(Mission.fromJson(entry)));
+      }
       return Result<List<Mission>>.success(missions);
     } on DioException catch (e) {
       return failureFromDioException<List<Mission>>(e);
@@ -44,7 +45,7 @@ class ApiMissionRepository implements MissionRepository {
         '/api/v1/missions/$id',
       );
       return Result<Mission>.success(
-        Mission.fromJson(response.data as Map<String, dynamic>),
+        await _hydrateMission(Mission.fromJson(_jsonMap(response.data))),
       );
     } on DioException catch (e) {
       return failureFromDioException<Mission>(e);
@@ -79,6 +80,69 @@ class ApiMissionRepository implements MissionRepository {
       );
     } on DioException catch (e) {
       return failureFromDioException<MissionSubmissionResult>(e);
+    }
+  }
+
+  Future<Mission> _hydrateMission(Mission mission) async {
+    Mission hydrated = mission;
+    try {
+      final Response<dynamic> detailResponse = await _dio.get<dynamic>(
+        '/api/v1/missions/${mission.id}',
+      );
+      hydrated = Mission.fromJson(_jsonMap(detailResponse.data));
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) {
+        // Keep the list item renderable; the detail screen can retry later.
+      }
+    }
+
+    try {
+      final Response<dynamic> performanceResponse = await _dio.get<dynamic>(
+        '/api/v1/missions/${mission.id}/performance',
+      );
+      hydrated = _applyPerformance(
+        hydrated,
+        _jsonMap(performanceResponse.data),
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) {
+        // No submission yet remains the normal "진행전" state.
+      }
+    }
+
+    return hydrated;
+  }
+
+  Mission _applyPerformance(Mission mission, Map<String, dynamic> json) {
+    final List<String> photoUrls = <String>[
+      if (json['proofImageUrl'] != null) json['proofImageUrl'].toString(),
+    ];
+    return mission.copyWith(
+      status: _statusFromPerformance(
+        json['status']?.toString(),
+        mission.confirmationMethod,
+      ),
+      photoUrls: photoUrls.isEmpty ? mission.photoUrls : photoUrls,
+    );
+  }
+
+  MissionStatus _statusFromPerformance(
+    String? status,
+    ConfirmationMethod confirmationMethod,
+  ) {
+    switch (status?.toUpperCase()) {
+      case 'ACCEPTED':
+        return MissionStatus.completed;
+      case 'REJECTED':
+        return MissionStatus.rejected;
+      case 'PENDING':
+        return switch (confirmationMethod) {
+          ConfirmationMethod.childSelf => MissionStatus.completed,
+          ConfirmationMethod.parentApproval => MissionStatus.reviewing,
+          ConfirmationMethod.aiAuto => MissionStatus.reviewing,
+        };
+      default:
+        return MissionStatus.pendingCheck;
     }
   }
 
