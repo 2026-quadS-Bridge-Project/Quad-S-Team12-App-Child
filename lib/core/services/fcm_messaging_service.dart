@@ -36,13 +36,20 @@ class FcmMessage {
 
   factory FcmMessage.fromRemoteMessage(RemoteMessage message) {
     final Map<String, dynamic> data = message.data;
-    final String? entityId = (data['missionId'] as String?) ??
-        (data['reportId'] as String?) ??
-        (data['scheduleId'] as String?);
+    final String? entityId =
+        _dataString(data, 'missionId') ??
+        _dataString(data, 'reportId') ??
+        _dataString(data, 'scheduleId');
     return FcmMessage(
-      type: data['type'] as String? ?? 'unknown',
-      deeplink: data['deeplink'] as String? ?? '/child-home',
-      notificationId: data['notificationId'] as String?,
+      type:
+          _dataString(data, 'type') ??
+          _dataString(data, 'notificationType') ??
+          'unknown',
+      deeplink:
+          _dataString(data, 'deeplink') ??
+          _dataString(data, 'targetRoute') ??
+          '/child-home',
+      notificationId: _dataString(data, 'notificationId'),
       entityId: entityId,
       title: message.notification?.title,
       body: message.notification?.body,
@@ -106,8 +113,7 @@ class MockFcmMessagingService implements FcmMessagingService {
       const Stream<FcmMessage>.empty();
 
   @override
-  Stream<FcmMessage> get onMessageOpenedApp =>
-      const Stream<FcmMessage>.empty();
+  Stream<FcmMessage> get onMessageOpenedApp => const Stream<FcmMessage>.empty();
 
   @override
   Future<FcmMessage?> getInitialMessage() async => null;
@@ -118,12 +124,8 @@ class ApiFcmMessagingService implements FcmMessagingService {
 
   @override
   Future<bool> requestPermission() async {
-    final NotificationSettings settings =
-        await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    final NotificationSettings settings = await FirebaseMessaging.instance
+        .requestPermission(alert: true, badge: true, sound: true);
     return settings.authorizationStatus == AuthorizationStatus.authorized ||
         settings.authorizationStatus == AuthorizationStatus.provisional;
   }
@@ -145,9 +147,15 @@ class ApiFcmMessagingService implements FcmMessagingService {
 
   @override
   Future<FcmMessage?> getInitialMessage() async {
-    final RemoteMessage? msg =
-        await FirebaseMessaging.instance.getInitialMessage();
+    final RemoteMessage? msg = await FirebaseMessaging.instance
+        .getInitialMessage();
     if (msg == null) return null;
     return FcmMessage.fromRemoteMessage(msg);
   }
+}
+
+String? _dataString(Map<String, dynamic> data, String key) {
+  final Object? value = data[key];
+  final String? stringValue = value?.toString();
+  return stringValue == null || stringValue.isEmpty ? null : stringValue;
 }

@@ -1,3 +1,4 @@
+import 'package:bridge_k/core/services/fcm_messaging_service.dart';
 import 'package:bridge_k/features/auth/data/models/auth_token.dart';
 import 'package:bridge_k/features/mission/data/mock/mission_mock.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
@@ -10,6 +11,7 @@ import 'package:bridge_k/features/time_confirm/data/mock/time_confirm_mock.dart'
 import 'package:bridge_k/features/time_confirm/data/models/time_confirm_data.dart';
 import 'package:bridge_k/features/time_setup/data/mock/time_schedule_mock.dart';
 import 'package:bridge_k/features/time_setup/data/models/time_schedule.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -216,6 +218,26 @@ void main() {
 
       expect(fromPayload.type, NotificationType.missionRejected);
       expect(fromPayload.deeplink, '/child-home/mission/22');
+    });
+  });
+
+  group('FcmMessage JSON payload', () {
+    test('uses backend targetRoute when deeplink is absent', () {
+      final FcmMessage message = FcmMessage.fromRemoteMessage(
+        const RemoteMessage(
+          data: <String, dynamic>{
+            'notificationType': 'MISSION_CREATED',
+            'notificationId': 'n-2',
+            'missionId': '21',
+            'targetRoute': '/child-home/mission/21',
+          },
+        ),
+      );
+
+      expect(message.type, 'MISSION_CREATED');
+      expect(message.notificationId, 'n-2');
+      expect(message.entityId, '21');
+      expect(message.deeplink, '/child-home/mission/21');
     });
   });
 
