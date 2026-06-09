@@ -2,6 +2,7 @@ import 'package:bridge_k/features/auth/data/models/auth_token.dart';
 import 'package:bridge_k/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/mock_auth_repository.dart';
+import 'package:bridge_k/core/auth/auth_session.dart';
 import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/listeners/mock_mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
@@ -99,6 +100,65 @@ void main() {
           fail('fetchCurrentSchedule should succeed in mock mode');
       }
     });
+
+    test(
+      'api fetchCurrentSchedule excludes reward pool from legacy policy total',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        await AuthSession.saveLogin(username: 'child', memberId: '22');
+
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/children/22/policies') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'totalAvailableTime': 720,
+                          'accumulatedRewardTime': 120,
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  if (options.path == '/api/v1/schedules/routines') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: const <Map<String, dynamic>>[],
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'unexpected ${options.method} ${options.path}',
+                    ),
+                  );
+                },
+          ),
+        );
+
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<TimeSchedule?> result = await repo.fetchCurrentSchedule();
+
+        switch (result) {
+          case Success<TimeSchedule?>(:final TimeSchedule? data):
+            expect(data, isNotNull);
+            expect(data!.monthlyBudgetMinutes, 600);
+            expect(data.weeklyTotalCapMinutes, 600);
+          case Failure<TimeSchedule?>():
+            fail('fetchCurrentSchedule should parse policy fallback');
+        }
+      },
+    );
 
     test('saveSchedule returns Success', () async {
       final TimeSetupRepository repo = MockTimeSetupRepository();

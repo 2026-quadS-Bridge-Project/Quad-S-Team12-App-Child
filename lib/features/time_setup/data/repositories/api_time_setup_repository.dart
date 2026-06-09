@@ -94,9 +94,10 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
 
     final int baseTime = _intValue(data['baseTime']);
     final int totalAvailableTime = _intValue(data['totalAvailableTime']);
+    final int accumulatedRewardTime = _intValue(data['accumulatedRewardTime']);
     final int monthlyBudgetMinutes = baseTime > 0
         ? baseTime
-        : totalAvailableTime;
+        : totalAvailableTime - accumulatedRewardTime;
     if (monthlyBudgetMinutes <= 0) {
       return null;
     }
