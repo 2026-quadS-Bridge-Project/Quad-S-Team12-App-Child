@@ -85,7 +85,7 @@ class _ChildHomePageState extends State<ChildHomePage>
       }
       setState(() {
         _timeSnapshot = snapshot;
-        _hasSchedule = snapshot != null && snapshot.totalMinutes > 0;
+        _hasSchedule = snapshot != null;
         _remainingSeconds = remainingSeconds;
         _appliedExpiryBlock = false;
         if (snapshot == null) {
@@ -149,14 +149,11 @@ class _ChildHomePageState extends State<ChildHomePage>
           daily['totalAvailableMinutes'],
           fallback: baseMinutes + extendedMinutes,
         );
-        if (totalMinutes <= 0) {
-          return null;
-        }
         return _HomeTimeSnapshot(
           dateKey: dateKey,
           baseMinutes: _intValue(daily['baseMinutes']),
           bonusMinutes: await _fetchRewardPoolMinutes(),
-          totalMinutes: totalMinutes,
+          totalMinutes: totalMinutes < 0 ? 0 : totalMinutes,
         );
       }
     } on DioException catch (e) {

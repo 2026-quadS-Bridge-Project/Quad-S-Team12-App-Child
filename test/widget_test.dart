@@ -170,6 +170,66 @@ void main() {
     expect(find.text('00:30'), findsOneWidget);
   });
 
+  testWidgets('child home keeps zero-minute daily schedule as spent time', (
+    WidgetTester tester,
+  ) async {
+    await AuthSession.saveLogin(username: 'child', memberId: '22');
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          if (options.path == '/api/v1/schedules/daily') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'isSuccess': true,
+                  'data': <String, dynamic>{
+                    'targetDate': '2026-06-09',
+                    'baseMinutes': 0,
+                    'extendedMinutes': 0,
+                    'totalAvailableMinutes': 0,
+                  },
+                },
+              ),
+            );
+            return;
+          }
+          if (options.path == '/api/v1/children/22/policies') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'isSuccess': true,
+                  'data': <String, dynamic>{'accumulatedRewardTime': 0},
+                },
+              ),
+            );
+            return;
+          }
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              message: 'unexpected ${options.method} ${options.path}',
+            ),
+          );
+        },
+      ),
+    );
+    addTearDown(() => dio.close(force: true));
+
+    await tester.pumpWidget(MaterialApp(home: ChildHomePage(dio: dio)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(find.text('남은시간'), findsOneWidget);
+    expect(find.text('보너스시간'), findsOneWidget);
+    expect(find.text('00:00'), findsNWidgets(2));
+    expect(find.text('아직 등록된 시간 계획이 없어요.'), findsNothing);
+  });
+
   testWidgets(
     'child home does not fall back to monthly policy when daily schedule is missing',
     (WidgetTester tester) async {

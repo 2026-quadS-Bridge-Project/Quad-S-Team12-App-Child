@@ -54,10 +54,6 @@ class AppBlockerService : AccessibilityService() {
 
         fun configureScreenTime(context: Context, trackerId: String, allocatedSeconds: Int): Boolean {
             if (trackerId.isBlank() || allocatedSeconds < 0) return false
-            if (allocatedSeconds == 0) {
-                clearScreenTime(context)
-                return true
-            }
 
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val previousTrackerId = prefs.getString(KEY_TRACKER_ID, null)
@@ -105,7 +101,7 @@ class AppBlockerService : AccessibilityService() {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val trackerId = prefs.getString(KEY_TRACKER_ID, null)
             val allocatedSeconds = prefs.getInt(KEY_ALLOCATED_SECONDS, 0)
-            return !trackerId.isNullOrBlank() && allocatedSeconds > 0
+            return !trackerId.isNullOrBlank() && allocatedSeconds >= 0
         }
 
         private fun remainingSeconds(context: Context): Int {
