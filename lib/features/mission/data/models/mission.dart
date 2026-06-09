@@ -30,6 +30,10 @@ class MissionSubmissionResult {
   MissionStatus statusFor(ConfirmationMethod confirmationMethod) {
     final MissionStatus? submittedStatus = status;
     if (submittedStatus != null) {
+      if (submittedStatus == MissionStatus.reviewing &&
+          confirmationMethod == ConfirmationMethod.childSelf) {
+        return MissionStatus.completed;
+      }
       return submittedStatus;
     }
     switch (confirmationMethod) {

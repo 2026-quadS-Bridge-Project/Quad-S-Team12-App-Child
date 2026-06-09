@@ -88,6 +88,10 @@ void main() {
         pending.statusFor(ConfirmationMethod.aiAuto),
         MissionStatus.reviewing,
       );
+      expect(
+        pending.statusFor(ConfirmationMethod.childSelf),
+        MissionStatus.completed,
+      );
 
       final MissionSubmissionResult rejected = MissionSubmissionResult.fromJson(
         <String, dynamic>{
