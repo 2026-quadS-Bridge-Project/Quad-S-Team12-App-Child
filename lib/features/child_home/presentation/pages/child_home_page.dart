@@ -94,7 +94,7 @@ class _ChildHomePageState extends State<ChildHomePage>
       });
       if (snapshot == null) {
         _countdownTimer?.cancel();
-        unawaited(DeviceBlockController.instance.setBlocked(false));
+        unawaited(DeviceBlockController.instance.clearScreenTime());
         return;
       }
       unawaited(_refreshBlockerPermissionPrompt());
@@ -111,7 +111,7 @@ class _ChildHomePageState extends State<ChildHomePage>
         _remainingSeconds = 0;
         _showBlockerPermissionPrompt = false;
       });
-      unawaited(DeviceBlockController.instance.setBlocked(false));
+      unawaited(DeviceBlockController.instance.clearScreenTime());
     } on FormatException catch (e) {
       debugPrint('Child home time parse failed: ${e.message}');
     }

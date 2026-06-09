@@ -108,6 +108,18 @@ class DeviceBlockController {
     }
   }
 
+  Future<bool> clearScreenTime() async {
+    if (!_isSupportedPlatform) return false;
+    try {
+      final bool? ok = await _channel.invokeMethod<bool>('clearScreenTime');
+      return ok ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// Drives blocking from the child's remaining screen time: blocks when
   /// [remainingMinutes] is at or below zero, lifts it otherwise.
   ///

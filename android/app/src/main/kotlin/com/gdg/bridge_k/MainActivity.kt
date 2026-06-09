@@ -49,6 +49,9 @@ class MainActivity : FlutterActivity() {
                     "remainingScreenTimeSeconds" -> {
                         result.success(AppBlockerService.remainingScreenTimeSeconds(this))
                     }
+                    "clearScreenTime" -> {
+                        result.success(AppBlockerService.clearScreenTime(this))
+                    }
                     else -> result.notImplemented()
                 }
             }

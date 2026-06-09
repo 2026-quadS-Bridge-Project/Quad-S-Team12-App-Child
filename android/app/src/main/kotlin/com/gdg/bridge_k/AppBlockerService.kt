@@ -54,6 +54,10 @@ class AppBlockerService : AccessibilityService() {
 
         fun configureScreenTime(context: Context, trackerId: String, allocatedSeconds: Int): Boolean {
             if (trackerId.isBlank() || allocatedSeconds < 0) return false
+            if (allocatedSeconds == 0) {
+                clearScreenTime(context)
+                return true
+            }
 
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val previousTrackerId = prefs.getString(KEY_TRACKER_ID, null)
@@ -75,6 +79,19 @@ class AppBlockerService : AccessibilityService() {
             }
             editor.apply()
             maybeActivateBlockingIfExpired(context)
+            context.sendBroadcast(Intent(ACTION_TRACKER_CONFIGURED).setPackage(context.packageName))
+            return true
+        }
+
+        fun clearScreenTime(context: Context): Boolean {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_TRACKER_ID)
+                .remove(KEY_ALLOCATED_SECONDS)
+                .remove(KEY_USED_SECONDS)
+                .remove(KEY_LAST_SCREEN_ON_ELAPSED)
+                .apply()
+            setBlocking(context, false)
             context.sendBroadcast(Intent(ACTION_TRACKER_CONFIGURED).setPackage(context.packageName))
             return true
         }
