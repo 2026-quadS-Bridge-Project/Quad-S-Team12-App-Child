@@ -29,6 +29,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       widget._repository ?? createNotificationRepository();
 
   List<NotificationItem> _notifications = <NotificationItem>[];
+  bool _isPastNotificationsExpanded = false;
 
   @override
   void initState() {
@@ -60,24 +61,26 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final String route =
         item.deeplink ?? childNotificationFallbackRoute(item.type);
     final GoRouter router = GoRouter.of(context);
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    final Result<void> result = await _repository.markAsRead(item.id);
-    if (!mounted) {
-      return;
-    }
-    switch (result) {
-      case Success<void>():
-        setState(() {
-          _notifications = _notifications
-              .map(
-                (NotificationItem candidate) => candidate.id == item.id
-                    ? candidate.copyWith(isRead: true)
-                    : candidate,
-              )
-              .toList(growable: false);
-        });
-      case Failure<void>(:final String message):
-        messenger.showSnackBar(SnackBar(content: Text(message)));
+    if (!item.isRead) {
+      final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+      final Result<void> result = await _repository.markAsRead(item.id);
+      if (!mounted) {
+        return;
+      }
+      switch (result) {
+        case Success<void>():
+          setState(() {
+            _notifications = _notifications
+                .map(
+                  (NotificationItem candidate) => candidate.id == item.id
+                      ? candidate.copyWith(isRead: true)
+                      : candidate,
+                )
+                .toList(growable: false);
+          });
+        case Failure<void>(:final String message):
+          messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
     }
     router.push(route);
   }
@@ -151,7 +154,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isEmpty = _notifications.isEmpty;
+    final List<NotificationItem> activeNotifications = _notifications
+        .where((NotificationItem item) => !item.isRead)
+        .toList(growable: false);
+    final List<NotificationItem> pastNotifications = _notifications
+        .where((NotificationItem item) => item.isRead)
+        .toList(growable: false);
+    final bool isEmpty =
+        activeNotifications.isEmpty && pastNotifications.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.gray100,
@@ -188,25 +198,132 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 22),
-                        child: ListView.separated(
+                        child: ListView(
                           padding: EdgeInsets.zero,
-                          itemCount: _notifications.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 15),
-                          itemBuilder: (BuildContext context, int index) {
-                            final NotificationItem item = _notifications[index];
-                            return NotificationCard(
-                              item: item,
-                              onTap: () => _handleCardTap(item),
-                              onDeleteIntent: _showDeleteDialog,
-                            );
-                          },
+                          children: <Widget>[
+                            if (activeNotifications.isEmpty)
+                              const _UnreadEmptyMessage(),
+                            for (
+                              int index = 0;
+                              index < activeNotifications.length;
+                              index++
+                            ) ...<Widget>[
+                              NotificationCard(
+                                item: activeNotifications[index],
+                                onTap: () =>
+                                    _handleCardTap(activeNotifications[index]),
+                                onDeleteIntent: _showDeleteDialog,
+                              ),
+                              if (index < activeNotifications.length - 1)
+                                const SizedBox(height: 15),
+                            ],
+                            if (pastNotifications.isNotEmpty) ...<Widget>[
+                              SizedBox(
+                                height: activeNotifications.isEmpty ? 18 : 24,
+                              ),
+                              _PastNotificationsToggle(
+                                expanded: _isPastNotificationsExpanded,
+                                onTap: () {
+                                  setState(() {
+                                    _isPastNotificationsExpanded =
+                                        !_isPastNotificationsExpanded;
+                                  });
+                                },
+                              ),
+                              if (_isPastNotificationsExpanded) ...<Widget>[
+                                const SizedBox(height: 15),
+                                for (
+                                  int index = 0;
+                                  index < pastNotifications.length;
+                                  index++
+                                ) ...<Widget>[
+                                  NotificationCard(
+                                    item: pastNotifications[index],
+                                    onTap: () => _handleCardTap(
+                                      pastNotifications[index],
+                                    ),
+                                    onDeleteIntent: _showDeleteDialog,
+                                  ),
+                                  if (index < pastNotifications.length - 1)
+                                    const SizedBox(height: 15),
+                                ],
+                              ],
+                            ],
+                          ],
                         ),
                       ),
                     ),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnreadEmptyMessage extends StatelessWidget {
+  const _UnreadEmptyMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      child: Text(
+        '확인하지 않은 알림이 없습니다.',
+        textAlign: TextAlign.center,
+        style: AppTypography.headlineMedium.copyWith(
+          color: AppColors.gray300,
+          decoration: TextDecoration.none,
+        ),
+      ),
+    );
+  }
+}
+
+class _PastNotificationsToggle extends StatelessWidget {
+  const _PastNotificationsToggle({required this.expanded, required this.onTap});
+
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: AppColors.gray500.withValues(alpha: 0.08),
+        highlightColor: AppColors.gray500.withValues(alpha: 0.12),
+        splashColor: AppColors.gray500.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
+        child: SizedBox(
+          height: 46,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                '지난알림 확인하기',
+                style: AppTypography.labelSemiBold.copyWith(
+                  fontSize: 13,
+                  height: 1.429,
+                  letterSpacing: 0,
+                  color: AppColors.gray600,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                expanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 20,
+                color: AppColors.gray500,
+              ),
+            ],
           ),
         ),
       ),
