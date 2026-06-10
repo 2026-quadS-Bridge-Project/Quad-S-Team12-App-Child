@@ -12,12 +12,14 @@ import '../../../../core/auth/auth_session.dart';
 import '../../../../core/config/dio_config.dart';
 import '../../../../core/config/environment.dart';
 import '../../../../core/models/result.dart';
+import '../../../../core/network/api_error.dart';
 import '../../../../core/services/device_block_controller.dart';
 import '../../../../core/services/fcm_bootstrap.dart';
 import '../../../../core/services/fcm_messaging_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/pickers/bridge_time_bottom_sheet.dart';
 import '../../../mission/data/models/mission.dart' as mission_model;
 import '../../../mission/data/repositories/mission_repository.dart';
 import '../../../notifications/data/models/notification_item.dart';
@@ -60,7 +62,7 @@ class _ChildHomePageState extends State<ChildHomePage>
   int _missionRefreshRevision = 0;
   bool _appliedExpiryBlock = false;
   bool _isReadingRemainingSeconds = false;
-  bool _isSettlingUsage = false;
+  bool _isExtendingTime = false;
 
   @override
   void initState() {
@@ -196,7 +198,7 @@ class _ChildHomePageState extends State<ChildHomePage>
         return _HomeTimeSnapshot(
           dateKey: dateKey,
           baseMinutes: _intValue(daily['baseMinutes']),
-          bonusMinutes: await _fetchRewardPoolMinutes(),
+          monthlyRemainingMinutes: await _fetchMonthlyRemainingMinutes(),
           totalMinutes: totalMinutes < 0 ? 0 : totalMinutes,
         );
       }
@@ -210,7 +212,7 @@ class _ChildHomePageState extends State<ChildHomePage>
     return null;
   }
 
-  Future<int> _fetchRewardPoolMinutes() async {
+  Future<int> _fetchMonthlyRemainingMinutes() async {
     final String? memberId = await AuthSession.memberId();
     if (memberId == null || memberId.isEmpty) {
       return 0;
@@ -224,9 +226,14 @@ class _ChildHomePageState extends State<ChildHomePage>
       if (policy == null) {
         return 0;
       }
-      return _intValue(policy['accumulatedRewardTime']);
+      return _intValue(
+        policy['totalAvailableTime'],
+        fallback:
+            _intValue(policy['baseTime']) +
+            _intValue(policy['accumulatedRewardTime']),
+      );
     } on DioException catch (e) {
-      debugPrint('Child home reward pool load failed: ${e.message}');
+      debugPrint('Child home monthly remaining load failed: ${e.message}');
       return 0;
     }
   }
@@ -311,40 +318,6 @@ class _ChildHomePageState extends State<ChildHomePage>
     }
   }
 
-  Future<void> _settleCurrentUsageIfNeeded() async {
-    if (_isSettlingUsage) {
-      return;
-    }
-    final _HomeTimeSnapshot? snapshot = _timeSnapshot;
-    if (snapshot == null || snapshot.totalMinutes <= 0) {
-      return;
-    }
-    _isSettlingUsage = true;
-    try {
-      final String? memberId = await AuthSession.memberId();
-      final String memberKey = memberId ?? 'child';
-      final SharedPreferences preferences =
-          await SharedPreferences.getInstance();
-      if (preferences.getString(_screenTimeSettledDateKey(memberKey)) ==
-          snapshot.dateKey) {
-        return;
-      }
-
-      final bool settled = await _settleUsage(
-        dateKey: snapshot.dateKey,
-        actualUsedMinutes: snapshot.totalMinutes,
-      );
-      if (settled) {
-        await preferences.setString(
-          _screenTimeSettledDateKey(memberKey),
-          snapshot.dateKey,
-        );
-      }
-    } finally {
-      _isSettlingUsage = false;
-    }
-  }
-
   Future<bool> _settleUsage({
     required String dateKey,
     required int actualUsedMinutes,
@@ -408,11 +381,79 @@ class _ChildHomePageState extends State<ChildHomePage>
         return;
       }
       _appliedExpiryBlock = true;
-      unawaited(_settleCurrentUsageIfNeeded());
     }
     unawaited(
       DeviceBlockController.instance.applyForRemainingMinutes(remainingMinutes),
     );
+  }
+
+  Future<void> _handleAddTimePressed() async {
+    final _HomeTimeSnapshot? snapshot = _timeSnapshot;
+    if (snapshot == null || _isExtendingTime) {
+      return;
+    }
+
+    final int monthlyRemainingMinutes = snapshot.monthlyRemainingMinutes;
+    if (monthlyRemainingMinutes <= 0) {
+      _showSnackBar('이번 달 남은 시간이 없어요.');
+      return;
+    }
+
+    final int initialMinutes = monthlyRemainingMinutes >= 30
+        ? 30
+        : monthlyRemainingMinutes;
+    final TimeOfDayPick? pick = await BridgeTimeBottomSheet.show(
+      context,
+      initialHours: initialMinutes ~/ 60,
+      initialMinutes: initialMinutes % 60,
+      maxHours: monthlyRemainingMinutes ~/ 60,
+      minuteStep: 1,
+    );
+    if (!mounted || pick == null) {
+      return;
+    }
+
+    final int extraMinutes = pick.hours * 60 + pick.minutes;
+    if (extraMinutes <= 0) {
+      _showSnackBar('추가할 시간을 선택해 주세요.');
+      return;
+    }
+    if (extraMinutes > monthlyRemainingMinutes) {
+      _showSnackBar('월간 남은시간을 초과할 수 없어요.');
+      return;
+    }
+
+    setState(() {
+      _isExtendingTime = true;
+    });
+    try {
+      await _dio.post<dynamic>(
+        '/api/v1/schedules/extend',
+        data: <String, dynamic>{
+          'targetDate': snapshot.dateKey,
+          'extraMinutes': extraMinutes,
+        },
+      );
+      await _loadHomeTime();
+    } on DioException catch (e) {
+      final Failure<void> failure = failureFromDioException<void>(e);
+      _showSnackBar(failure.message);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExtendingTime = false;
+        });
+      }
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _toggleHasScheduleForDebug() {
@@ -422,7 +463,7 @@ class _ChildHomePageState extends State<ChildHomePage>
         _timeSnapshot = _HomeTimeSnapshot(
           dateKey: _yyyyMmDd(DateTime.now()),
           baseMinutes: 90,
-          bonusMinutes: 30,
+          monthlyRemainingMinutes: 30,
           totalMinutes: 120,
         );
         _remainingSeconds = 120 * 60;
@@ -459,6 +500,8 @@ class _ChildHomePageState extends State<ChildHomePage>
                         missionRepository: widget.missionRepository,
                         onNotificationsChanged: () =>
                             unawaited(_refreshHomeData()),
+                        isExtendingTime: _isExtendingTime,
+                        onAddTimePressed: _handleAddTimePressed,
                         onDebugToggleSchedule: kDebugMode
                             ? _toggleHasScheduleForDebug
                             : null,
@@ -474,6 +517,8 @@ class _ChildHomePageState extends State<ChildHomePage>
                       missionRepository: widget.missionRepository,
                       onNotificationsChanged: () =>
                           unawaited(_refreshHomeData()),
+                      isExtendingTime: _isExtendingTime,
+                      onAddTimePressed: _handleAddTimePressed,
                       onDebugToggleSchedule: kDebugMode
                           ? _toggleHasScheduleForDebug
                           : null,
@@ -490,13 +535,13 @@ class _HomeTimeSnapshot {
   const _HomeTimeSnapshot({
     required this.dateKey,
     required this.baseMinutes,
-    required this.bonusMinutes,
+    required this.monthlyRemainingMinutes,
     required this.totalMinutes,
   });
 
   final String dateKey;
   final int baseMinutes;
-  final int bonusMinutes;
+  final int monthlyRemainingMinutes;
   final int totalMinutes;
 }
 
@@ -559,6 +604,8 @@ class _ChildHomeContent extends StatelessWidget {
     required this.missionRefreshRevision,
     required this.missionRepository,
     required this.onNotificationsChanged,
+    required this.isExtendingTime,
+    required this.onAddTimePressed,
     required this.onDebugToggleSchedule,
   });
 
@@ -570,6 +617,8 @@ class _ChildHomeContent extends StatelessWidget {
   final int missionRefreshRevision;
   final MissionRepository? missionRepository;
   final VoidCallback onNotificationsChanged;
+  final bool isExtendingTime;
+  final VoidCallback onAddTimePressed;
   // Null in release builds — see ChildHomePage build(). Keeps the long-press
   // debug toggle from silently flipping schedule state for end users.
   final VoidCallback? onDebugToggleSchedule;
@@ -611,6 +660,8 @@ class _ChildHomeContent extends StatelessWidget {
                 hasSchedule: hasSchedule,
                 timeSnapshot: timeSnapshot,
                 remainingSeconds: remainingSeconds,
+                isExtendingTime: isExtendingTime,
+                onAddTimePressed: onAddTimePressed,
                 onDebugToggleSchedule: onDebugToggleSchedule,
               ),
               const SizedBox(height: 50),
@@ -748,6 +799,8 @@ class _TodayTimeSection extends StatelessWidget {
     required this.hasSchedule,
     required this.timeSnapshot,
     required this.remainingSeconds,
+    required this.isExtendingTime,
+    required this.onAddTimePressed,
     required this.onDebugToggleSchedule,
   });
 
@@ -755,14 +808,20 @@ class _TodayTimeSection extends StatelessWidget {
   final bool hasSchedule;
   final _HomeTimeSnapshot? timeSnapshot;
   final int remainingSeconds;
+  final bool isExtendingTime;
+  final VoidCallback onAddTimePressed;
   // Null in release builds; long-press becomes a no-op.
   final VoidCallback? onDebugToggleSchedule;
 
   @override
   Widget build(BuildContext context) {
-    // Donut + bonus details only when there's actually a registered schedule.
+    // Donut + time details only when there's actually a registered schedule.
     // All other states fall through to the empty card with a tappable + button.
     final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
+    final bool showAddTimeButton =
+        showDonut &&
+        remainingSeconds <= 0 &&
+        timeSnapshot!.monthlyRemainingMinutes > 0;
 
     return SizedBox(
       height: 223,
@@ -849,8 +908,13 @@ class _TodayTimeSection extends StatelessWidget {
                     color: AppColors.gray300,
                     size: 22,
                   ),
-                if (!hasContent) ...[
-                  const Spacer(),
+                const Spacer(),
+                if (showAddTimeButton)
+                  _AddTimeButton(
+                    isLoading: isExtendingTime,
+                    onPressed: onAddTimePressed,
+                  )
+                else if (!hasContent)
                   Text(
                     '사용 리포트',
                     style: AppTypography.labelSemiBold.copyWith(
@@ -860,7 +924,6 @@ class _TodayTimeSection extends StatelessWidget {
                       letterSpacing: 0.203,
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -889,7 +952,7 @@ class _TodayTimeSection extends StatelessWidget {
                   ],
                 ),
                 // Three card states:
-                // - has schedule: donut + bonus details
+                // - has schedule: donut + time details
                 // - no schedule (normal path): empty-state with tappable + button
                 // - hasContent=false (legacy onboarding path): same empty-state
                 //   so the + button is always reachable.
@@ -904,6 +967,40 @@ class _TodayTimeSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AddTimeButton extends StatelessWidget {
+  const _AddTimeButton({required this.isLoading, required this.onPressed});
+
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle textStyle = AppTypography.labelSemiBold.copyWith(
+      color: AppColors.primary,
+      fontSize: 13,
+      height: 1.2,
+    );
+
+    return TextButton(
+      onPressed: isLoading ? null : onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.primary,
+        disabledBackgroundColor: AppColors.primaryLight,
+        disabledForegroundColor: AppColors.primary,
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+        ),
+        textStyle: textStyle,
+      ),
+      child: Text(isLoading ? '추가 중' : '시간 추가', style: textStyle),
     );
   }
 }
@@ -1037,9 +1134,9 @@ class _TimeDonutChartPainter extends CustomPainter {
     final double remainingProgress = totalSeconds <= 0
         ? 0
         : (remainingSeconds / totalSeconds).clamp(0, 1).toDouble();
-    final double bonusProgress = snapshot.totalMinutes <= 0
+    final double monthlyRemainingProgress = snapshot.totalMinutes <= 0
         ? 0
-        : (snapshot.bonusMinutes / snapshot.totalMinutes)
+        : (snapshot.monthlyRemainingMinutes / snapshot.totalMinutes)
               .clamp(0, 1)
               .toDouble();
 
@@ -1055,7 +1152,7 @@ class _TimeDonutChartPainter extends CustomPainter {
       strokeWidth: 11,
       baseColor: AppColors.gray150,
       progressColor: AppColors.bonusAmber,
-      progress: bonusProgress,
+      progress: monthlyRemainingProgress,
     );
   }
 
@@ -1093,8 +1190,8 @@ class _TimeDetails extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _TimeDetailGroup(
-                label: '보너스시간',
-                value: _formatMinutes(snapshot.bonusMinutes),
+                label: '월간 남은시간',
+                value: _formatMinutes(snapshot.monthlyRemainingMinutes),
                 color: AppColors.bonusAmber,
               ),
             ],
