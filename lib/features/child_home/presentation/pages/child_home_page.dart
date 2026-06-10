@@ -819,9 +819,7 @@ class _TodayTimeSection extends StatelessWidget {
     // All other states fall through to the empty card with a tappable + button.
     final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
     final bool showAddTimeButton =
-        showDonut &&
-        remainingSeconds <= 0 &&
-        timeSnapshot!.monthlyRemainingMinutes > 0;
+        showDonut && timeSnapshot!.monthlyRemainingMinutes > 0;
 
     return SizedBox(
       height: 223,
