@@ -109,13 +109,79 @@ class _MissionInfoPageState extends State<MissionInfoPage>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (BuildContext context, _) {
-          return switch (_controller.step) {
+          final Widget currentView = switch (_controller.step) {
             MissionFlowStep.info => const _InfoView(),
             MissionFlowStep.cameraPrompt => const _CameraPromptView(),
             MissionFlowStep.photoPreview => const _PhotoPreviewView(),
             MissionFlowStep.submitted => const _SubmittedView(),
           };
+          return PopScope(
+            canPop: !_controller.isLoading,
+            child: Stack(
+              children: <Widget>[
+                currentView,
+                if (_controller.isLoading)
+                  const Positioned.fill(child: _MissionSubmitBlockingOverlay()),
+              ],
+            ),
+          );
         },
+      ),
+    );
+  }
+}
+
+class _MissionSubmitBlockingOverlay extends StatelessWidget {
+  const _MissionSubmitBlockingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: const <Widget>[
+        ModalBarrier(dismissible: false, color: Color(0x66000000)),
+        Center(child: _MissionSubmitLoadingPanel()),
+      ],
+    );
+  }
+}
+
+class _MissionSubmitLoadingPanel extends StatelessWidget {
+  const _MissionSubmitLoadingPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: '사진을 제출중입니다.',
+      child: Container(
+        width: 224,
+        height: 118,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              '사진을 제출중입니다.',
+              style: AppTypography.bodySemiBold.copyWith(
+                color: AppColors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -737,7 +803,8 @@ class _PhotoPreviewView extends StatelessWidget {
     final MissionController controller = MissionScope.of(context);
     final Mission mission = controller.mission;
     final int photoCount = controller.capturedPhotos.length;
-    final bool showAddTile = !controller.hasMaxPhotos;
+    final bool isSubmitting = controller.isLoading;
+    final bool showAddTile = !controller.hasMaxPhotos && !isSubmitting;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -780,7 +847,9 @@ class _PhotoPreviewView extends StatelessWidget {
                       for (int i = 0; i < photoCount; i++)
                         BridgePhotoTile(
                           path: controller.capturedPhotos[i],
-                          onDelete: () => controller.removePhoto(i),
+                          onDelete: isSubmitting
+                              ? () {}
+                              : () => controller.removePhoto(i),
                         ),
                       if (showAddTile)
                         BridgeAddPhotoTile(

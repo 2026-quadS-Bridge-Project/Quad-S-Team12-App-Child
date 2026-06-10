@@ -117,6 +117,7 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
   /// channel is delegated to [_approvalListener] (mock fires after 2s; the
   /// api impl will wire WebSocket/SSE later) and is cancelled in [dispose].
   Future<void> submit({bool? aiAutoApprove}) async {
+    if (!canSubmit) return;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -198,6 +199,7 @@ class MissionController extends ChangeNotifier implements AsyncErrorController {
   }
 
   void goBack() {
+    if (_isLoading) return;
     switch (_step) {
       case MissionFlowStep.cameraPrompt:
         _step = MissionFlowStep.info;

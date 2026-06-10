@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bridge_k/core/models/result.dart';
 import 'package:bridge_k/core/services/photo_upload_service.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
@@ -45,6 +47,42 @@ void main() {
     expect(controller.mission.photoUrls, <String>['/tmp/proof.jpg']);
   });
 
+  test('submit exposes loading while photo submission is in flight', () async {
+    final Completer<Result<MissionSubmissionResult>> submitCompleter =
+        Completer<Result<MissionSubmissionResult>>();
+    final MissionController controller = MissionController(
+      missionId: '1',
+      repository: _DelayedSubmissionMissionRepository(submitCompleter),
+      uploadService: const _EchoPhotoUploadService(),
+    );
+    addTearDown(controller.dispose);
+
+    controller.goToCameraPrompt();
+    await controller.addCapturedPhoto('/tmp/proof.jpg');
+    expect(controller.step, MissionFlowStep.photoPreview);
+
+    final Future<void> submission = controller.submit(aiAutoApprove: false);
+
+    expect(controller.isLoading, isTrue);
+    expect(controller.canSubmit, isFalse);
+    controller.goBack();
+    expect(controller.step, MissionFlowStep.photoPreview);
+
+    submitCompleter.complete(
+      Result<MissionSubmissionResult>.success(
+        const MissionSubmissionResult(
+          status: MissionStatus.reviewing,
+          performanceId: '301',
+        ),
+      ),
+    );
+    await submission;
+
+    expect(controller.isLoading, isFalse);
+    expect(controller.mission.performanceId, '301');
+    expect(controller.step, MissionFlowStep.submitted);
+  });
+
   test(
     'api photo upload service preserves local path for multipart submit',
     () async {
@@ -84,6 +122,30 @@ void main() {
     expect(controller.mission.performanceId, '201');
     expect(controller.step, MissionFlowStep.submitted);
   });
+}
+
+class _DelayedSubmissionMissionRepository implements MissionRepository {
+  const _DelayedSubmissionMissionRepository(this.submitCompleter);
+
+  final Completer<Result<MissionSubmissionResult>> submitCompleter;
+
+  @override
+  Future<Result<Mission>> fetchMission(String id) async {
+    return Result<Mission>.failure('미션을 불러오지 못했습니다.');
+  }
+
+  @override
+  Future<Result<List<Mission>>> listMissions() async {
+    return Result<List<Mission>>.success(const <Mission>[]);
+  }
+
+  @override
+  Future<Result<MissionSubmissionResult>> submitMission({
+    required String id,
+    required List<String> photoPaths,
+  }) {
+    return submitCompleter.future;
+  }
 }
 
 class _FailingMissionRepository implements MissionRepository {
