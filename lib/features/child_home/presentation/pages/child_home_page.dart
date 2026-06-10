@@ -13,6 +13,8 @@ import '../../../../core/config/dio_config.dart';
 import '../../../../core/config/environment.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/services/device_block_controller.dart';
+import '../../../../core/services/fcm_bootstrap.dart';
+import '../../../../core/services/fcm_messaging_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -22,11 +24,21 @@ import '../../../notifications/data/models/notification_item.dart';
 import '../../../notifications/data/repositories/notification_repository.dart';
 
 class ChildHomePage extends StatefulWidget {
-  const ChildHomePage({super.key, this.showContent = true, this.dio});
+  const ChildHomePage({
+    super.key,
+    this.showContent = true,
+    this.dio,
+    this.notificationRepository,
+    this.missionRepository,
+  });
 
   final bool showContent;
   @visibleForTesting
   final Dio? dio;
+  @visibleForTesting
+  final NotificationRepository? notificationRepository;
+  @visibleForTesting
+  final MissionRepository? missionRepository;
 
   @override
   State<ChildHomePage> createState() => _ChildHomePageState();
@@ -37,25 +49,28 @@ class _ChildHomePageState extends State<ChildHomePage>
   late final Dio _dio = widget.dio ?? DioConfig.create();
   bool get _ownsDio => widget.dio == null;
   late final NotificationRepository _notificationRepository =
-      createNotificationRepository();
+      widget.notificationRepository ?? createNotificationRepository();
 
   bool _hasSchedule = false;
   bool _hasNotification = false;
   _HomeTimeSnapshot? _timeSnapshot;
   int _remainingSeconds = 0;
   Timer? _countdownTimer;
+  StreamSubscription<FcmMessage>? _notificationRefreshSub;
+  int _missionRefreshRevision = 0;
   bool _appliedExpiryBlock = false;
   bool _isReadingRemainingSeconds = false;
   bool _isSettlingUsage = false;
-  bool _showBlockerPermissionPrompt = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (widget.showContent) {
-      unawaited(_loadHomeTime());
-      unawaited(_loadNotificationIndicator());
+      unawaited(_refreshHomeData(refreshMissions: false));
+      _notificationRefreshSub = FcmBootstrap.notificationRefreshes.listen((_) {
+        unawaited(_refreshHomeData(optimisticUnread: true));
+      });
     }
   }
 
@@ -63,6 +78,7 @@ class _ChildHomePageState extends State<ChildHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
+    unawaited(_notificationRefreshSub?.cancel());
     if (_ownsDio) {
       _dio.close(force: true);
     }
@@ -71,9 +87,30 @@ class _ChildHomePageState extends State<ChildHomePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _timeSnapshot != null) {
-      unawaited(_refreshBlockerPermissionPrompt(syncExpiredBlock: true));
+    if (state != AppLifecycleState.resumed) {
+      return;
     }
+    if (widget.showContent) {
+      unawaited(_refreshHomeData());
+    }
+  }
+
+  Future<void> _refreshHomeData({
+    bool optimisticUnread = false,
+    bool refreshMissions = true,
+  }) async {
+    if (!widget.showContent) {
+      return;
+    }
+    if (refreshMissions && mounted) {
+      setState(() {
+        _missionRefreshRevision += 1;
+      });
+    }
+    await Future.wait<void>(<Future<void>>[
+      _loadHomeTime(),
+      _loadNotificationIndicator(optimisticUnread: optimisticUnread),
+    ]);
   }
 
   Future<void> _loadHomeTime() async {
@@ -90,16 +127,12 @@ class _ChildHomePageState extends State<ChildHomePage>
         _hasSchedule = snapshot != null;
         _remainingSeconds = remainingSeconds;
         _appliedExpiryBlock = false;
-        if (snapshot == null) {
-          _showBlockerPermissionPrompt = false;
-        }
       });
       if (snapshot == null) {
         _countdownTimer?.cancel();
         unawaited(DeviceBlockController.instance.clearScreenTime());
         return;
       }
-      unawaited(_refreshBlockerPermissionPrompt());
       _syncDeviceBlocker();
       _restartCountdown();
     } on DioException catch (e) {
@@ -111,7 +144,6 @@ class _ChildHomePageState extends State<ChildHomePage>
         _hasSchedule = false;
         _timeSnapshot = null;
         _remainingSeconds = 0;
-        _showBlockerPermissionPrompt = false;
       });
       unawaited(DeviceBlockController.instance.clearScreenTime());
     } on FormatException catch (e) {
@@ -119,17 +151,27 @@ class _ChildHomePageState extends State<ChildHomePage>
     }
   }
 
-  Future<void> _loadNotificationIndicator() async {
+  Future<void> _loadNotificationIndicator({
+    bool optimisticUnread = false,
+  }) async {
+    if (optimisticUnread && mounted && !_hasNotification) {
+      setState(() {
+        _hasNotification = true;
+      });
+    }
     final Result<List<NotificationItem>> result = await _notificationRepository
         .listNotifications();
     if (!mounted) {
       return;
     }
-    setState(() {
-      _hasNotification =
-          result is Success<List<NotificationItem>> &&
-          result.data.any((NotificationItem item) => !item.isRead);
-    });
+    switch (result) {
+      case Success<List<NotificationItem>>(:final List<NotificationItem> data):
+        setState(() {
+          _hasNotification = data.any((NotificationItem item) => !item.isRead);
+        });
+      case Failure<List<NotificationItem>>(:final String message):
+        debugPrint('Child home notifications load failed: $message');
+    }
   }
 
   Future<_HomeTimeSnapshot?> _fetchHomeTimeSnapshot() async {
@@ -325,39 +367,6 @@ class _ChildHomePageState extends State<ChildHomePage>
     }
   }
 
-  Future<void> _refreshBlockerPermissionPrompt({
-    bool syncExpiredBlock = false,
-  }) async {
-    if (!DeviceBlockController.instance.isSupported || _timeSnapshot == null) {
-      if (mounted && _showBlockerPermissionPrompt) {
-        setState(() {
-          _showBlockerPermissionPrompt = false;
-        });
-      }
-      return;
-    }
-    final bool hasPermission = await DeviceBlockController.instance
-        .hasPermission();
-    if (!mounted) {
-      return;
-    }
-    final bool canApplyExpiredBlock = hasPermission && _remainingSeconds <= 0;
-    setState(() {
-      _showBlockerPermissionPrompt = !hasPermission;
-      if (canApplyExpiredBlock) {
-        _appliedExpiryBlock = false;
-      }
-    });
-    if (syncExpiredBlock && canApplyExpiredBlock) {
-      _syncDeviceBlocker();
-    }
-  }
-
-  Future<void> _openBlockerPermissionSettings() async {
-    await DeviceBlockController.instance.requestPermission();
-    await _refreshBlockerPermissionPrompt(syncExpiredBlock: true);
-  }
-
   void _restartCountdown() {
     _countdownTimer?.cancel();
     if (_remainingSeconds <= 0) {
@@ -435,20 +444,40 @@ class _ChildHomePageState extends State<ChildHomePage>
             ),
             child: SafeArea(
               bottom: false,
-              child: _ChildHomeContent(
-                hasContent: widget.showContent,
-                hasSchedule: _hasSchedule,
-                hasNotification: _hasNotification,
-                timeSnapshot: _timeSnapshot,
-                remainingSeconds: _remainingSeconds,
-                showBlockerPermissionPrompt: _showBlockerPermissionPrompt,
-                onRequestBlockerPermission: _openBlockerPermissionSettings,
-                onNotificationsChanged: () =>
-                    unawaited(_loadNotificationIndicator()),
-                onDebugToggleSchedule: kDebugMode
-                    ? _toggleHasScheduleForDebug
-                    : null,
-              ),
+              child: widget.showContent
+                  ? RefreshIndicator(
+                      color: AppColors.primary,
+                      triggerMode: RefreshIndicatorTriggerMode.anywhere,
+                      onRefresh: _refreshHomeData,
+                      child: _ChildHomeContent(
+                        hasContent: widget.showContent,
+                        hasSchedule: _hasSchedule,
+                        hasNotification: _hasNotification,
+                        timeSnapshot: _timeSnapshot,
+                        remainingSeconds: _remainingSeconds,
+                        missionRefreshRevision: _missionRefreshRevision,
+                        missionRepository: widget.missionRepository,
+                        onNotificationsChanged: () =>
+                            unawaited(_refreshHomeData()),
+                        onDebugToggleSchedule: kDebugMode
+                            ? _toggleHasScheduleForDebug
+                            : null,
+                      ),
+                    )
+                  : _ChildHomeContent(
+                      hasContent: widget.showContent,
+                      hasSchedule: _hasSchedule,
+                      hasNotification: _hasNotification,
+                      timeSnapshot: _timeSnapshot,
+                      remainingSeconds: _remainingSeconds,
+                      missionRefreshRevision: _missionRefreshRevision,
+                      missionRepository: widget.missionRepository,
+                      onNotificationsChanged: () =>
+                          unawaited(_refreshHomeData()),
+                      onDebugToggleSchedule: kDebugMode
+                          ? _toggleHasScheduleForDebug
+                          : null,
+                    ),
             ),
           ),
         ),
@@ -527,8 +556,8 @@ class _ChildHomeContent extends StatelessWidget {
     required this.hasNotification,
     required this.timeSnapshot,
     required this.remainingSeconds,
-    required this.showBlockerPermissionPrompt,
-    required this.onRequestBlockerPermission,
+    required this.missionRefreshRevision,
+    required this.missionRepository,
     required this.onNotificationsChanged,
     required this.onDebugToggleSchedule,
   });
@@ -538,8 +567,8 @@ class _ChildHomeContent extends StatelessWidget {
   final bool hasNotification;
   final _HomeTimeSnapshot? timeSnapshot;
   final int remainingSeconds;
-  final bool showBlockerPermissionPrompt;
-  final VoidCallback onRequestBlockerPermission;
+  final int missionRefreshRevision;
+  final MissionRepository? missionRepository;
   final VoidCallback onNotificationsChanged;
   // Null in release builds — see ChildHomePage build(). Keeps the long-press
   // debug toggle from silently flipping schedule state for end users.
@@ -555,7 +584,7 @@ class _ChildHomeContent extends StatelessWidget {
 
     return SingleChildScrollView(
       physics: hasContent
-          ? const BouncingScrollPhysics()
+          ? const AlwaysScrollableScrollPhysics()
           : const NeverScrollableScrollPhysics(),
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: visibleHeight),
@@ -582,12 +611,14 @@ class _ChildHomeContent extends StatelessWidget {
                 hasSchedule: hasSchedule,
                 timeSnapshot: timeSnapshot,
                 remainingSeconds: remainingSeconds,
-                showBlockerPermissionPrompt: showBlockerPermissionPrompt,
-                onRequestBlockerPermission: onRequestBlockerPermission,
                 onDebugToggleSchedule: onDebugToggleSchedule,
               ),
               const SizedBox(height: 50),
-              _MissionSection(hasContent: hasContent),
+              _MissionSection(
+                hasContent: hasContent,
+                refreshRevision: missionRefreshRevision,
+                repository: missionRepository,
+              ),
               if (hasContent) const SizedBox(height: AppTokens.sectionGap),
             ],
           ),
@@ -614,38 +645,65 @@ class _TopBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const _MyPageButton(),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () async {
-              await context.push('/child-home/notifications');
-              onNotificationsChanged();
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  size: 30,
-                  color: AppColors.gray900,
-                ),
-                if (hasNotification)
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.destructive,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () async {
+                await context.push('/child-home/notifications');
+                onNotificationsChanged();
+              },
+              hoverColor: AppColors.gray800.withValues(alpha: 0.06),
+              highlightColor: AppColors.gray800.withValues(alpha: 0.10),
+              splashColor: AppColors.gray800.withValues(alpha: 0.12),
+              customBorder: const CircleBorder(),
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: _NotificationIcon(hasUnread: hasNotification),
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NotificationIcon extends StatelessWidget {
+  const _NotificationIcon({required this.hasUnread});
+
+  final bool hasUnread;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Center(
+          child: SvgPicture.asset(
+            'assets/icons/속성 1=알림없음.svg',
+            width: 32,
+            height: 32,
+          ),
+        ),
+        if (hasUnread)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Container(
+              key: const ValueKey('child-home-notification-unread-dot'),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.destructive,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.white, width: 1),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -690,8 +748,6 @@ class _TodayTimeSection extends StatelessWidget {
     required this.hasSchedule,
     required this.timeSnapshot,
     required this.remainingSeconds,
-    required this.showBlockerPermissionPrompt,
-    required this.onRequestBlockerPermission,
     required this.onDebugToggleSchedule,
   });
 
@@ -699,8 +755,6 @@ class _TodayTimeSection extends StatelessWidget {
   final bool hasSchedule;
   final _HomeTimeSnapshot? timeSnapshot;
   final int remainingSeconds;
-  final bool showBlockerPermissionPrompt;
-  final VoidCallback onRequestBlockerPermission;
   // Null in release builds; long-press becomes a no-op.
   final VoidCallback? onDebugToggleSchedule;
 
@@ -711,7 +765,7 @@ class _TodayTimeSection extends StatelessWidget {
     final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
 
     return SizedBox(
-      height: showBlockerPermissionPrompt ? 275 : 223,
+      height: 223,
       child: Stack(
         children: [
           Positioned(
@@ -848,57 +902,7 @@ class _TodayTimeSection extends StatelessWidget {
               ),
             ),
           ),
-          if (showBlockerPermissionPrompt)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 235,
-              child: _BlockerPermissionBanner(
-                onTap: onRequestBlockerPermission,
-              ),
-            ),
         ],
-      ),
-    );
-  }
-}
-
-class _BlockerPermissionBanner extends StatelessWidget {
-  const _BlockerPermissionBanner({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
-        border: Border.all(color: AppColors.primaryLight),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.lock_clock_rounded,
-              size: 20,
-              color: AppColors.primary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '화면 시간 차감을 위해 접근성 권한을 켜주세요.',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.gray700,
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-              ),
-            ),
-            TextButton(onPressed: onTap, child: const Text('설정')),
-          ],
-        ),
       ),
     );
   }
@@ -1143,14 +1147,23 @@ class _TimeDetailGroup extends StatelessWidget {
 }
 
 class _MissionSection extends StatelessWidget {
-  const _MissionSection({required this.hasContent});
+  const _MissionSection({
+    required this.hasContent,
+    required this.refreshRevision,
+    required this.repository,
+  });
 
   final bool hasContent;
+  final int refreshRevision;
+  final MissionRepository? repository;
 
   @override
   Widget build(BuildContext context) {
     if (hasContent) {
-      return const _MissionListSection();
+      return _MissionListSection(
+        refreshRevision: refreshRevision,
+        repository: repository,
+      );
     }
 
     return SizedBox(
@@ -1214,7 +1227,13 @@ class _MissionSection extends StatelessWidget {
 }
 
 class _MissionListSection extends StatefulWidget {
-  const _MissionListSection();
+  const _MissionListSection({
+    required this.refreshRevision,
+    required this.repository,
+  });
+
+  final int refreshRevision;
+  final MissionRepository? repository;
 
   @override
   State<_MissionListSection> createState() => _MissionListSectionState();
@@ -1225,13 +1244,22 @@ class _MissionListSectionState extends State<_MissionListSection> {
   // [_loadMissions] hydrates it from the repo (mock today, HTTP once
   // useMocks flips off). No loading/error UI by design — the repo load fills
   // the (currently instant) async window; an empty list is retained on failure.
-  late final MissionRepository _repository = createMissionRepository();
+  late final MissionRepository _repository =
+      widget.repository ?? createMissionRepository();
   late List<_MissionItemData> _missions = <_MissionItemData>[];
 
   @override
   void initState() {
     super.initState();
     _loadMissions();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MissionListSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshRevision != widget.refreshRevision) {
+      unawaited(_loadMissions());
+    }
   }
 
   Future<void> _loadMissions() async {
@@ -1277,9 +1305,9 @@ class _MissionListSectionState extends State<_MissionListSection> {
     final int totalCount = missions.length;
 
     return SizedBox(
-      height: 520,
       width: double.infinity,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -1342,8 +1370,8 @@ _MissionStatus _statusFromModel(mission_model.MissionStatus status) {
 }
 
 /// Maps a Mission.category to its SVG asset on disk. Falls back to the
-/// generic 루틴 icon when an unknown category arrives, matching the default
-/// from [mission_model.Mission].
+/// generic 기타 icon when an unknown or legacy category arrives, matching the
+/// current parent-app category surface.
 String _iconAssetForCategory(String category) {
   switch (category) {
     case '청소':
@@ -1352,11 +1380,11 @@ String _iconAssetForCategory(String category) {
       return 'assets/icons/학습.svg';
     case '운동':
       return 'assets/icons/운동.svg';
-    case '심부름':
-      return 'assets/icons/심부름.svg';
+    case '기타':
     case '루틴':
+    case '심부름':
     default:
-      return 'assets/icons/루틴.svg';
+      return 'assets/icons/icn/light-bulb.svg';
   }
 }
 
@@ -1388,30 +1416,38 @@ class _MissionCard extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => context.push('/child-home/mission/${data.id}'),
-      child: Container(
-        height: 84,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
-        decoration: BoxDecoration(
-          color: _isCompleted ? AppColors.gray150 : AppColors.white,
-          borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
-        ),
-        child: Row(
-          children: [
-            Opacity(
-              opacity: _isCompleted ? 0.3 : 1,
-              child: SvgPicture.asset(data.iconAsset, width: 48, height: 48),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 84),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _isCompleted ? AppColors.gray150 : AppColors.white,
+            borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
+            child: Row(
+              children: [
+                Opacity(
+                  opacity: _isCompleted ? 0.3 : 1,
+                  child: SvgPicture.asset(
+                    data.iconAsset,
+                    width: 48,
+                    height: 48,
+                  ),
+                ),
+                const SizedBox(width: 19),
+                Expanded(
+                  child: _MissionText(
+                    title: data.title,
+                    rewardText: data.rewardText,
+                    completed: _isCompleted,
+                  ),
+                ),
+                const SizedBox(width: AppTokens.mediumGap),
+                _MissionStatusIcon(status: data.status),
+              ],
             ),
-            const SizedBox(width: 19),
-            Expanded(
-              child: _MissionText(
-                title: data.title,
-                rewardText: data.rewardText,
-                completed: _isCompleted,
-              ),
-            ),
-            _MissionStatusIcon(status: data.status),
-          ],
+          ),
         ),
       ),
     );
@@ -1437,11 +1473,13 @@ class _MissionText extends StatelessWidget {
         : TextDecoration.none;
 
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: AppTypography.bodyMedium.copyWith(
             color: color,
             fontSize: 16,
@@ -1453,6 +1491,8 @@ class _MissionText extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           rewardText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: AppTypography.captionRegular.copyWith(
             color: completed ? AppColors.gray300 : AppColors.gray500,
             fontSize: 12,

@@ -83,12 +83,67 @@ void main() {
 
     expect(appRouter.routeInformationProvider.value.uri.path, '/');
   });
+
+  testWidgets('foreground FCM message emits notification refresh event', (
+    WidgetTester tester,
+  ) async {
+    final _FakeFcmMessagingService messaging = _FakeFcmMessagingService();
+    final List<FcmMessage> refreshes = <FcmMessage>[];
+    final StreamSubscription<FcmMessage> sub = FcmBootstrap
+        .notificationRefreshes
+        .listen(refreshes.add);
+    addTearDown(sub.cancel);
+
+    await tester.pumpWidget(const BridgeKApp());
+    await FcmBootstrap.initialize(
+      messagingService: messaging,
+      deviceRepository: const _NoopDeviceRepository(),
+    );
+
+    messaging.foregroundMessages.add(
+      const FcmMessage(type: 'MISSION_APPROVED', deeplink: '/child-home'),
+    );
+    await tester.pump();
+
+    expect(refreshes, hasLength(1));
+    expect(refreshes.single.type, 'MISSION_APPROVED');
+  });
+
+  testWidgets('opened FCM message emits notification refresh event', (
+    WidgetTester tester,
+  ) async {
+    final _FakeFcmMessagingService messaging = _FakeFcmMessagingService();
+    final List<FcmMessage> refreshes = <FcmMessage>[];
+    final StreamSubscription<FcmMessage> sub = FcmBootstrap
+        .notificationRefreshes
+        .listen(refreshes.add);
+    addTearDown(sub.cancel);
+
+    await tester.pumpWidget(const BridgeKApp());
+    await FcmBootstrap.initialize(
+      messagingService: messaging,
+      deviceRepository: const _NoopDeviceRepository(),
+    );
+
+    messaging.openedMessages.add(
+      const FcmMessage(
+        type: 'MISSION_CREATED',
+        deeplink: 'https://example.com',
+      ),
+    );
+    await tester.pump();
+
+    expect(refreshes, hasLength(1));
+    expect(refreshes.single.type, 'MISSION_CREATED');
+  });
 }
 
 class _FakeFcmMessagingService implements FcmMessagingService {
   _FakeFcmMessagingService({this.initialMessage});
 
   final FcmMessage? initialMessage;
+  final StreamController<FcmMessage> foregroundMessages =
+      StreamController<FcmMessage>.broadcast();
   final StreamController<FcmMessage> openedMessages =
       StreamController<FcmMessage>.broadcast();
 
@@ -99,8 +154,7 @@ class _FakeFcmMessagingService implements FcmMessagingService {
   Future<String?> getToken() async => 'fake-token';
 
   @override
-  Stream<FcmMessage> get onForegroundMessage =>
-      const Stream<FcmMessage>.empty();
+  Stream<FcmMessage> get onForegroundMessage => foregroundMessages.stream;
 
   @override
   Stream<FcmMessage> get onMessageOpenedApp => openedMessages.stream;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,9 +8,19 @@ import 'package:bridge_k/app/router/app_router.dart';
 import 'package:bridge_k/core/auth/auth_session.dart';
 import 'package:bridge_k/core/models/result.dart';
 import 'package:bridge_k/core/services/device_block_controller.dart';
+import 'package:bridge_k/core/services/fcm_bootstrap.dart';
+import 'package:bridge_k/core/services/fcm_messaging_service.dart';
+import 'package:bridge_k/core/widgets/inputs/bridge_photo_tile.dart';
 import 'package:bridge_k/features/child_home/presentation/pages/child_home_page.dart';
+import 'package:bridge_k/features/devices/data/repositories/device_repository.dart';
+import 'package:bridge_k/features/mission/data/models/mission.dart'
+    as mission_model;
+import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart'
+    as mission_repository;
 import 'package:bridge_k/features/mission/presentation/pages/mission_info_page.dart';
 import 'package:bridge_k/features/my_page/presentation/pages/my_page.dart';
+import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
+import 'package:bridge_k/features/notifications/data/repositories/notification_repository.dart';
 import 'package:bridge_k/features/time_setup/data/models/time_schedule.dart';
 import 'package:bridge_k/features/time_setup/data/repositories/time_setup_repository.dart';
 import 'package:bridge_k/features/time_setup/presentation/pages/time_setup_root_page.dart';
@@ -170,6 +182,349 @@ void main() {
     expect(find.text('01:15'), findsOneWidget);
     expect(find.text('보너스시간'), findsOneWidget);
     expect(find.text('00:30'), findsOneWidget);
+  });
+
+  testWidgets(
+    'child home shows notification dot after foreground FCM refresh',
+    (WidgetTester tester) async {
+      await FcmBootstrap.dispose();
+      addTearDown(FcmBootstrap.dispose);
+
+      final _FakeFcmMessagingService messaging = _FakeFcmMessagingService();
+      await FcmBootstrap.initialize(
+        messagingService: messaging,
+        deviceRepository: const _NoopDeviceRepository(),
+      );
+
+      final _MutableNotificationRepository notifications =
+          _MutableNotificationRepository(<NotificationItem>[]);
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/schedules/daily') {
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      response: Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 404,
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    message: 'unexpected ${options.method} ${options.path}',
+                  ),
+                );
+              },
+        ),
+      );
+      addTearDown(() => dio.close(force: true));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChildHomePage(
+            dio: dio,
+            notificationRepository: notifications,
+            missionRepository: _MutableMissionRepository(
+              <mission_model.Mission>[],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('child-home-notification-unread-dot'),
+        ),
+        findsNothing,
+      );
+
+      notifications.items = <NotificationItem>[
+        NotificationItem(
+          id: '17',
+          type: NotificationType.missionCompleted,
+          title: '미션 승인 완료',
+          message: '부모님이 미션을 승인했습니다.',
+          createdAt: DateTime(2026, 6, 10, 12, 30),
+          isRead: false,
+        ),
+      ];
+      messaging.foregroundMessages.add(
+        const FcmMessage(type: 'MISSION_APPROVED', deeplink: '/child-home'),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 10));
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('child-home-notification-unread-dot'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('child home refreshes mission list after foreground FCM', (
+    WidgetTester tester,
+  ) async {
+    await FcmBootstrap.dispose();
+    addTearDown(FcmBootstrap.dispose);
+
+    final _FakeFcmMessagingService messaging = _FakeFcmMessagingService();
+    await FcmBootstrap.initialize(
+      messagingService: messaging,
+      deviceRepository: const _NoopDeviceRepository(),
+    );
+
+    final _MutableMissionRepository missions =
+        _MutableMissionRepository(<mission_model.Mission>[
+          const mission_model.Mission(
+            id: '10',
+            title: '방청소',
+            rewardHours: 1,
+            rewardMinutes: 0,
+            status: mission_model.MissionStatus.pendingCheck,
+            category: '청소',
+          ),
+        ]);
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          if (options.path == '/api/v1/schedules/daily') {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                response: Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 404,
+                ),
+              ),
+            );
+            return;
+          }
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              message: 'unexpected ${options.method} ${options.path}',
+            ),
+          );
+        },
+      ),
+    );
+    addTearDown(() => dio.close(force: true));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildHomePage(
+          dio: dio,
+          notificationRepository: _MutableNotificationRepository(
+            <NotificationItem>[],
+          ),
+          missionRepository: missions,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(find.text('방청소'), findsOneWidget);
+    expect(find.text('공부'), findsNothing);
+
+    missions.items = <mission_model.Mission>[
+      ...missions.items,
+      const mission_model.Mission(
+        id: '11',
+        title: '공부',
+        rewardHours: 1,
+        rewardMinutes: 0,
+        status: mission_model.MissionStatus.pendingCheck,
+        category: '학습',
+      ),
+    ];
+    messaging.foregroundMessages.add(
+      const FcmMessage(type: 'MISSION_CREATED', deeplink: '/child-home'),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(missions.listCalls, greaterThanOrEqualTo(2));
+    expect(find.text('공부'), findsOneWidget);
+  });
+
+  testWidgets('child home mission list scrolls with long backend titles', (
+    WidgetTester tester,
+  ) async {
+    await AuthSession.saveLogin(username: 'child', memberId: '22');
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final List<mission_model.Mission> longMissions = <mission_model.Mission>[
+      for (int index = 0; index < 10; index++)
+        mission_model.Mission(
+          id: '${2000 + index}',
+          title: 'constraint-test-${index.isEven ? 'ETC' : 'EXERCISE'}-200321',
+          rewardHours: index == 0 ? 1 : 0,
+          rewardMinutes: 0,
+          status: index == 0
+              ? mission_model.MissionStatus.completed
+              : mission_model.MissionStatus.pendingCheck,
+          category: index.isEven ? '기타' : '운동',
+        ),
+    ];
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          if (options.path == '/api/v1/schedules/daily') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'targetDate': '2026-06-10',
+                  'baseMinutes': 0,
+                  'extendedMinutes': 60,
+                  'totalAvailableMinutes': 60,
+                },
+              ),
+            );
+            return;
+          }
+          if (options.path == '/api/v1/children/22/policies') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{'accumulatedRewardTime': 60},
+              ),
+            );
+            return;
+          }
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              message: 'unexpected ${options.method} ${options.path}',
+            ),
+          );
+        },
+      ),
+    );
+    addTearDown(() => dio.close(force: true));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildHomePage(
+          dio: dio,
+          notificationRepository: _MutableNotificationRepository(
+            <NotificationItem>[],
+          ),
+          missionRepository: _MutableMissionRepository(longMissions),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('10'), findsOneWidget);
+
+    final Finder lastTitle = find.text('constraint-test-EXERCISE-200321').last;
+    final double beforeDragY = tester.getTopLeft(lastTitle).dy;
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(tester.getTopLeft(lastTitle).dy, lessThan(beforeDragY));
+  });
+
+  testWidgets('child home pull-to-refresh reloads today time', (
+    WidgetTester tester,
+  ) async {
+    await AuthSession.saveLogin(username: 'child', memberId: '22');
+
+    int dailyLoadCount = 0;
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          if (options.path == '/api/v1/schedules/daily') {
+            dailyLoadCount += 1;
+            final int totalMinutes = dailyLoadCount == 1 ? 60 : 90;
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'targetDate': '2026-06-09',
+                  'baseMinutes': totalMinutes,
+                  'extendedMinutes': 0,
+                  'totalAvailableMinutes': totalMinutes,
+                },
+              ),
+            );
+            return;
+          }
+          if (options.path == '/api/v1/children/22/policies') {
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{'accumulatedRewardTime': 0},
+              ),
+            );
+            return;
+          }
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              message: 'unexpected ${options.method} ${options.path}',
+            ),
+          );
+        },
+      ),
+    );
+    addTearDown(() => dio.close(force: true));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildHomePage(
+          dio: dio,
+          notificationRepository: _MutableNotificationRepository(
+            <NotificationItem>[],
+          ),
+          missionRepository: _MutableMissionRepository(
+            <mission_model.Mission>[],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(find.text('01:00'), findsOneWidget);
+
+    final RefreshIndicator refreshIndicator = tester.widget(
+      find.byType(RefreshIndicator),
+    );
+    unawaited(refreshIndicator.onRefresh());
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(dailyLoadCount, greaterThanOrEqualTo(2));
+    expect(find.text('01:30'), findsOneWidget);
   });
 
   testWidgets('child home configures native ledger with child date key', (
@@ -397,7 +752,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.text('화면 시간 차감을 위해 접근성 권한을 켜주세요.'), findsOneWidget);
+      expect(find.text('화면 시간 차감을 위해 접근성 권한을 켜주세요.'), findsNothing);
+      expect(
+        channelCalls.any(
+          (MethodCall call) => call.method == 'requestPermission',
+        ),
+        isTrue,
+      );
       expect(
         channelCalls.any(
           (MethodCall call) =>
@@ -622,7 +983,80 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('미션수행'), findsOneWidget);
+    expect(find.text('미션을 인증할 수 있는 사진을 올려주세요!'), findsOneWidget);
     expect(find.text('사진을 업로드해주세요'), findsOneWidget);
+
+    await tester.tap(find.text('사진을 업로드해주세요'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('앨범에서 선택'), findsOneWidget);
+    expect(find.text('사진 촬영'), findsOneWidget);
+  });
+
+  testWidgets('mission info category options render as one supported row', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: MissionInfoPage(missionId: '5')),
+    );
+    await tester.pumpAndSettle();
+
+    final Offset study = tester.getCenter(find.text('학습'));
+    final Offset exercise = tester.getCenter(find.text('운동'));
+    final Offset cleaning = tester.getCenter(find.text('청소'));
+    final Offset etc = tester.getCenter(find.text('기타'));
+
+    expect(find.text('루틴'), findsNothing);
+    expect(find.text('심부름'), findsNothing);
+
+    expect(exercise.dx, greaterThan(study.dx));
+    expect(cleaning.dx, greaterThan(exercise.dx));
+    expect(etc.dx, greaterThan(cleaning.dx));
+    expect(exercise.dy, closeTo(study.dy, 1));
+    expect(cleaning.dy, closeTo(study.dy, 1));
+    expect(etc.dy, closeTo(study.dy, 1));
+
+    final Offset daily = tester.getCenter(find.text('매일'));
+    final Offset weekly = tester.getCenter(find.text('일주일'));
+    final Offset monthly = tester.getCenter(find.text('한 달'));
+    expect(weekly.dx, greaterThan(daily.dx));
+    expect(monthly.dx, greaterThan(weekly.dx));
+    expect(weekly.dy, closeTo(daily.dy, 1));
+    expect(monthly.dy, closeTo(daily.dy, 1));
+
+    final Offset ai = tester.getCenter(find.text('AI 자동확인'));
+    final Offset child = tester.getCenter(find.text('자녀 확인'));
+    final Offset parent = tester.getCenter(find.text('부모 확인'));
+    expect(child.dx, greaterThan(ai.dx));
+    expect(parent.dx, greaterThan(child.dx));
+    expect(child.dy, closeTo(ai.dy, 1));
+    expect(parent.dy, closeTo(ai.dy, 1));
+  });
+
+  testWidgets('add photo tile keeps mock upload affordance', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 157,
+              height: 156,
+              child: BridgeAddPhotoTile(onTap: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byType(BridgeAddPhotoTile)),
+      const Size(157, 156),
+    );
+    expect(find.byIcon(Icons.add_photo_alternate_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.camera_alt_outlined), findsNothing);
+    expect(find.text('추가 업로드'), findsOneWidget);
   });
 
   testWidgets('child my page renders account details and actions', (
@@ -698,5 +1132,106 @@ class _MissingPolicyTimeSetupRepository implements TimeSetupRepository {
   @override
   Future<Result<void>> saveSchedule(TimeSchedule schedule) async {
     return Result<void>.failure('부모님이 아직 이번 달 시간을 설정하지 않았어요.');
+  }
+}
+
+class _MutableNotificationRepository implements NotificationRepository {
+  _MutableNotificationRepository(this.items);
+
+  List<NotificationItem> items;
+
+  @override
+  Future<Result<List<NotificationItem>>> listNotifications() async {
+    return Result<List<NotificationItem>>.success(
+      List<NotificationItem>.from(items),
+    );
+  }
+
+  @override
+  Future<Result<void>> deleteNotification(String id) async {
+    items.removeWhere((NotificationItem item) => item.id == id);
+    return Result<void>.success(null);
+  }
+
+  @override
+  Future<Result<void>> markAsRead(String id) async {
+    items = <NotificationItem>[
+      for (final NotificationItem item in items)
+        item.id == id ? item.copyWith(isRead: true) : item,
+    ];
+    return Result<void>.success(null);
+  }
+}
+
+class _MutableMissionRepository
+    implements mission_repository.MissionRepository {
+  _MutableMissionRepository(this.items);
+
+  List<mission_model.Mission> items;
+  int listCalls = 0;
+
+  @override
+  Future<Result<mission_model.Mission>> fetchMission(String id) async {
+    return Result<mission_model.Mission>.success(
+      items.firstWhere((mission_model.Mission item) => item.id == id),
+    );
+  }
+
+  @override
+  Future<Result<List<mission_model.Mission>>> listMissions() async {
+    listCalls += 1;
+    return Result<List<mission_model.Mission>>.success(
+      List<mission_model.Mission>.from(items),
+    );
+  }
+
+  @override
+  Future<Result<mission_model.MissionSubmissionResult>> submitMission({
+    required String id,
+    required List<String> photoPaths,
+  }) async {
+    return Result<mission_model.MissionSubmissionResult>.failure(
+      '미션 제출에 실패했습니다.',
+    );
+  }
+}
+
+class _FakeFcmMessagingService implements FcmMessagingService {
+  final StreamController<FcmMessage> foregroundMessages =
+      StreamController<FcmMessage>.broadcast();
+
+  @override
+  Future<FcmMessage?> getInitialMessage() async => null;
+
+  @override
+  Future<String?> getToken() async => 'fake-token';
+
+  @override
+  Stream<FcmMessage> get onForegroundMessage => foregroundMessages.stream;
+
+  @override
+  Stream<FcmMessage> get onMessageOpenedApp => const Stream<FcmMessage>.empty();
+
+  @override
+  Stream<String> get onTokenRefresh => const Stream<String>.empty();
+
+  @override
+  Future<bool> requestPermission() async => true;
+}
+
+class _NoopDeviceRepository implements DeviceRepository {
+  const _NoopDeviceRepository();
+
+  @override
+  Future<Result<String>> registerDevice({
+    required String fcmToken,
+    required String platform,
+  }) async {
+    return Result<String>.success('noop-device');
+  }
+
+  @override
+  Future<Result<void>> unregisterDevice(String deviceId) async {
+    return Result<void>.success(null);
   }
 }

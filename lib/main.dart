@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
 import 'core/config/environment.dart';
+import 'core/services/device_block_controller.dart';
 import 'core/services/fcm_bootstrap.dart';
 import 'firebase_options.dart';
 
@@ -31,14 +32,24 @@ Future<void> main() async {
 
   runApp(const BridgeKApp());
 
-  // Push setup must never block the first frame. In real API mode the app
-  // still needs Firebase/FCM, but simulator/APNs/plugin issues should degrade
-  // to "no push" instead of leaving the user on a white launch screen.
-  if (!currentEnvironment.useMocks) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(_requestDeviceBlockPermissionOnLaunch());
+
+    // Push setup must never block the first frame. In real API mode the app
+    // still needs Firebase/FCM, but simulator/APNs/plugin issues should degrade
+    // to "no push" instead of leaving the user on a white launch screen.
+    if (!currentEnvironment.useMocks) {
       unawaited(_initializePush());
-    });
+    }
+  });
+}
+
+Future<void> _requestDeviceBlockPermissionOnLaunch() async {
+  final DeviceBlockController blocker = DeviceBlockController.instance;
+  if (!blocker.isSupported || await blocker.hasPermission()) {
+    return;
   }
+  await blocker.requestPermission();
 }
 
 Future<void> _initializePush() async {
