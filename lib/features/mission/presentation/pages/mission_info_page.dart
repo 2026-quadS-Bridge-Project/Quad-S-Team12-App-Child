@@ -469,12 +469,7 @@ class _MissionInfoSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: AppTypography.headlineSemiBold.copyWith(
-        fontSize: 16,
-        height: 1.445,
-        letterSpacing: 0,
-        color: AppColors.gray800,
-      ),
+      style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
     );
   }
 }
@@ -500,19 +495,18 @@ class _SelectableChip extends StatelessWidget {
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.gray200,
           ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
         ),
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               label,
-              style: AppTypography.headlineMedium.copyWith(
-                fontSize: 16,
-                height: 1.445,
-                letterSpacing: 0,
-                color: textColor,
-              ),
+              style:
+                  (selected
+                          ? AppTypography.bodySemiBold
+                          : AppTypography.bodyMedium)
+                      .copyWith(color: textColor),
               maxLines: 1,
               overflow: TextOverflow.visible,
               textAlign: TextAlign.center,
