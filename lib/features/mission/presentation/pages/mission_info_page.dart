@@ -152,35 +152,39 @@ class _MissionSubmitLoadingPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
-      label: '사진을 제출중입니다.',
-      child: Container(
-        width: 224,
-        height: 118,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.4,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+      label: '업로드 중',
+      child: Material(
+        type: MaterialType.transparency,
+        child: Container(
+          width: 118,
+          height: 118,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              '사진을 제출중입니다.',
-              style: AppTypography.bodySemiBold.copyWith(
-                color: AppColors.white,
+              const SizedBox(height: 14),
+              Text(
+                '업로드 중',
+                style: AppTypography.bodySemiBold.copyWith(
+                  color: AppColors.black,
+                  decoration: TextDecoration.none,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
