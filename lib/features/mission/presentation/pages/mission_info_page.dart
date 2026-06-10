@@ -14,6 +14,57 @@ import '../../data/models/mission.dart';
 import '../../state/mission_controller.dart';
 import '../../state/mission_scope.dart';
 
+enum _MissionPhotoSource { gallery, camera }
+
+Future<void> _pickAndAttachMissionPhoto(
+  BuildContext context,
+  MissionController controller,
+) async {
+  final String? path = await _pickMissionPhoto(context);
+  if (path != null) {
+    await controller.addCapturedPhoto(path);
+  }
+}
+
+Future<String?> _pickMissionPhoto(BuildContext context) async {
+  final _MissionPhotoSource? source =
+      await showModalBottomSheet<_MissionPhotoSource>(
+        context: context,
+        backgroundColor: AppColors.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (BuildContext context) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text('앨범에서 선택', style: AppTypography.bodyMedium),
+                  onTap: () =>
+                      Navigator.of(context).pop(_MissionPhotoSource.gallery),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: Text('사진 촬영', style: AppTypography.bodyMedium),
+                  onTap: () =>
+                      Navigator.of(context).pop(_MissionPhotoSource.camera),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+  if (source == null) {
+    return null;
+  }
+  return switch (source) {
+    _MissionPhotoSource.gallery => CameraService.pickPhotoFromGallery(),
+    _MissionPhotoSource.camera => CameraService.capturePhoto(),
+  };
+}
+
 /// Root page for the mission detail / perform flow.
 ///
 /// Owns the [MissionController] and mounts a [MissionScope] so descendant
@@ -151,9 +202,10 @@ class _InfoTabsBar extends StatelessWidget {
   }
 }
 
-/// "미션정보" tab — 5 labeled rows per Figma 746-11392.
+/// "미션정보" tab — labeled rows per Figma 746-11392.
 ///
-/// 카테고리 / 리셋주기 / 확인방식 are horizontal selectable chip rows;
+/// 카테고리는 부모앱 미션 등록과 같은 3-column grid, 리셋주기 / 확인방식은
+/// horizontal selectable chip rows;
 /// 지급시간 inlines a split-color reward chip on the right; 상세설명 is a
 /// read-only textarea.
 class _MissionInfoTab extends StatelessWidget {
@@ -172,19 +224,21 @@ class _MissionInfoTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _ChipRowSection(
+          _EvenChipRowSection(
             label: '카테고리',
             options: mission.categoryOptions,
             selected: mission.category,
+            spacing: AppTokens.smallGap,
           ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
-          _ChipRowSection(
+          const _MissionInfoSeparator(),
+          _FixedChipRowSection(
             label: '리셋주기',
             options: mission.resetCycleOptions,
             selected: mission.resetCycle,
+            widths: const <double>[74, 88, 74],
           ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
-          _ChipRowSection(
+          const _MissionInfoSeparator(),
+          _EvenChipRowSection(
             label: '확인방식',
             options: <String>[
               for (final ConfirmationMethod m
@@ -193,13 +247,13 @@ class _MissionInfoTab extends StatelessWidget {
             ],
             selected: mission.confirmationMethod.label,
           ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
+          const _MissionInfoSeparator(),
           _PayoutTimeSection(
             label: '지급시간',
             hours: mission.rewardHours,
             minutes: mission.rewardMinutes,
           ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
+          const _MissionInfoSeparator(),
           _DescriptionSection(label: '상세설명', value: detail),
         ],
       ),
@@ -255,36 +309,41 @@ class _MissionPerformInfoTab extends StatelessWidget {
   }
 }
 
-/// Section: 18 SemiBold label + horizontal selectable chip row.
-class _ChipRowSection extends StatelessWidget {
-  const _ChipRowSection({
+/// Section: fixed-width parent-app style chip row.
+class _FixedChipRowSection extends StatelessWidget {
+  const _FixedChipRowSection({
     required this.label,
     required this.options,
     required this.selected,
+    required this.widths,
   });
 
   final String label;
   final List<String> options;
   final String selected;
+  final List<double> widths;
+
+  static const double _spacing = 14;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: AppTypography.headlineSemiBold.copyWith(
-            color: AppColors.gray800,
-          ),
-        ),
-        const SizedBox(height: AppTokens.smallGap),
-        Wrap(
-          spacing: AppTokens.smallGap,
-          runSpacing: AppTokens.smallGap,
+        _MissionInfoSectionLabel(label),
+        const SizedBox(height: 18),
+        Row(
           children: <Widget>[
-            for (final String option in options)
-              _SelectableChip(label: option, selected: option == selected),
+            for (int i = 0; i < options.length; i++) ...<Widget>[
+              if (i > 0) const SizedBox(width: _spacing),
+              SizedBox(
+                width: i < widths.length ? widths[i] : widths.last,
+                child: _SelectableChip(
+                  label: options[i],
+                  selected: options[i] == selected,
+                ),
+              ),
+            ],
           ],
         ),
       ],
@@ -292,8 +351,66 @@ class _ChipRowSection extends StatelessWidget {
   }
 }
 
+/// Section: equal-width parent-app style chip row.
+class _EvenChipRowSection extends StatelessWidget {
+  const _EvenChipRowSection({
+    required this.label,
+    required this.options,
+    required this.selected,
+    this.spacing = 14,
+  });
+
+  final String label;
+  final List<String> options;
+  final String selected;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _MissionInfoSectionLabel(label),
+        const SizedBox(height: 18),
+        Row(
+          children: <Widget>[
+            for (int i = 0; i < options.length; i++) ...<Widget>[
+              if (i > 0) SizedBox(width: spacing),
+              Expanded(
+                child: _SelectableChip(
+                  label: options[i],
+                  selected: options[i] == selected,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MissionInfoSectionLabel extends StatelessWidget {
+  const _MissionInfoSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: AppTypography.headlineSemiBold.copyWith(
+        fontSize: 16,
+        height: 1.445,
+        letterSpacing: 0,
+        color: AppColors.gray800,
+      ),
+    );
+  }
+}
+
 /// Single chip with selected (primary bg + white text) and unselected
-/// (gray100 bg + gray200 border) variants per Figma 746-11392.
+/// parent-app variants.
 class _SelectableChip extends StatelessWidget {
   const _SelectableChip({required this.label, required this.selected});
 
@@ -302,22 +419,51 @@ class _SelectableChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = selected ? AppColors.primary : AppColors.gray100;
+    final Color bg = selected ? AppColors.primary : AppColors.gray050;
     final Color textColor = selected ? AppColors.white : AppColors.gray600;
-    final TextStyle textStyle = selected
-        ? AppTypography.bodySemiBold.copyWith(color: textColor)
-        : AppTypography.bodyMedium.copyWith(color: textColor);
 
-    return Container(
+    return SizedBox(
       height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: AppTokens.mediumGap),
-      decoration: BoxDecoration(
-        color: bg,
-        border: selected ? null : Border.all(color: AppColors.gray200),
-        borderRadius: BorderRadius.circular(AppTokens.mediumGap),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.gray200,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              label,
+              style: AppTypography.headlineMedium.copyWith(
+                fontSize: 16,
+                height: 1.445,
+                letterSpacing: 0,
+                color: textColor,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.visible,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
       ),
-      alignment: Alignment.center,
-      child: Text(label, style: textStyle),
+    );
+  }
+}
+
+class _MissionInfoSeparator extends StatelessWidget {
+  const _MissionInfoSeparator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 6,
+      margin: const EdgeInsets.symmetric(vertical: 26),
+      color: AppColors.gray150,
     );
   }
 }
@@ -339,14 +485,7 @@ class _PayoutTimeSection extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        Expanded(
-          child: Text(
-            label,
-            style: AppTypography.headlineSemiBold.copyWith(
-              color: AppColors.gray800,
-            ),
-          ),
-        ),
+        Expanded(child: _MissionInfoSectionLabel(label)),
         _RewardChip(hours: hours, minutes: minutes),
       ],
     );
@@ -365,12 +504,7 @@ class _DescriptionSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: AppTypography.headlineSemiBold.copyWith(
-            color: AppColors.gray800,
-          ),
-        ),
+        _MissionInfoSectionLabel(label),
         const SizedBox(height: AppTokens.smallGap),
         Container(
           width: double.infinity,
@@ -493,10 +627,7 @@ class _CameraPromptView extends StatelessWidget {
               const SizedBox(height: _uploadSectionTopGap),
               _CameraCTA(
                 onTap: () async {
-                  final String? path = await CameraService.capturePhoto();
-                  if (path != null) {
-                    await controller.addCapturedPhoto(path);
-                  }
+                  await _pickAndAttachMissionPhoto(context, controller);
                 },
               ),
               const Spacer(),
@@ -654,11 +785,10 @@ class _PhotoPreviewView extends StatelessWidget {
                       if (showAddTile)
                         BridgeAddPhotoTile(
                           onTap: () async {
-                            final String? path =
-                                await CameraService.capturePhoto();
-                            if (path != null) {
-                              await controller.addCapturedPhoto(path);
-                            }
+                            await _pickAndAttachMissionPhoto(
+                              context,
+                              controller,
+                            );
                           },
                         ),
                     ],

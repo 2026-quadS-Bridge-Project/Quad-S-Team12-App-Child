@@ -116,20 +116,42 @@ MissionStatus? _missionStatusFromNameOrNull(String? name) {
   return null;
 }
 
+const List<String> missionDefaultCategoryOptions = <String>[
+  '학습',
+  '운동',
+  '청소',
+  '기타',
+];
+
 /// Backend mission category enum (`CLEANING`/`STUDY`/…) → the Korean label the
-/// child app stores in [Mission.category]. Lookup is case-insensitive. Values
-/// already in Korean (mock fixtures, contract shape) pass through unchanged.
+/// child app stores in [Mission.category]. Lookup is case-insensitive.
+/// Legacy/unsupported categories are folded into `기타` so the child app stays
+/// aligned with the parent app's current four-category surface.
 String _categoryFromWire(Object? raw) {
-  if (raw == null) return '루틴';
+  if (raw == null) return '기타';
   const Map<String, String> map = <String, String>{
     'CLEANING': '청소',
     'STUDY': '학습',
     'EXERCISE': '운동',
-    'ERRAND': '심부름',
-    'ROUTINE': '루틴',
+    'ERRAND': '기타',
+    'ROUTINE': '기타',
+    'ETC': '기타',
   };
-  final String value = raw.toString();
-  return map[value.toUpperCase()] ?? value;
+  final String value = raw.toString().trim();
+  final String category = map[value.toUpperCase()] ?? value;
+  return missionDefaultCategoryOptions.contains(category) ? category : '기타';
+}
+
+List<String> _categoryOptionsFromWire(Object? raw) {
+  if (raw is! List) return missionDefaultCategoryOptions;
+  final Set<String> decoded = <String>{
+    for (final Object? item in raw) _categoryFromWire(item),
+  };
+  final List<String> options = <String>[
+    for (final String option in missionDefaultCategoryOptions)
+      if (decoded.contains(option)) option,
+  ];
+  return options.isEmpty ? missionDefaultCategoryOptions : options;
 }
 
 /// Backend reset-cycle enum (`DAILY`/`WEEKLY`/`MONTHLY`) → Korean label.
@@ -145,13 +167,9 @@ String _resetCycleFromWire(Object? raw) {
   return map[value.toUpperCase()] ?? value;
 }
 
-/// Resolve [ConfirmationMethod] from either the child app's own field
-/// (`confirmationMethod`: `aiAuto`/`childSelf`/`parentApproval`) or the
-/// backend mission's `verificationType` enum (`AI`/`CHILD`/`PARENT`).
-ConfirmationMethod _confirmationFromWire(Map<String, dynamic> json) {
-  final Object? verificationType = json['verificationType'];
-  if (verificationType != null) {
-    switch (verificationType.toString().toUpperCase()) {
+ConfirmationMethod _confirmationMethodFromWire(Object? raw) {
+  if (raw != null) {
+    switch (raw.toString().toUpperCase()) {
       case 'AI':
         return ConfirmationMethod.aiAuto;
       case 'CHILD':
@@ -160,7 +178,16 @@ ConfirmationMethod _confirmationFromWire(Map<String, dynamic> json) {
         return ConfirmationMethod.parentApproval;
     }
   }
-  return ConfirmationMethod.fromName(json['confirmationMethod']?.toString());
+  return ConfirmationMethod.fromName(raw?.toString());
+}
+
+/// Resolve [ConfirmationMethod] from either the child app's own field
+/// (`confirmationMethod`: `aiAuto`/`childSelf`/`parentApproval`) or the
+/// backend mission's `verificationType` enum (`AI`/`CHILD`/`PARENT`).
+ConfirmationMethod _confirmationFromWire(Map<String, dynamic> json) {
+  return json['verificationType'] != null
+      ? _confirmationMethodFromWire(json['verificationType'])
+      : _confirmationMethodFromWire(json['confirmationMethod']);
 }
 
 class Mission {
@@ -175,8 +202,8 @@ class Mission {
     this.photoUrls = const [],
     this.performanceId,
     this.deadline,
-    this.category = '루틴',
-    this.categoryOptions = const <String>['루틴', '학습', '운동', '청소', '심부름'],
+    this.category = '기타',
+    this.categoryOptions = missionDefaultCategoryOptions,
     this.resetCycle = '매일',
     this.resetCycleOptions = const <String>['매일', '일주일', '한 달'],
     this.confirmationMethod = ConfirmationMethod.childSelf,
@@ -186,7 +213,7 @@ class Mission {
       ConfirmationMethod.parentApproval,
     ],
     this.payoutTime,
-    this.captureInstruction = '깨끗해진 방을 찍어서 올려주세요!',
+    this.captureInstruction = '미션을 인증할 수 있는 사진을 올려주세요!',
   });
 
   final String id;
@@ -200,8 +227,8 @@ class Mission {
   final String? performanceId;
   final DateTime? deadline;
 
-  /// Mission info section fields (frame 746-11392 — 5 chip rows).
-  /// Each `*Options` list drives the horizontal selectable-chip row;
+  /// Mission info section fields (frame 746-11392).
+  /// Each `*Options` list drives the read-only selectable controls;
   /// the singular field (e.g. [category]) marks the selected option.
   final String category;
   final List<String> categoryOptions;
@@ -213,7 +240,8 @@ class Mission {
 
   /// Mission-specific copy shown above the camera CTA on frames
   /// 426-18960 / 426-19035 / 426-18995 / 426-18974. Defaults to the
-  /// Figma verbatim string for the `방청소 하기` mission.
+  /// Generic copy used when the backend does not provide mission-specific
+  /// photo guidance.
   final String captureInstruction;
 
   /// Display string for the "지급시간" row. Falls back to a derived label
@@ -267,21 +295,19 @@ class Mission {
         : const <String>[];
 
     final dynamic rawCategoryOptions = json['categoryOptions'];
-    final List<String> categoryOptions = rawCategoryOptions is List
-        ? rawCategoryOptions.map((dynamic e) => e.toString()).toList()
-        : const <String>['루틴', '학습', '운동', '청소', '심부름'];
+    final List<String> categoryOptions = _categoryOptionsFromWire(
+      rawCategoryOptions,
+    );
 
     final dynamic rawResetCycleOptions = json['resetCycleOptions'];
     final List<String> resetCycleOptions = rawResetCycleOptions is List
-        ? rawResetCycleOptions.map((dynamic e) => e.toString()).toList()
+        ? rawResetCycleOptions.map(_resetCycleFromWire).toList()
         : const <String>['매일', '일주일', '한 달'];
 
     final dynamic rawConfirmationOptions = json['confirmationMethodOptions'];
     final List<ConfirmationMethod> confirmationOptions =
         rawConfirmationOptions is List
-        ? rawConfirmationOptions
-              .map((dynamic e) => ConfirmationMethod.fromName(e?.toString()))
-              .toList()
+        ? rawConfirmationOptions.map(_confirmationMethodFromWire).toList()
         : const <ConfirmationMethod>[
             ConfirmationMethod.aiAuto,
             ConfirmationMethod.childSelf,
@@ -323,8 +349,8 @@ class Mission {
       confirmationMethod: _confirmationFromWire(json),
       confirmationMethodOptions: confirmationOptions,
       payoutTime: json['payoutTime']?.toString(),
-      captureInstruction: (json['captureInstruction'] ?? '깨끗해진 방을 찍어서 올려주세요!')
-          .toString(),
+      captureInstruction:
+          (json['captureInstruction'] ?? '미션을 인증할 수 있는 사진을 올려주세요!').toString(),
     );
   }
 

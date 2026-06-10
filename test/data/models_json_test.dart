@@ -47,6 +47,16 @@ void main() {
       );
     });
 
+    test('uses generic photo instruction when backend omits it', () {
+      final Mission decoded = Mission.fromJson(<String, dynamic>{
+        'missionId': 42,
+        'title': '국어공부',
+        'reward': 30,
+      });
+
+      expect(decoded.captureInstruction, '미션을 인증할 수 있는 사진을 올려주세요!');
+    });
+
     test('every mock mission preserves status + confirmation method', () {
       for (final Mission m in MissionMock.all) {
         final Mission decoded = Mission.fromJson(m.toJson());
@@ -89,6 +99,49 @@ void main() {
       expect(decoded.resetCycle, '일주일');
       expect(decoded.confirmationMethod, ConfirmationMethod.parentApproval);
       expect(decoded.rewardMinutes, 45);
+    });
+
+    test('parses backend mission option enums for info screen', () {
+      final Mission decoded = Mission.fromJson(<String, dynamic>{
+        'missionId': 8,
+        'title': '자유 미션',
+        'category': 'ETC',
+        'categoryOptions': <String>[
+          'ROUTINE',
+          'STUDY',
+          'EXERCISE',
+          'CLEANING',
+          'ERRAND',
+          'ETC',
+        ],
+        'resetCycleOptions': <String>['DAILY', 'WEEKLY', 'MONTHLY'],
+        'confirmationMethodOptions': <String>['AI', 'CHILD', 'PARENT'],
+        'reward': 10,
+      });
+
+      expect(decoded.category, '기타');
+      expect(decoded.categoryOptions, <String>['학습', '운동', '청소', '기타']);
+      expect(decoded.resetCycleOptions, <String>['매일', '일주일', '한 달']);
+      expect(decoded.confirmationMethodOptions, <ConfirmationMethod>[
+        ConfirmationMethod.aiAuto,
+        ConfirmationMethod.childSelf,
+        ConfirmationMethod.parentApproval,
+      ]);
+    });
+
+    test('folds legacy mission categories into etc', () {
+      expect(
+        Mission.fromJson(<String, dynamic>{'category': 'ROUTINE'}).category,
+        '기타',
+      );
+      expect(
+        Mission.fromJson(<String, dynamic>{'category': 'ERRAND'}).category,
+        '기타',
+      );
+      expect(
+        Mission.fromJson(<String, dynamic>{'category': '심부름'}).category,
+        '기타',
+      );
     });
 
     test('submission response prefers backend performance status', () {
