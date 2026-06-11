@@ -103,24 +103,30 @@ class _TimeConfirmPageState extends State<TimeConfirmPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BridgeAppBar(title: '시간설정'),
       body: SafeArea(
-        child: ListenableBuilder(
-          listenable: _controller,
-          builder: (context, _) {
-            final TimeConfirmData data = _controller.data;
-            if (_controller.isLoading && data.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (data.isEmpty) {
-              return _EmptyVariant(onClose: _handleConfirm);
-            }
-            return _FilledVariant(
-              data: data,
-              onConfirm: _handleConfirm,
-              onRequestEdit: _isRequesting ? null : _showRequestSnack,
-            );
-          },
+        child: Column(
+          children: [
+            const BridgeAppBar(title: '시간설정'),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: _controller,
+                builder: (context, _) {
+                  final TimeConfirmData data = _controller.data;
+                  if (_controller.isLoading && data.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (data.isEmpty) {
+                    return _EmptyVariant(onClose: _handleConfirm);
+                  }
+                  return _FilledVariant(
+                    data: data,
+                    onConfirm: _handleConfirm,
+                    onRequestEdit: _isRequesting ? null : _showRequestSnack,
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

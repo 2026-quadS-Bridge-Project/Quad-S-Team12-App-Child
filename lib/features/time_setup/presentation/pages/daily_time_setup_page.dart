@@ -51,97 +51,106 @@ class DailyTimeSetupPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(
-        title: '시간 설정',
-        onBack: () => controller.goToStep(TimeSetupStep.weeklyTotal),
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 16),
-                      Center(
-                        child: BridgeStepperPills(
-                          currentStep: controller.stepIndex,
-                          totalSteps: 3,
+        child: Column(
+          children: [
+            BridgeAppBar(
+              title: '시간 설정',
+              onBack: () => controller.goToStep(TimeSetupStep.weeklyTotal),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 16),
+                            Center(
+                              child: BridgeStepperPills(
+                                currentStep: controller.stepIndex,
+                                totalSteps: 3,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Title + description verbatim per Figma 08b
+                            // 695-9743 and 08c 695:10675.
+                            const BridgeStepHeader(
+                              step: 3,
+                              title: '이번주 일간 시간 설정',
+                              description:
+                                  '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
+                            ),
+                            const SizedBox(height: 16),
+                            // Week label (`2월 1주차`) + read-only weekly total.
+                            // The actual week index comes from the controller so
+                            // v2 renders `2주차`.
+                            Text(
+                              '$monthLabel ${controller.currentWeekIndex + 1}주차',
+                              style: AppTypography.heading2Bold.copyWith(
+                                color: AppColors.gray800,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            BridgeTotalTimeCard(
+                              variant: BridgeTotalTimeCardVariant.compact,
+                              hours: controller.currentWeekTotalHours,
+                              minutes:
+                                  controller.currentWeekTotalRemainderMinutes,
+                            ),
+                            const SizedBox(height: _sectionGap),
+                            _DailyAllocationSection(
+                              allocations: schedule.dayAllocations,
+                              isOver: controller.isOverBudget,
+                              isUnder: controller.isUnderBudget,
+                              showErrorFrame: controller.showPastWeekDim,
+                              showAddButton: !controller.showPastWeekDim,
+                              showScheduleAction: controller.showPastWeekDim,
+                              showUsageReportAction: controller.showPastWeekDim,
+                              onSchedulePressed: () => _openSchedulePreview(
+                                context,
+                                schedule: controller.showPastWeekDim
+                                    ? controller.previousWeek ?? schedule
+                                    : schedule,
+                                isPastReference: controller.showPastWeekDim,
+                              ),
+                              onUsageReportPressed: () =>
+                                  _openUsageReportPreview(
+                                    context,
+                                    previousWeek: controller.previousWeek,
+                                  ),
+                              onAdd: () => _openSheet(context),
+                              onEdit: (DayAllocation allocation) =>
+                                  _openSheet(context, initial: allocation),
+                            ),
+                            if (deltaBanner != null) ...[
+                              const SizedBox(height: 12),
+                              deltaBanner,
+                            ],
+                            const SizedBox(height: 24),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      // Title + description verbatim per Figma 08b
-                      // 695-9743 and 08c 695:10675.
-                      const BridgeStepHeader(
-                        step: 3,
-                        title: '이번주 일간 시간 설정',
-                        description: '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
-                      ),
-                      const SizedBox(height: 16),
-                      // Week label (`2월 1주차`) + read-only weekly total.
-                      // The actual week index comes from the controller so
-                      // v2 renders `2주차`.
-                      Text(
-                        '$monthLabel ${controller.currentWeekIndex + 1}주차',
-                        style: AppTypography.heading2Bold.copyWith(
-                          color: AppColors.gray800,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      BridgeTotalTimeCard(
-                        variant: BridgeTotalTimeCardVariant.compact,
-                        hours: controller.currentWeekTotalHours,
-                        minutes: controller.currentWeekTotalRemainderMinutes,
-                      ),
-                      const SizedBox(height: _sectionGap),
-                      _DailyAllocationSection(
-                        allocations: schedule.dayAllocations,
-                        isOver: controller.isOverBudget,
-                        isUnder: controller.isUnderBudget,
-                        showErrorFrame: controller.showPastWeekDim,
-                        showAddButton: !controller.showPastWeekDim,
-                        showScheduleAction: controller.showPastWeekDim,
-                        showUsageReportAction: controller.showPastWeekDim,
-                        onSchedulePressed: () => _openSchedulePreview(
-                          context,
-                          schedule: controller.showPastWeekDim
-                              ? controller.previousWeek ?? schedule
-                              : schedule,
-                          isPastReference: controller.showPastWeekDim,
-                        ),
-                        onUsageReportPressed: () => _openUsageReportPreview(
-                          context,
-                          previousWeek: controller.previousWeek,
-                        ),
-                        onAdd: () => _openSheet(context),
-                        onEdit: (DayAllocation allocation) =>
-                            _openSheet(context, initial: allocation),
-                      ),
-                      if (deltaBanner != null) ...[
-                        const SizedBox(height: 12),
-                        deltaBanner,
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                    ),
+                    BridgeButton(
+                      label: '다음',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: controller.isAllocationBalanced
+                          ? () => controller.goToStep(TimeSetupStep.review)
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-              BridgeButton(
-                label: '다음',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: controller.isAllocationBalanced
-                    ? () => controller.goToStep(TimeSetupStep.review)
-                    : null,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -676,7 +676,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 10));
 
     expect(find.text('남은시간'), findsOneWidget);
-    expect(find.text('보너스시간'), findsOneWidget);
+    expect(find.text('월간 남은시간'), findsOneWidget);
     expect(find.text('00:00'), findsNWidgets(2));
     expect(find.text('아직 등록된 시간 계획이 없어요.'), findsNothing);
   });
@@ -790,6 +790,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await AuthSession.saveLogin(username: 'child', memberId: '22');
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    await preferences.setString('child_home.screen_time.22.date', '2026-06-08');
+    await preferences.setInt('child_home.screen_time.22.allocated_minutes', 75);
     DeviceBlockController.debugIsSupportedOverride = true;
     const MethodChannel channel = MethodChannel(
       'com.gdg.bridge_k/device_block',

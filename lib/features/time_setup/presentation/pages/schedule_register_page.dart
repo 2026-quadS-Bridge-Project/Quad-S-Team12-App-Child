@@ -63,17 +63,23 @@ class ScheduleRegisterPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(
-        title: '',
-        // Per Figma 08a 695:8924 Interactions: back chevron pops to the
-        // entry explainer (`695:8850`). The root-level `PopScope` mirrors
-        // this on Android system back from step 1.
-        onBack: () => controller.goToStep(TimeSetupStep.intro),
-      ),
       body: SafeArea(
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (context, _) => _buildBody(context, controller),
+        child: Column(
+          children: [
+            BridgeAppBar(
+              title: '',
+              // Per Figma 08a 695:8924 Interactions: back chevron pops to the
+              // entry explainer (`695:8850`). The root-level `PopScope` mirrors
+              // this on Android system back from step 1.
+              onBack: () => controller.goToStep(TimeSetupStep.intro),
+            ),
+            Expanded(
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) => _buildBody(context, controller),
+              ),
+            ),
+          ],
         ),
       ),
     );

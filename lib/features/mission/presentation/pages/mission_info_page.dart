@@ -212,28 +212,34 @@ class _InfoView extends StatelessWidget {
       length: 2,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: BridgeAppBar(title: mission.title),
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.pageHorizontal,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                const SizedBox(height: AppTokens.smallGap),
-                const _InfoTabsBar(),
-                Expanded(
-                  child: TabBarView(
-                    physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              BridgeAppBar(title: mission.title),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.pageHorizontal,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      _MissionInfoTab(mission: mission),
-                      _MissionPerformInfoTab(controller: controller),
+                      const SizedBox(height: AppTokens.smallGap),
+                      const _InfoTabsBar(),
+                      Expanded(
+                        child: TabBarView(
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: <Widget>[
+                            _MissionInfoTab(mission: mission),
+                            _MissionPerformInfoTab(controller: controller),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -665,52 +671,58 @@ class _CameraPromptView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(title: '미션수행', onBack: controller.goBack),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const SizedBox(height: AppTokens.pageTop),
-              Text(
-                mission.title,
-                style: AppTypography.heading1SemiBold,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
-              Text(
-                mission.captureInstruction,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray600,
+        child: Column(
+          children: [
+            BridgeAppBar(title: '미션수행', onBack: controller.goBack),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: _uploadSectionTopGap),
-              _CameraCTA(
-                onTap: () async {
-                  await _pickAndAttachMissionPhoto(context, controller);
-                },
-              ),
-              const Spacer(),
-              Text(
-                '최대 4장까지 올릴 수 있어요',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.gray600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: AppTokens.pageTop),
+                    Text(
+                      mission.title,
+                      style: AppTypography.heading1SemiBold,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.itemGap),
+                    Text(
+                      mission.captureInstruction,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: _uploadSectionTopGap),
+                    _CameraCTA(
+                      onTap: () async {
+                        await _pickAndAttachMissionPhoto(context, controller);
+                      },
+                    ),
+                    const Spacer(),
+                    Text(
+                      '최대 4장까지 올릴 수 있어요',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.mediumGap),
+                    // Disabled until at least one photo is captured. Once
+                    // [addPhoto] runs, the controller auto-transitions to
+                    // photoPreview so this view won't typically re-render
+                    // with an enabled submit — that lives in _PhotoPreviewView.
+                    const BridgeButton(label: '제출', onPressed: null),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppTokens.mediumGap),
-              // Disabled until at least one photo is captured. Once
-              // [addPhoto] runs, the controller auto-transitions to
-              // photoPreview so this view won't typically re-render
-              // with an enabled submit — that lives in _PhotoPreviewView.
-              const BridgeButton(label: '제출', onPressed: null),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -806,86 +818,92 @@ class _PhotoPreviewView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(title: '미션수행', onBack: controller.goBack),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const SizedBox(height: AppTokens.pageTop),
-              Text(
-                mission.title,
-                style: AppTypography.heading1SemiBold.copyWith(
-                  color: AppColors.textPrimary,
+        child: Column(
+          children: [
+            BridgeAppBar(title: '미션수행', onBack: controller.goBack),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
-              Text(
-                mission.captureInstruction,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: _photoGridTopGap),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: AppTokens.photoGap,
-                    crossAxisSpacing: AppTokens.photoGap,
-                    childAspectRatio: 157 / 156,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: <Widget>[
-                      for (int i = 0; i < photoCount; i++)
-                        BridgePhotoTile(
-                          path: controller.capturedPhotos[i],
-                          onDelete: isSubmitting
-                              ? () {}
-                              : () => controller.removePhoto(i),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: AppTokens.pageTop),
+                    Text(
+                      mission.title,
+                      style: AppTypography.heading1SemiBold.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.itemGap),
+                    Text(
+                      mission.captureInstruction,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: _photoGridTopGap),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: GridView.count(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: AppTokens.photoGap,
+                          crossAxisSpacing: AppTokens.photoGap,
+                          childAspectRatio: 157 / 156,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: <Widget>[
+                            for (int i = 0; i < photoCount; i++)
+                              BridgePhotoTile(
+                                path: controller.capturedPhotos[i],
+                                onDelete: isSubmitting
+                                    ? () {}
+                                    : () => controller.removePhoto(i),
+                              ),
+                            if (showAddTile)
+                              BridgeAddPhotoTile(
+                                onTap: () async {
+                                  await _pickAndAttachMissionPhoto(
+                                    context,
+                                    controller,
+                                  );
+                                },
+                              ),
+                          ],
                         ),
-                      if (showAddTile)
-                        BridgeAddPhotoTile(
-                          onTap: () async {
-                            await _pickAndAttachMissionPhoto(
-                              context,
-                              controller,
-                            );
-                          },
-                        ),
-                    ],
-                  ),
+                      ),
+                    ),
+                    Text(
+                      '최대 4장까지 올릴 수 있어요',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.mediumGap),
+                    BridgeButton(
+                      label: '제출',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      // submit() is now async; canSubmit also gates on isLoading so
+                      // a double-tap can't kick off two in-flight submissions.
+                      onPressed: controller.canSubmit
+                          ? () {
+                              controller.submit();
+                            }
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-              Text(
-                '최대 4장까지 올릴 수 있어요',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.gray600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.mediumGap),
-              BridgeButton(
-                label: '제출',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                // submit() is now async; canSubmit also gates on isLoading so
-                // a double-tap can't kick off two in-flight submissions.
-                onPressed: controller.canSubmit
-                    ? () {
-                        controller.submit();
-                      }
-                    : null,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -924,56 +942,66 @@ class _SubmittedView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BridgeAppBar(title: '미션수행', showBack: false),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const SizedBox(height: _contentTopGap),
-              Text(
-                title,
-                style: AppTypography.heading1SemiBold.copyWith(
-                  color: AppColors.textPrimary,
+        child: Column(
+          children: [
+            const BridgeAppBar(title: '미션수행', showBack: false),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
-              Text(
-                subtitle,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: _contentTopGap),
+                    Text(
+                      title,
+                      style: AppTypography.heading1SemiBold.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.itemGap),
+                    Text(
+                      subtitle,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
+                    Center(
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.check,
+                            color: AppColors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    BridgeButton(
+                      label: '홈으로',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: () => context.go('/child-home'),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 40),
-              Center(
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.check, color: AppColors.white, size: 20),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              BridgeButton(
-                label: '홈으로',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: () => context.go('/child-home'),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

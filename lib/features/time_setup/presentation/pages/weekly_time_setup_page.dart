@@ -59,106 +59,114 @@ class WeeklyTimeSetupPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(
-        title: '시간 설정',
-        onBack: () => controller.goToStep(TimeSetupStep.scheduleRegister),
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            _horizontalPadding,
-            _topPadding,
-            _horizontalPadding,
-            _bottomPadding,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const Center(
-                child: BridgeStepperPills(currentStep: 2, totalSteps: 3),
-              ),
-              const SizedBox(height: 24),
-              // Title + description verbatim per Figma 08a 695:11870 nodes
-              // 695:11880 (title) and 695:11883 (2-line description). Spec
-              // 09-time-v2 §v2-3 overrides the description for v2 next-week
-              // edits, branched via [controller.mode] above.
-              BridgeStepHeader(
-                step: 2,
-                title: '주별 시간 분배',
-                description: headerDescription,
-              ),
-              const SizedBox(height: 24),
-              BridgeTotalTimeCard(
-                variant: BridgeTotalTimeCardVariant.compact,
-                title: totalTimeTitle,
-                hours: totalTime.hours,
-                minutes: totalTime.minutes,
-              ),
-              const SizedBox(height: _sectionGap),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    '주별 시간 분배',
-                    style: AppTypography.heading2Bold.copyWith(
-                      color: AppColors.gray800,
-                    ),
-                  ),
-                  _AutoCalculateButton(
-                    onPressed: canAutoCalculate
-                        ? () => _handleAutoCalculate(controller)
-                        : null,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // v2 (next-week edit): row 1 is the locked historical `1주차`
-              // sourced from `controller.previousWeek` (opacity 0.2, not
-              // tappable). Rows 2/3/4 are editable. v1 (initial setup):
-              // all 4 rows editable. Per spec §v2-3, row count is always 4.
-              if (controller.showPastWeekDim) ...<Widget>[
-                BridgeWeekRow(
-                  weekLabel: '1주차',
-                  hours: _pastWeekTime(controller).hours,
-                  minutes: _pastWeekTime(controller).minutes,
-                  onTap: null,
-                  isPast: true,
+        child: Column(
+          children: [
+            BridgeAppBar(
+              title: '시간 설정',
+              onBack: () => controller.goToStep(TimeSetupStep.scheduleRegister),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  _horizontalPadding,
+                  _topPadding,
+                  _horizontalPadding,
+                  _bottomPadding,
                 ),
-                const SizedBox(height: _weekRowGap),
-                for (int i = 1; i < 4; i++) ...<Widget>[
-                  BridgeWeekRow(
-                    weekLabel: '${i + 1}주차',
-                    hours: _weekTime(controller, i).hours,
-                    minutes: _weekTime(controller, i).minutes,
-                    onTap: () =>
-                        _openTimeSheet(context, controller, weekIndex: i),
-                  ),
-                  if (i < 3) const SizedBox(height: _weekRowGap),
-                ],
-              ] else
-                for (int i = 0; i < 4; i++) ...<Widget>[
-                  BridgeWeekRow(
-                    weekLabel: '${i + 1}주차',
-                    hours: _weekTime(controller, i).hours,
-                    minutes: _weekTime(controller, i).minutes,
-                    onTap: () =>
-                        _openTimeSheet(context, controller, weekIndex: i),
-                  ),
-                  if (i < 3) const SizedBox(height: _weekRowGap),
-                ],
-              const Spacer(),
-              BridgeButton(
-                label: '다음',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: canProceed
-                    ? () => controller.goToStep(TimeSetupStep.dailyAllocation)
-                    : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const Center(
+                      child: BridgeStepperPills(currentStep: 2, totalSteps: 3),
+                    ),
+                    const SizedBox(height: 24),
+                    // Title + description verbatim per Figma 08a 695:11870 nodes
+                    // 695:11880 (title) and 695:11883 (2-line description). Spec
+                    // 09-time-v2 §v2-3 overrides the description for v2 next-week
+                    // edits, branched via [controller.mode] above.
+                    BridgeStepHeader(
+                      step: 2,
+                      title: '주별 시간 분배',
+                      description: headerDescription,
+                    ),
+                    const SizedBox(height: 24),
+                    BridgeTotalTimeCard(
+                      variant: BridgeTotalTimeCardVariant.compact,
+                      title: totalTimeTitle,
+                      hours: totalTime.hours,
+                      minutes: totalTime.minutes,
+                    ),
+                    const SizedBox(height: _sectionGap),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          '주별 시간 분배',
+                          style: AppTypography.heading2Bold.copyWith(
+                            color: AppColors.gray800,
+                          ),
+                        ),
+                        _AutoCalculateButton(
+                          onPressed: canAutoCalculate
+                              ? () => _handleAutoCalculate(controller)
+                              : null,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // v2 (next-week edit): row 1 is the locked historical `1주차`
+                    // sourced from `controller.previousWeek` (opacity 0.2, not
+                    // tappable). Rows 2/3/4 are editable. v1 (initial setup):
+                    // all 4 rows editable. Per spec §v2-3, row count is always 4.
+                    if (controller.showPastWeekDim) ...<Widget>[
+                      BridgeWeekRow(
+                        weekLabel: '1주차',
+                        hours: _pastWeekTime(controller).hours,
+                        minutes: _pastWeekTime(controller).minutes,
+                        onTap: null,
+                        isPast: true,
+                      ),
+                      const SizedBox(height: _weekRowGap),
+                      for (int i = 1; i < 4; i++) ...<Widget>[
+                        BridgeWeekRow(
+                          weekLabel: '${i + 1}주차',
+                          hours: _weekTime(controller, i).hours,
+                          minutes: _weekTime(controller, i).minutes,
+                          onTap: () =>
+                              _openTimeSheet(context, controller, weekIndex: i),
+                        ),
+                        if (i < 3) const SizedBox(height: _weekRowGap),
+                      ],
+                    ] else
+                      for (int i = 0; i < 4; i++) ...<Widget>[
+                        BridgeWeekRow(
+                          weekLabel: '${i + 1}주차',
+                          hours: _weekTime(controller, i).hours,
+                          minutes: _weekTime(controller, i).minutes,
+                          onTap: () =>
+                              _openTimeSheet(context, controller, weekIndex: i),
+                        ),
+                        if (i < 3) const SizedBox(height: _weekRowGap),
+                      ],
+                    const Spacer(),
+                    BridgeButton(
+                      label: '다음',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: canProceed
+                          ? () => controller.goToStep(
+                              TimeSetupStep.dailyAllocation,
+                            )
+                          : null,
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

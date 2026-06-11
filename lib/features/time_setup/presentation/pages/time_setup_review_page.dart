@@ -53,99 +53,110 @@ class _TimeSetupReviewPageState extends State<TimeSetupReviewPage>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(
-        title: '시간 설정',
-        onBack: () => controller.goToStep(TimeSetupStep.dailyAllocation),
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 16),
-                      Center(
-                        child: BridgeStepperPills(
-                          currentStep: controller.stepIndex,
-                          totalSteps: 3,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const BridgeStepHeader(
-                        step: 3,
-                        title: '이번주 일간 시간 설정',
-                        description: '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
-                      ),
-                      const SizedBox(height: AppTokens.itemGap),
-                      BridgeTotalTimeCard(
-                        variant: BridgeTotalTimeCardVariant.compact,
-                        title:
-                            '$monthLabel ${controller.currentWeekIndex + 1}주차',
-                        hours: controller.currentWeekTotalHours,
-                        minutes: controller.currentWeekTotalRemainderMinutes,
-                      ),
-                      const SizedBox(height: AppTokens.sectionGap),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Text(
-                            '일별 시간 분배',
-                            style: AppTypography.heading2Bold.copyWith(
-                              color: AppColors.gray800,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: BridgePillIconButton(
-                                label: '스케줄 보기',
-                                trailingIcon: Icons.arrow_forward,
-                                variant: BridgePillVariant.tonal,
-                                onPressed: () =>
-                                    _openSchedulePreview(context, schedule),
+        child: Column(
+          children: [
+            BridgeAppBar(
+              title: '시간 설정',
+              onBack: () => controller.goToStep(TimeSetupStep.dailyAllocation),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 16),
+                            Center(
+                              child: BridgeStepperPills(
+                                currentStep: controller.stepIndex,
+                                totalSteps: 3,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: _sectionHeaderGap),
-                      for (
-                        int index = 0;
-                        index < schedule.dayAllocations.length;
-                        index++
-                      ) ...[
-                        BridgeDayRow(
-                          daysLabel: schedule.dayAllocations[index].daysLabel,
-                          hours: schedule.dayAllocations[index].hours,
-                          minutes: schedule.dayAllocations[index].minutes,
-                          showPencil: false,
+                            const SizedBox(height: 24),
+                            const BridgeStepHeader(
+                              step: 3,
+                              title: '이번주 일간 시간 설정',
+                              description:
+                                  '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
+                            ),
+                            const SizedBox(height: AppTokens.itemGap),
+                            BridgeTotalTimeCard(
+                              variant: BridgeTotalTimeCardVariant.compact,
+                              title:
+                                  '$monthLabel ${controller.currentWeekIndex + 1}주차',
+                              hours: controller.currentWeekTotalHours,
+                              minutes:
+                                  controller.currentWeekTotalRemainderMinutes,
+                            ),
+                            const SizedBox(height: AppTokens.sectionGap),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '일별 시간 분배',
+                                  style: AppTypography.heading2Bold.copyWith(
+                                    color: AppColors.gray800,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: BridgePillIconButton(
+                                      label: '스케줄 보기',
+                                      trailingIcon: Icons.arrow_forward,
+                                      variant: BridgePillVariant.tonal,
+                                      onPressed: () => _openSchedulePreview(
+                                        context,
+                                        schedule,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: _sectionHeaderGap),
+                            for (
+                              int index = 0;
+                              index < schedule.dayAllocations.length;
+                              index++
+                            ) ...[
+                              BridgeDayRow(
+                                daysLabel:
+                                    schedule.dayAllocations[index].daysLabel,
+                                hours: schedule.dayAllocations[index].hours,
+                                minutes: schedule.dayAllocations[index].minutes,
+                                showPencil: false,
+                              ),
+                              if (index < schedule.dayAllocations.length - 1)
+                                const SizedBox(height: AppTokens.mediumGap),
+                            ],
+                            const SizedBox(height: 24),
+                          ],
                         ),
-                        if (index < schedule.dayAllocations.length - 1)
-                          const SizedBox(height: AppTokens.mediumGap),
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                      ),
+                    ),
+                    BridgeButton(
+                      label: '다음',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: controller.isSaving ? null : controller.submit,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-              BridgeButton(
-                label: '다음',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: controller.isSaving ? null : controller.submit,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

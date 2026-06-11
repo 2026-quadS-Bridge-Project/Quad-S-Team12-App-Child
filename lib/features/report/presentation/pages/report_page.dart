@@ -87,39 +87,45 @@ class _ReportPageState extends State<ReportPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BridgeAppBar(title: '사용 리포트'),
       body: SafeArea(
-        top: false,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : report == null
-            ? _ReportUnavailable(
-                message: _errorMessage ?? '리포트를 불러오지 못했어요.',
-                onRetry: _load,
-              )
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                children: [
-                  _WeeklyIntroCard(weekLabel: report.weekLabel),
-                  const SizedBox(height: 20),
-                  _PlanCard(plan: report.plan),
-                  const SizedBox(height: 20),
-                  _BarChartCard(dailyRows: report.dailyRows),
-                  const SizedBox(height: 20),
-                  _PieChartCard(compliance: report.compliance),
-                  const SizedBox(height: 20),
-                  _SuggestionCard(suggestions: report.suggestions),
-                  const SizedBox(height: 24),
-                  BridgeButton(
-                    label: '다음주 계획 짜러가기 →',
-                    variant: BridgeButtonVariant.primary,
-                    size: BridgeButtonSize.large,
-                    fullWidth: true,
-                    onPressed: () => context.push('/child-home/time-setup/v2'),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
+        child: Column(
+          children: [
+            const BridgeAppBar(title: '사용 리포트'),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : report == null
+                  ? _ReportUnavailable(
+                      message: _errorMessage ?? '리포트를 불러오지 못했어요.',
+                      onRetry: _load,
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      children: [
+                        _WeeklyIntroCard(weekLabel: report.weekLabel),
+                        const SizedBox(height: 20),
+                        _PlanCard(plan: report.plan),
+                        const SizedBox(height: 20),
+                        _BarChartCard(dailyRows: report.dailyRows),
+                        const SizedBox(height: 20),
+                        _PieChartCard(compliance: report.compliance),
+                        const SizedBox(height: 20),
+                        _SuggestionCard(suggestions: report.suggestions),
+                        const SizedBox(height: 24),
+                        BridgeButton(
+                          label: '다음주 계획 짜러가기 →',
+                          variant: BridgeButtonVariant.primary,
+                          size: BridgeButtonSize.large,
+                          fullWidth: true,
+                          onPressed: () =>
+                              context.push('/child-home/time-setup/v2'),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
