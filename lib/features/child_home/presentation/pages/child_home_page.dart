@@ -781,9 +781,6 @@ class _MyPageButton extends StatelessWidget {
               'my',
               style: AppTypography.labelRegular.copyWith(
                 color: AppColors.gray800,
-                fontSize: 14,
-                height: 1.429,
-                letterSpacing: 0.203,
               ),
             ),
           ),
@@ -835,7 +832,6 @@ class _TodayTimeSection extends StatelessWidget {
                   '오늘의 시간',
                   style: AppTypography.heading2Bold.copyWith(
                     color: AppColors.black,
-                    letterSpacing: -0.24,
                   ),
                 ),
                 const SizedBox(width: AppTokens.smallGap),
@@ -917,9 +913,6 @@ class _TodayTimeSection extends StatelessWidget {
                     '사용 리포트',
                     style: AppTypography.labelSemiBold.copyWith(
                       color: AppColors.gray400,
-                      fontSize: 14,
-                      height: 1.429,
-                      letterSpacing: 0.203,
                     ),
                   ),
               ],
@@ -1217,24 +1210,11 @@ class _TimeDetailGroup extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTypography.labelMedium.copyWith(
-            color: color,
-            fontSize: 14,
-            height: 1.429,
-            letterSpacing: 0.203,
-          ),
-        ),
+        Text(label, style: AppTypography.labelMedium.copyWith(color: color)),
         const SizedBox(height: 2),
         Text(
           value,
-          style: AppTypography.heading1SemiBold.copyWith(
-            color: color,
-            fontSize: 24,
-            height: 1.364,
-            letterSpacing: -0.466,
-          ),
+          style: AppTypography.heading1SemiBold.copyWith(color: color),
         ),
       ],
     );
@@ -1273,7 +1253,6 @@ class _MissionSection extends StatelessWidget {
                 '오늘의 미션',
                 style: AppTypography.heading2Bold.copyWith(
                   color: AppColors.black,
-                  letterSpacing: -0.24,
                 ),
               ),
               const Spacer(),
@@ -1281,9 +1260,6 @@ class _MissionSection extends StatelessWidget {
                 '0개 완료',
                 style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray700,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
               const SizedBox(width: AppTokens.smallGap),
@@ -1293,9 +1269,6 @@ class _MissionSection extends StatelessWidget {
                 '0',
                 style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray200,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
             ],
@@ -1309,9 +1282,6 @@ class _MissionSection extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.gray500,
-                fontSize: 14,
-                height: 1.429,
-                letterSpacing: 0.203,
               ),
             ),
           ),
@@ -1410,7 +1380,6 @@ class _MissionListSectionState extends State<_MissionListSection> {
                 '오늘의 미션',
                 style: AppTypography.heading2Bold.copyWith(
                   color: AppColors.black,
-                  letterSpacing: -0.24,
                 ),
               ),
               const Spacer(),
@@ -1418,9 +1387,6 @@ class _MissionListSectionState extends State<_MissionListSection> {
                 '$completedCount개 완료',
                 style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray700,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
               const SizedBox(width: AppTokens.smallGap),
@@ -1430,9 +1396,6 @@ class _MissionListSectionState extends State<_MissionListSection> {
                 '$totalCount',
                 style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray200,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
             ],
@@ -1577,9 +1540,6 @@ class _MissionText extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTypography.bodyMedium.copyWith(
             color: color,
-            fontSize: 16,
-            height: 1.5,
-            letterSpacing: 0.0912,
             decoration: decoration,
           ),
         ),
@@ -1590,9 +1550,6 @@ class _MissionText extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTypography.captionRegular.copyWith(
             color: completed ? AppColors.gray300 : AppColors.gray500,
-            fontSize: 12,
-            height: 1.334,
-            letterSpacing: 0.302,
             decoration: decoration,
           ),
         ),
