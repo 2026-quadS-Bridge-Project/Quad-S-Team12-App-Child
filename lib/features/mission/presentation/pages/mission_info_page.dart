@@ -203,6 +203,9 @@ class _MissionSubmitLoadingPanel extends StatelessWidget {
 class _InfoView extends StatelessWidget {
   const _InfoView();
 
+  static const double _tabTopGap = 16;
+  static const double _contentHorizontalPadding = AppTokens.pageHorizontal;
+
   @override
   Widget build(BuildContext context) {
     final MissionController controller = MissionScope.of(context);
@@ -216,25 +219,18 @@ class _InfoView extends StatelessWidget {
           child: Column(
             children: [
               BridgeAppBar(title: mission.title),
+              const SizedBox(height: _tabTopGap),
+              const _InfoTabsBar(),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppTokens.pageHorizontal,
+                    horizontal: _contentHorizontalPadding,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: TabBarView(
+                    physics: const NeverScrollableScrollPhysics(),
                     children: <Widget>[
-                      const SizedBox(height: AppTokens.smallGap),
-                      const _InfoTabsBar(),
-                      Expanded(
-                        child: TabBarView(
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: <Widget>[
-                            _MissionInfoTab(mission: mission),
-                            _MissionPerformInfoTab(controller: controller),
-                          ],
-                        ),
-                      ),
+                      _MissionInfoTab(mission: mission),
+                      _MissionPerformInfoTab(controller: controller),
                     ],
                   ),
                 ),
@@ -248,9 +244,6 @@ class _InfoView extends StatelessWidget {
 }
 
 /// Top tabs (`미션정보` / `수행정보`) for the info screen.
-///
-/// Lightweight wrapper around Material [TabBar] tuned to the spec's
-/// 1.4px underline + token typography. Sits inside a [DefaultTabController].
 class _InfoTabsBar extends StatelessWidget {
   const _InfoTabsBar();
 
@@ -259,18 +252,11 @@ class _InfoTabsBar extends StatelessWidget {
     return Center(
       child: SizedBox(
         width: 190,
-        child: TabBar(
-          labelColor: AppColors.textPrimary,
-          unselectedLabelColor: AppColors.gray400,
-          labelStyle: AppTypography.bodySemiBold,
-          unselectedLabelStyle: AppTypography.bodyMedium,
-          indicatorSize: TabBarIndicatorSize.tab,
-          indicatorColor: AppColors.textPrimary,
-          indicatorWeight: 1.4,
-          dividerColor: AppColors.border,
-          tabs: const <Widget>[
-            Tab(text: '미션정보'),
-            Tab(text: '수행정보'),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const <Widget>[
+            _InfoTabButton(index: 0, label: '미션정보'),
+            _InfoTabButton(index: 1, label: '수행정보'),
           ],
         ),
       ),
@@ -278,14 +264,67 @@ class _InfoTabsBar extends StatelessWidget {
   }
 }
 
+class _InfoTabButton extends StatelessWidget {
+  const _InfoTabButton({required this.index, required this.label});
+
+  final int index;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TabController controller = DefaultTabController.of(context);
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (BuildContext context, Widget? child) {
+        final bool selected = controller.index == index;
+        final Color feedbackColor = selected
+            ? AppColors.black
+            : AppColors.gray400;
+
+        return Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => controller.animateTo(index),
+            hoverColor: feedbackColor.withValues(alpha: 0.06),
+            highlightColor: feedbackColor.withValues(alpha: 0.10),
+            splashColor: feedbackColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: selected ? AppColors.black : Colors.transparent,
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              child: Text(
+                label,
+                style:
+                    (selected
+                            ? AppTypography.bodySemiBold
+                            : AppTypography.bodyMedium)
+                        .copyWith(
+                          color: selected ? AppColors.black : AppColors.gray400,
+                        ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// "미션정보" tab — labeled rows per Figma 746-11392.
-///
-/// 카테고리는 부모앱 미션 등록과 같은 3-column grid, 리셋주기 / 확인방식은
-/// horizontal selectable chip rows;
-/// 지급시간 inlines a split-color reward chip on the right; 상세설명 is a
-/// read-only textarea.
 class _MissionInfoTab extends StatelessWidget {
   const _MissionInfoTab({required this.mission});
+
+  static const double _contentTopGap = 34;
 
   final Mission mission;
 
@@ -295,44 +334,58 @@ class _MissionInfoTab extends StatelessWidget {
         ? mission.description!
         : '상세 설명이 없어요.';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: AppTokens.itemGap + 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _EvenChipRowSection(
-            label: '카테고리',
-            options: mission.categoryOptions,
-            selected: mission.category,
-            spacing: AppTokens.smallGap,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints viewport) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: viewport.maxWidth,
+              minHeight: viewport.maxHeight,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const SizedBox(height: _contentTopGap),
+                _EvenChipRowSection(
+                  label: '카테고리',
+                  options: mission.categoryOptions,
+                  selected: mission.category,
+                  spacing: AppTokens.smallGap,
+                ),
+                const _MissionInfoSeparator(),
+                _FixedChipRowSection(
+                  label: '리셋주기',
+                  options: mission.resetCycleOptions,
+                  selected: mission.resetCycle,
+                  widths: const <double>[74, 88, 74],
+                ),
+                const _MissionInfoSeparator(),
+                _EvenChipRowSection(
+                  label: '확인방식',
+                  options: <String>[
+                    for (final ConfirmationMethod m
+                        in mission.confirmationMethodOptions)
+                      m.label,
+                  ],
+                  selected: mission.confirmationMethod.label,
+                ),
+                const _MissionInfoSeparator(),
+                _PayoutTimeSection(
+                  label: '지급시간',
+                  hours: mission.rewardHours,
+                  minutes: mission.rewardMinutes,
+                ),
+                const _MissionInfoSeparator(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: _DescriptionSection(label: '상세설명', value: detail),
+                ),
+              ],
+            ),
           ),
-          const _MissionInfoSeparator(),
-          _FixedChipRowSection(
-            label: '리셋주기',
-            options: mission.resetCycleOptions,
-            selected: mission.resetCycle,
-            widths: const <double>[74, 88, 74],
-          ),
-          const _MissionInfoSeparator(),
-          _EvenChipRowSection(
-            label: '확인방식',
-            options: <String>[
-              for (final ConfirmationMethod m
-                  in mission.confirmationMethodOptions)
-                m.label,
-            ],
-            selected: mission.confirmationMethod.label,
-          ),
-          const _MissionInfoSeparator(),
-          _PayoutTimeSection(
-            label: '지급시간',
-            hours: mission.rewardHours,
-            minutes: mission.rewardMinutes,
-          ),
-          const _MissionInfoSeparator(),
-          _DescriptionSection(label: '상세설명', value: detail),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -399,7 +452,8 @@ class _FixedChipRowSection extends StatelessWidget {
   final String selected;
   final List<double> widths;
 
-  static const double _spacing = 14;
+  static const double _spacing = 8;
+  static const double _labelControlGap = 14;
 
   @override
   Widget build(BuildContext context) {
@@ -407,7 +461,7 @@ class _FixedChipRowSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _MissionInfoSectionLabel(label),
-        const SizedBox(height: 18),
+        const SizedBox(height: _labelControlGap),
         Row(
           children: <Widget>[
             for (int i = 0; i < options.length; i++) ...<Widget>[
@@ -433,13 +487,14 @@ class _EvenChipRowSection extends StatelessWidget {
     required this.label,
     required this.options,
     required this.selected,
-    this.spacing = 14,
+    this.spacing = 8,
   });
 
   final String label;
   final List<String> options;
   final String selected;
   final double spacing;
+  static const double _labelControlGap = 14;
 
   @override
   Widget build(BuildContext context) {
@@ -447,7 +502,7 @@ class _EvenChipRowSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _MissionInfoSectionLabel(label),
-        const SizedBox(height: 18),
+        const SizedBox(height: _labelControlGap),
         Row(
           children: <Widget>[
             for (int i = 0; i < options.length; i++) ...<Widget>[
@@ -531,9 +586,9 @@ class _MissionInfoSeparator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 6,
-      margin: const EdgeInsets.symmetric(vertical: 26),
-      color: AppColors.gray150,
+      height: 7,
+      margin: const EdgeInsets.symmetric(vertical: 24),
+      color: AppColors.gray100,
     );
   }
 }
@@ -553,10 +608,11 @@ class _PayoutTimeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        Expanded(child: _MissionInfoSectionLabel(label)),
-        _RewardChip(hours: hours, minutes: minutes),
+        _MissionInfoSectionLabel(label),
+        _RewardTimeField(hours: hours, minutes: minutes),
       ],
     );
   }
@@ -575,13 +631,11 @@ class _DescriptionSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _MissionInfoSectionLabel(label),
-        const SizedBox(height: AppTokens.smallGap),
+        const SizedBox(height: 14),
         Container(
+          height: 198,
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: AppTokens.mediumGap,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.gray050,
             border: Border.all(color: AppColors.gray200),
@@ -599,49 +653,59 @@ class _DescriptionSection extends StatelessWidget {
   }
 }
 
-/// Split-color reward chip: number in primary, unit in textPrimary.
-/// Renders only the segments that have a non-zero value. Used inline
-/// inside the 지급시간 row.
-class _RewardChip extends StatelessWidget {
-  const _RewardChip({required this.hours, required this.minutes});
+class _RewardTimeField extends StatelessWidget {
+  const _RewardTimeField({required this.hours, required this.minutes});
 
   final int hours;
   final int minutes;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle numberStyle = AppTypography.headlineSemiBold.copyWith(
-      color: AppColors.primary,
-    );
-    final TextStyle unitStyle = AppTypography.headlineMedium.copyWith(
-      color: AppColors.textPrimary,
-    );
-
-    final List<InlineSpan> spans = <InlineSpan>[];
-    if (hours > 0) {
-      spans.add(
-        TextSpan(text: hours.toString().padLeft(2, '0'), style: numberStyle),
-      );
-      spans.add(TextSpan(text: ' 시간', style: unitStyle));
-    }
-    if (minutes > 0) {
-      if (spans.isNotEmpty) {
-        spans.add(const WidgetSpan(child: SizedBox(width: AppTokens.smallGap)));
-      }
-      spans.add(
-        TextSpan(text: minutes.toString().padLeft(2, '0'), style: numberStyle),
-      );
-      spans.add(TextSpan(text: ' 분', style: unitStyle));
-    }
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.gray050,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.gray200),
         borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
       ),
-      child: RichText(text: TextSpan(children: spans)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _RewardTimePart(value: hours, label: '시간'),
+          const SizedBox(width: 16),
+          _RewardTimePart(value: minutes, label: '분'),
+        ],
+      ),
+    );
+  }
+}
+
+class _RewardTimePart extends StatelessWidget {
+  const _RewardTimePart({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        children: <InlineSpan>[
+          TextSpan(
+            text: value.toString().padLeft(2, '0'),
+            style: AppTypography.headlineSemiBold.copyWith(
+              color: AppColors.primary,
+            ),
+          ),
+          TextSpan(
+            text: ' $label',
+            style: AppTypography.headlineMedium.copyWith(
+              color: AppColors.inkBlack,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

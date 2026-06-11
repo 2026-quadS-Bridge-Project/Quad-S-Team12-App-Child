@@ -43,7 +43,7 @@ class _DeleteAccountCompletePageState extends State<DeleteAccountCompletePage> {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: AppColors.gray100,
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Center(
             child: ConstrainedBox(

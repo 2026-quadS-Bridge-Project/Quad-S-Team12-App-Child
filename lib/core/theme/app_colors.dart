@@ -24,7 +24,7 @@ abstract final class AppColors {
   static const Color labelNormal = Color(0xFF171719);
   static const Color lineNormalNeutral = Color(0x2970737C);
 
-  static const Color background = gray100;
+  static const Color background = gray050;
   static const Color surface = white;
   static const Color surfaceMuted = gray100;
   static const Color border = gray200;
