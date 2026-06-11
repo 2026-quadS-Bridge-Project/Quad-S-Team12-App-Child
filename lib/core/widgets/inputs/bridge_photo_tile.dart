@@ -4,6 +4,7 @@ import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_tokens.dart';
 import '../../theme/app_typography.dart';
 
 /// A filled photo tile used in the mission perform photo grid
@@ -36,7 +37,7 @@ class BridgePhotoTile extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
           child: Image.file(
             File(path),
             fit: BoxFit.cover,
@@ -108,17 +109,17 @@ class BridgeAddPhotoTile extends StatelessWidget {
     return SizedBox.expand(
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
           onTap: onTap,
           child: DottedBorder(
             color: AppColors.gray400,
             strokeWidth: 2,
             dashPattern: const [6, 4],
             borderType: BorderType.RRect,
-            radius: const Radius.circular(8),
+            radius: const Radius.circular(AppTokens.buttonRadius),
             padding: EdgeInsets.zero,
             stackFit: StackFit.expand,
             child: Padding(
