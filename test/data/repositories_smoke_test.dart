@@ -1119,8 +1119,8 @@ void main() {
   });
 
   group('usage report repository', () {
-    test('createUsageReportRepository returns Api in dev real API mode', () {
-      expect(createUsageReportRepository(), isA<ApiUsageReportRepository>());
+    test('createUsageReportRepository keeps report on mock UI data', () {
+      expect(createUsageReportRepository(), isA<MockUsageReportRepository>());
     });
 
     test('fetchCurrentWeekReport returns Success', () async {
