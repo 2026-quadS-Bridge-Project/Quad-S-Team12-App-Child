@@ -38,56 +38,63 @@ class TimeSetupIntroPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BridgeAppBar(title: ''),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 109),
-              Text(
-                '사용시간 설정',
-                style: AppTypography.heading1Bold.copyWith(
-                  color: AppColors.inkBlack,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              Text(
-                subtitle,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray500,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 42),
-              Align(
-                alignment: Alignment.center,
+        child: Column(
+          children: [
+            const BridgeAppBar(title: ''),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (int i = 0; i < _steps.length; i++) ...[
-                      _StepRow(
-                        number: _steps[i].number,
-                        label: _steps[i].label,
+                    const SizedBox(height: 109),
+                    Text(
+                      '사용시간 설정',
+                      style: AppTypography.heading1SemiBold.copyWith(
+                        color: AppColors.inkBlack,
                       ),
-                      if (i != _steps.length - 1) const SizedBox(height: 20),
-                    ],
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
+                    Text(
+                      subtitle,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 42),
+                    Align(
+                      alignment: Alignment.center,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (int i = 0; i < _steps.length; i++) ...[
+                            _StepRow(
+                              number: _steps[i].number,
+                              label: _steps[i].label,
+                            ),
+                            if (i != _steps.length - 1)
+                              const SizedBox(height: 20),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    BridgeButton(
+                      label: '시작',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: () =>
+                          controller.goToStep(TimeSetupStep.scheduleRegister),
+                    ),
                   ],
                 ),
               ),
-              const Spacer(),
-              BridgeButton(
-                label: '시작',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: () =>
-                    controller.goToStep(TimeSetupStep.scheduleRegister),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -110,7 +117,9 @@ class _StepRow extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           label,
-          style: AppTypography.headlineBold.copyWith(color: AppColors.gray500),
+          style: AppTypography.headlineSemiBold.copyWith(
+            color: AppColors.gray500,
+          ),
         ),
       ],
     );

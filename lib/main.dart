@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
 import 'core/config/environment.dart';
+import 'core/services/device_block_controller.dart';
 import 'core/services/fcm_bootstrap.dart';
+import 'firebase_options.dart';
 
 /// Background message handler. Must be a top-level function annotated with
 /// `@pragma('vm:entry-point')` because FCM spawns a separate isolate for
@@ -25,21 +29,45 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Initializes Firebase using the platform-resolved configuration files
-  // (android/app/google-services.json and ios/Runner/GoogleService-Info.plist).
-  // FCM and other Firebase services rely on this being awaited before any
-  // feature code touches them.
-  await Firebase.initializeApp();
-
-  // In the mock environment we still want the UI to boot, but skip touching
-  // FirebaseMessaging — the Android emulator without Google Play Services
-  // and the iOS simulator without APNs both fail otherwise.
-  if (!currentEnvironment.useMocks) {
-    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
-  }
-  // Bootstraps permission, token registration, and the foreground +
-  // tap-from-background streams. Mock impl is a no-op so tests stay green.
-  await FcmBootstrap.initialize();
 
   runApp(const BridgeKApp());
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(_requestDeviceBlockPermissionOnLaunch());
+
+    // Push setup must never block the first frame. In real API mode the app
+    // still needs Firebase/FCM, but simulator/APNs/plugin issues should degrade
+    // to "no push" instead of leaving the user on a white launch screen.
+    if (!currentEnvironment.useMocks) {
+      unawaited(_initializePush());
+    }
+  });
+}
+
+Future<void> _requestDeviceBlockPermissionOnLaunch() async {
+  final DeviceBlockController blocker = DeviceBlockController.instance;
+  if (!blocker.isSupported || await blocker.hasPermission()) {
+    return;
+  }
+  await blocker.requestPermission();
+}
+
+Future<void> _initializePush() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  } catch (e, stack) {
+    debugPrint('[firebase] init failed — continuing without push: $e');
+    debugPrintStack(stackTrace: stack);
+    return;
+  }
+
+  try {
+    await FcmBootstrap.initialize();
+  } catch (e, stack) {
+    debugPrint('[fcm] bootstrap failed — continuing without push: $e');
+    debugPrintStack(stackTrace: stack);
+  }
 }

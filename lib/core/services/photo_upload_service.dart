@@ -3,9 +3,8 @@ import 'package:dio/dio.dart';
 import '../config/dio_config.dart';
 import '../config/environment.dart';
 import '../models/result.dart';
-import '../network/api_error.dart';
 
-/// Contract for uploading a locally captured photo to remote storage.
+/// Contract for registering a locally captured photo with the mission flow.
 ///
 /// Introduced as a seam between [CameraService] (which produces a
 /// `String? path` pointing at a file on disk) and the mission submission
@@ -13,27 +12,22 @@ import '../network/api_error.dart';
 /// `MissionRepository.submitMission` via the [List<String> photoPaths]
 /// field).
 ///
-/// In mock builds the local path is echoed back unchanged so the existing
-/// mock submit flow continues to work. Once the backend ships, the api
-/// implementation will upload the file (via `MultipartFile.fromFile`) and
-/// return the remote URL — the mission repo keeps treating the strings
-/// opaquely, so the only real wiring change is in
-/// [ApiPhotoUploadService.uploadPhoto].
+/// Both mock and api builds echo the local path unchanged. The real upload
+/// happens later in [ApiMissionRepository.submitMission], which attaches the
+/// file directly to the backend performance endpoint as multipart form data.
 abstract interface class PhotoUploadService {
   Future<Result<String>> uploadPhoto(String localPath);
 }
 
-/// Factory: selects mock vs. real implementation based on
-/// [currentEnvironment.useMocks]. Mirrors `createMissionRepository`.
-PhotoUploadService createPhotoUploadService() {
-  if (currentEnvironment.useMocks) return const MockPhotoUploadService();
-  return ApiPhotoUploadService(DioConfig.create());
-}
+/// Cached singleton — lazy-initialized at first access.
+final PhotoUploadService _photoUploadService = currentEnvironment.useMocks
+    ? const MockPhotoUploadService()
+    : ApiPhotoUploadService(DioConfig.create());
 
-/// Mock impl — pretends the local path IS the remote URL.
-///
-/// The mission repo will keep treating the returned string as-is until a
-/// real backend supplies actual URLs.
+/// Factory: returns the cached service. Mirrors `createMissionRepository`.
+PhotoUploadService createPhotoUploadService() => _photoUploadService;
+
+/// Mock impl — keeps the captured local path until submit time.
 class MockPhotoUploadService implements PhotoUploadService {
   const MockPhotoUploadService();
 
@@ -43,42 +37,25 @@ class MockPhotoUploadService implements PhotoUploadService {
   }
 }
 
-/// HTTP-backed impl. Uploads the file at [localPath] to `/uploads/photo`
-/// via `multipart/form-data` per `docs/api-contract.md` § Photo Upload and
-/// returns the server-assigned remote URL.
+/// HTTP-backed impl.
+///
+/// The backend exposes no standalone photo-upload endpoint; the captured
+/// photo is sent as a `multipart/form-data` file directly to
+/// `POST /api/v1/missions/{id}/performances` at submission time (see
+/// [ApiMissionRepository.submitMission] and backend-handoff §3.2). This
+/// service therefore defers the upload and returns the **local path**, which
+/// the controller stores and later hands to `submitMission` so the file can
+/// be attached. Behaviour now matches [MockPhotoUploadService].
 class ApiPhotoUploadService implements PhotoUploadService {
   ApiPhotoUploadService(this._dio);
 
+  // Retained so the construction seam (DioConfig.create()) is unchanged and a
+  // future direct-upload endpoint can be wired here without signature churn.
+  // ignore: unused_field
   final Dio _dio;
 
   @override
   Future<Result<String>> uploadPhoto(String localPath) async {
-    try {
-      final String filename = _basename(localPath);
-      final FormData formData = FormData.fromMap(<String, dynamic>{
-        'file': await MultipartFile.fromFile(localPath, filename: filename),
-        'purpose': 'mission',
-      });
-      final Response<dynamic> response = await _dio.post<dynamic>(
-        '/uploads/photo',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
-      );
-      final Map<String, dynamic> body =
-          response.data as Map<String, dynamic>;
-      return Result<String>.success(body['url'] as String);
-    } on DioException catch (e) {
-      return failureFromDioException<String>(e);
-    }
-  }
-
-  /// Extracts the file name (last path segment) from [path]. Handles both
-  /// POSIX (`/`) and Windows (`\`) separators so the multipart `filename`
-  /// field is just the bare name regardless of where the file came from.
-  static String _basename(String path) {
-    final int slash = path.lastIndexOf('/');
-    final int backslash = path.lastIndexOf(r'\');
-    final int sep = slash > backslash ? slash : backslash;
-    return sep == -1 ? path : path.substring(sep + 1);
+    return Result<String>.success(localPath);
   }
 }

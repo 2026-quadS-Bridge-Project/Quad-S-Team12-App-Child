@@ -30,18 +30,20 @@ class MockMissionRepository implements MissionRepository {
   }
 
   @override
-  Future<Result<Mission>> submitMission({
+  Future<Result<MissionSubmissionResult>> submitMission({
     required String id,
     required List<String> photoPaths,
   }) async {
     try {
-      // Mock backend: echo the mission with the supplied photoPaths attached.
-      // The controller is responsible for status transitions (childSelf vs.
-      // aiAuto vs. parentApproval) because those drive UI sub-views.
-      final Mission base = MissionMock.byId(id);
-      return Result<Mission>.success(base.copyWith(photoUrls: photoPaths));
+      // Mock backend: validate the id resolves and report success. The
+      // controller owns status transitions (childSelf vs. aiAuto vs.
+      // parentApproval) because those drive UI sub-views.
+      MissionMock.byId(id);
+      return Result<MissionSubmissionResult>.success(
+        const MissionSubmissionResult(),
+      );
     } catch (e, stack) {
-      return Result<Mission>.failure(
+      return Result<MissionSubmissionResult>.failure(
         'Mock submit failed for mission $id',
         cause: e,
         stack: stack,

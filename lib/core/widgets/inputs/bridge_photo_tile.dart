@@ -4,6 +4,7 @@ import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_tokens.dart';
 import '../../theme/app_typography.dart';
 
 /// A filled photo tile used in the mission perform photo grid
@@ -33,17 +34,14 @@ class BridgePhotoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.expand,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
           child: Image.file(
             File(path),
-            width: 157,
-            height: 156,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => Container(
-              width: 157,
-              height: 156,
               color: AppColors.gray200,
               alignment: Alignment.center,
               child: const Icon(
@@ -89,10 +87,9 @@ class BridgePhotoTile extends StatelessWidget {
 /// described in `docs/figma-specs/11-mission.md` §5.
 ///
 /// Visual: 157 × 156, radius 8, [AppColors.gray100] background, dashed 2 px
-/// [AppColors.gray400] border, with a centered column of camera icon +
+/// [AppColors.gray400] border, with a centered column of upload icon +
 /// label (defaults to "추가 업로드"). Tapping anywhere on the tile fires
-/// [onTap], which should launch the camera (NOT the gallery — see the
-/// critical annotation in spec §3).
+/// [onTap], which opens the mission photo upload flow.
 class BridgeAddPhotoTile extends StatelessWidget {
   const BridgeAddPhotoTile({
     super.key,
@@ -100,7 +97,8 @@ class BridgeAddPhotoTile extends StatelessWidget {
     this.label = '추가 업로드',
   });
 
-  /// Invoked when the user taps the tile. Callers should open the camera.
+  /// Invoked when the user taps the tile. Callers should open the photo upload
+  /// flow.
   final VoidCallback onTap;
 
   /// Label rendered under the camera icon. Defaults to `'추가 업로드'`.
@@ -108,43 +106,48 @@ class BridgeAddPhotoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: DottedBorder(
-          color: AppColors.gray400,
-          strokeWidth: 2,
-          dashPattern: const [6, 4],
-          borderType: BorderType.RRect,
-          radius: const Radius.circular(8),
-          child: Container(
-            width: 157,
-            height: 156,
-            decoration: BoxDecoration(
-              color: AppColors.gray100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.camera_alt_outlined,
-                    size: 24,
-                    color: AppColors.gray700,
+    return SizedBox.expand(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+          onTap: onTap,
+          child: DottedBorder(
+            color: AppColors.gray400,
+            strokeWidth: 2,
+            dashPattern: const [6, 4],
+            borderType: BorderType.RRect,
+            radius: const Radius.circular(AppTokens.buttonRadius),
+            padding: EdgeInsets.zero,
+            stackFit: StackFit.expand,
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.gray100,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 24,
+                        color: AppColors.gray700,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        label,
+                        style: AppTypography.headlineMedium.copyWith(
+                          color: AppColors.gray700,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    label,
-                    style: AppTypography.headlineMedium.copyWith(
-                      color: AppColors.gray700,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

@@ -15,7 +15,7 @@ import '../buttons/bridge_button.dart';
 /// Layout:
 ///   * Card 328 × 211, white background, 12pt radius, 1px `gray200` border.
 ///   * Warning icon (32 × 32) centered, 24pt below card top.
-///   * Title text 18pt below icon (`AppTypography.bodyBold`).
+///   * Title text 18pt below icon (`AppTypography.bodySemiBold`).
 ///   * Optional body text below title (`AppTypography.bodyMedium`, `gray600`).
 ///   * Two `BridgeButton`s (medium 120 × 42) at the bottom, 15pt gap,
 ///     24pt above card bottom. Cancel is outlined, Confirm is primary
@@ -31,7 +31,7 @@ class BridgeConfirmDialog extends StatelessWidget {
     this.onConfirm,
   });
 
-  /// Title text (rendered with `AppTypography.bodyBold`).
+  /// Title text (rendered with `AppTypography.bodySemiBold`).
   final String title;
 
   /// Optional body text below the title.
@@ -123,7 +123,7 @@ class BridgeConfirmDialog extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: AppTypography.bodyBold.copyWith(color: AppColors.textPrimary),
+          style: AppTypography.bodySemiBold.copyWith(color: AppColors.textPrimary),
         ),
         if (body != null && body!.isNotEmpty) ...[
           const SizedBox(height: _titleToBodyGap),

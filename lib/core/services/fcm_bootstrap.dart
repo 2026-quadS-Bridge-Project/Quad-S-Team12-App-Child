@@ -24,6 +24,13 @@ class FcmBootstrap {
   static StreamSubscription<FcmMessage>? _foregroundSub;
   static StreamSubscription<FcmMessage>? _openedAppSub;
   static StreamSubscription<String>? _tokenRefreshSub;
+  static final StreamController<FcmMessage> _notificationRefreshController =
+      StreamController<FcmMessage>.broadcast();
+
+  /// Emits whenever an FCM event should make in-app notification surfaces
+  /// refresh their unread state.
+  static Stream<FcmMessage> get notificationRefreshes =>
+      _notificationRefreshController.stream;
 
   static Future<void> initialize({
     FcmMessagingService? messagingService,
@@ -62,15 +69,15 @@ class FcmBootstrap {
     //    time the user opens it. Could be expanded with an in-app toast.
     await _foregroundSub?.cancel();
     _foregroundSub = messaging.onForegroundMessage.listen((FcmMessage msg) {
-      debugPrint(
-        '[fcm] foreground: type=${msg.type} deeplink=${msg.deeplink}',
-      );
+      debugPrint('[fcm] foreground: type=${msg.type} deeplink=${msg.deeplink}');
+      _notificationRefreshController.add(msg);
     });
 
     // 5. Tap-from-background → deeplink. Router is already mounted by
     //    this point so we can go() directly.
     await _openedAppSub?.cancel();
     _openedAppSub = messaging.onMessageOpenedApp.listen((FcmMessage msg) {
+      _notificationRefreshController.add(msg);
       _navigate(msg.deeplink);
     });
 
@@ -78,6 +85,7 @@ class FcmBootstrap {
     //    the first frame so the router has finished mounting.
     final FcmMessage? initial = await messaging.getInitialMessage();
     if (initial != null) {
+      _notificationRefreshController.add(initial);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _navigate(initial.deeplink);
       });
@@ -130,6 +138,9 @@ class FcmBootstrap {
   }
 
   static void _navigate(String deeplink) {
+    if (!deeplink.startsWith('/')) {
+      return;
+    }
     try {
       appRouter.go(deeplink);
     } catch (e) {

@@ -23,7 +23,9 @@ abstract interface class DeviceRepository {
   Future<Result<void>> unregisterDevice(String deviceId);
 }
 
-DeviceRepository createDeviceRepository() {
-  if (currentEnvironment.useMocks) return const MockDeviceRepository();
-  return ApiDeviceRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final DeviceRepository _deviceRepository = currentEnvironment.useMocks
+    ? const MockDeviceRepository()
+    : ApiDeviceRepository();
+
+DeviceRepository createDeviceRepository() => _deviceRepository;

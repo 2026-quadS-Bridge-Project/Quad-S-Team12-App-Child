@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/models/result.dart';
+import '../../../core/widgets/mixins/async_error_listener.dart';
 import '../data/mock/time_confirm_mock.dart';
 import '../data/models/time_confirm_data.dart';
 import '../data/repositories/time_confirm_repository.dart';
@@ -10,12 +11,13 @@ import '../data/repositories/time_confirm_repository.dart';
 /// Holds the currently-displayed [TimeConfirmData] plus loading/error flags,
 /// and delegates side-effecting flows (request modification, acknowledge)
 /// to a [TimeConfirmRepository].
-class TimeConfirmController extends ChangeNotifier {
+class TimeConfirmController extends ChangeNotifier
+    implements AsyncErrorController {
   TimeConfirmController({
     TimeConfirmData? initial,
     TimeConfirmRepository? repository,
-  })  : _data = initial ?? TimeConfirmMock.filled,
-        _repository = repository ?? createTimeConfirmRepository();
+  }) : _data = initial ?? TimeConfirmMock.empty,
+       _repository = repository ?? createTimeConfirmRepository();
 
   final TimeConfirmRepository _repository;
 
@@ -26,7 +28,17 @@ class TimeConfirmController extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   String? _errorMessage;
+  @override
   String? get errorMessage => _errorMessage;
+
+  /// Clears [errorMessage] so the next failure can fire again. No-op when
+  /// the controller is already in a clean state.
+  @override
+  void clearError() {
+    if (_errorMessage == null) return;
+    _errorMessage = null;
+    notifyListeners();
+  }
 
   /// Fetches the latest schedule from the repository and updates [data].
   ///
@@ -37,8 +49,8 @@ class TimeConfirmController extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final Result<TimeConfirmData> result =
-        await _repository.fetchCurrentSchedule();
+    final Result<TimeConfirmData> result = await _repository
+        .fetchCurrentSchedule();
     switch (result) {
       case Success<TimeConfirmData>(:final data):
         _data = data;

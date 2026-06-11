@@ -9,11 +9,7 @@ import '../models/result.dart';
 /// class is exposed for the rare case a caller wants the structured
 /// representation (e.g. for matching `code` against UI-specific switches).
 class ApiError {
-  const ApiError({
-    required this.message,
-    this.code,
-    this.cause,
-  });
+  const ApiError({required this.message, this.code, this.cause});
 
   /// Human-readable Korean message — safe to surface in the UI.
   final String message;
@@ -35,10 +31,20 @@ Map<String, dynamic>? _extractErrorPayload(Response<dynamic>? response) {
     return null;
   }
   final dynamic error = data['error'];
-  if (error is! Map) {
-    return null;
+  if (error is Map) {
+    return Map<String, dynamic>.from(error);
   }
-  return Map<String, dynamic>.from(error);
+  if (data.containsKey('code') && data.containsKey('message')) {
+    final Object? detail = data['data'];
+    final String? detailMessage = detail is String && detail.isNotEmpty
+        ? detail
+        : null;
+    return <String, dynamic>{
+      'code': data['code'],
+      'message': detailMessage ?? data['message'],
+    };
+  }
+  return null;
 }
 
 /// Generic Korean fallback messages used when the server doesn't supply one.
@@ -105,11 +111,28 @@ Failure<T> failureFromDioException<T>(DioException e) {
   return Failure<T>(_GenericMessages.unknown, cause: '$statusCode');
 }
 
-/// Returns the `error.code` from a [DioException] response body, or `null` if
-/// the body isn't in contract shape. Repositories use this to map specific
-/// codes (e.g. `INVALID_CREDENTIALS`) to UI-anchored failure messages BEFORE
-/// falling back to [failureFromDioException].
+/// Maps the backend's ApiResponse error codes (e.g. `MEMBER401`) onto the
+/// app's canonical SCREAMING_SNAKE_CASE codes that repository switches match.
+/// Unmapped codes pass through unchanged — repositories then fall back to the
+/// server-supplied Korean message via [failureFromDioException].
+const Map<String, String> _backendCodeAliases = <String, String>{
+  'MEMBER401': 'INVALID_CREDENTIALS', // 비밀번호 불일치
+  'MEMBER404': 'USER_NOT_FOUND',
+  'MEMBER409': 'DUPLICATE_USERNAME',
+  'MISSION404': 'MISSION_NOT_FOUND',
+  'MISSION400': 'MISSION_ALREADY_COMPLETED',
+};
+
+/// Returns the `error.code` from a [DioException] response body (translated to
+/// the app's canonical code via [_backendCodeAliases]), or `null` if the body
+/// isn't in contract shape. Repositories use this to map specific codes (e.g.
+/// `INVALID_CREDENTIALS`) to UI-anchored failure messages BEFORE falling back
+/// to [failureFromDioException].
 String? errorCodeOf(DioException e) {
   final Map<String, dynamic>? errorMap = _extractErrorPayload(e.response);
-  return errorMap?['code'] as String?;
+  final String? raw = errorMap?['code'] as String?;
+  if (raw == null) {
+    return null;
+  }
+  return _backendCodeAliases[raw] ?? raw;
 }

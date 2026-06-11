@@ -84,7 +84,7 @@ class _WeekdayChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgColor = isSelected ? AppColors.primary : AppColors.gray100;
     final textStyle = isSelected
-        ? AppTypography.bodyBold.copyWith(color: AppColors.white)
+        ? AppTypography.bodySemiBold.copyWith(color: AppColors.white)
         : AppTypography.bodyMedium.copyWith(color: AppColors.gray600);
     final radius = BorderRadius.circular(size / 2);
 

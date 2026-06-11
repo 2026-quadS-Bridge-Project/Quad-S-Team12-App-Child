@@ -51,97 +51,106 @@ class DailyTimeSetupPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(
-        title: '시간 설정',
-        onBack: () => controller.goToStep(TimeSetupStep.weeklyTotal),
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 16),
-                      Center(
-                        child: BridgeStepperPills(
-                          currentStep: controller.stepIndex,
-                          totalSteps: 3,
+        child: Column(
+          children: [
+            BridgeAppBar(
+              title: '시간 설정',
+              onBack: () => controller.goToStep(TimeSetupStep.weeklyTotal),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 16),
+                            Center(
+                              child: BridgeStepperPills(
+                                currentStep: controller.stepIndex,
+                                totalSteps: 3,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Title + description verbatim per Figma 08b
+                            // 695-9743 and 08c 695:10675.
+                            const BridgeStepHeader(
+                              step: 3,
+                              title: '이번주 일간 시간 설정',
+                              description:
+                                  '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
+                            ),
+                            const SizedBox(height: 16),
+                            // Week label (`2월 1주차`) + read-only weekly total.
+                            // The actual week index comes from the controller so
+                            // v2 renders `2주차`.
+                            Text(
+                              '$monthLabel ${controller.currentWeekIndex + 1}주차',
+                              style: AppTypography.heading2Bold.copyWith(
+                                color: AppColors.gray800,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            BridgeTotalTimeCard(
+                              variant: BridgeTotalTimeCardVariant.compact,
+                              hours: controller.currentWeekTotalHours,
+                              minutes:
+                                  controller.currentWeekTotalRemainderMinutes,
+                            ),
+                            const SizedBox(height: _sectionGap),
+                            _DailyAllocationSection(
+                              allocations: schedule.dayAllocations,
+                              isOver: controller.isOverBudget,
+                              isUnder: controller.isUnderBudget,
+                              showErrorFrame: controller.showPastWeekDim,
+                              showAddButton: !controller.showPastWeekDim,
+                              showScheduleAction: controller.showPastWeekDim,
+                              showUsageReportAction: controller.showPastWeekDim,
+                              onSchedulePressed: () => _openSchedulePreview(
+                                context,
+                                schedule: controller.showPastWeekDim
+                                    ? controller.previousWeek ?? schedule
+                                    : schedule,
+                                isPastReference: controller.showPastWeekDim,
+                              ),
+                              onUsageReportPressed: () =>
+                                  _openUsageReportPreview(
+                                    context,
+                                    previousWeek: controller.previousWeek,
+                                  ),
+                              onAdd: () => _openSheet(context),
+                              onEdit: (DayAllocation allocation) =>
+                                  _openSheet(context, initial: allocation),
+                            ),
+                            if (deltaBanner != null) ...[
+                              const SizedBox(height: 12),
+                              deltaBanner,
+                            ],
+                            const SizedBox(height: 24),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      // Title + description verbatim per Figma 08b
-                      // 695-9743 and 08c 695:10675.
-                      const BridgeStepHeader(
-                        step: 3,
-                        title: '이번주 일간 시간 설정',
-                        description: '거의 다 왔어요!\n내가 설정한 이번주의 시간을 일별로 분배해요.',
-                      ),
-                      const SizedBox(height: 16),
-                      // Week label (`2월 1주차`) + read-only weekly total.
-                      // The actual week index comes from the controller so
-                      // v2 renders `2주차`.
-                      Text(
-                        '$monthLabel ${controller.currentWeekIndex + 1}주차',
-                        style: AppTypography.heading2Bold.copyWith(
-                          color: AppColors.gray800,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      BridgeTotalTimeCard(
-                        variant: BridgeTotalTimeCardVariant.compact,
-                        hours: controller.currentWeekTotalHours,
-                        minutes: controller.currentWeekTotalRemainderMinutes,
-                      ),
-                      const SizedBox(height: _sectionGap),
-                      _DailyAllocationSection(
-                        allocations: schedule.dayAllocations,
-                        isOver: controller.isOverBudget,
-                        isUnder: controller.isUnderBudget,
-                        showErrorFrame: controller.showPastWeekDim,
-                        showAddButton: !controller.showPastWeekDim,
-                        showScheduleAction: controller.showPastWeekDim,
-                        showUsageReportAction: controller.showPastWeekDim,
-                        onSchedulePressed: () => _openSchedulePreview(
-                          context,
-                          schedule: controller.showPastWeekDim
-                              ? controller.previousWeek ?? schedule
-                              : schedule,
-                          isPastReference: controller.showPastWeekDim,
-                        ),
-                        onUsageReportPressed: () => _openUsageReportPreview(
-                          context,
-                          previousWeek: controller.previousWeek,
-                        ),
-                        onAdd: () => _openSheet(context),
-                        onEdit: (DayAllocation allocation) =>
-                            _openSheet(context, initial: allocation),
-                      ),
-                      if (deltaBanner != null) ...[
-                        const SizedBox(height: 12),
-                        deltaBanner,
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                    ),
+                    BridgeButton(
+                      label: '다음',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: controller.isAllocationBalanced
+                          ? () => controller.goToStep(TimeSetupStep.review)
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-              BridgeButton(
-                label: '다음',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: controller.isAllocationBalanced
-                    ? () => controller.goToStep(TimeSetupStep.review)
-                    : null,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -258,34 +267,36 @@ class _SchedulePreviewSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int selectedSlots = schedule.allowedHours.length;
-    final int allowedMinutes = selectedSlots * 60;
+    final int scheduledMinutes = schedule.allocatedMinutes;
 
     return _ReferenceSheetScaffold(
       title: isPastReference ? '지난 주 스케줄' : '스케줄 보기',
       subtitle: isPastReference
-          ? '지난 주에 등록한 사용 가능 시간을 확인해요.'
-          : '이번 주에 등록한 사용 가능 시간을 확인해요.',
+          ? '지난 주에 분배한 일별 사용 시간을 확인해요.'
+          : '이번 주에 분배한 일별 사용 시간을 확인해요.',
       children: <Widget>[
         _ReferenceMetricRow(
           metrics: <_ReferenceMetric>[
             _ReferenceMetric(
-              label: '사용 가능',
-              value: _formatMinutes(allowedMinutes),
+              label: '총 분배',
+              value: _formatMinutes(scheduledMinutes),
             ),
-            _ReferenceMetric(label: '선택 슬롯', value: '$selectedSlots개'),
+            _ReferenceMetric(
+              label: '분배 그룹',
+              value: '${schedule.dayAllocations.length}개',
+            ),
           ],
         ),
         const SizedBox(height: 20),
-        const _ReferenceSectionTitle('요일별 가능 시간'),
+        const _ReferenceSectionTitle('요일별 사용 시간'),
         const SizedBox(height: 10),
-        if (selectedSlots == 0)
+        if (scheduledMinutes == 0)
           const _ReferenceEmptyState('등록된 스케줄이 아직 없어요.')
         else
           for (int weekday = 0; weekday < _weekdayNames.length; weekday++) ...[
             _ScheduleDayPreviewRow(
               dayLabel: _weekdayNames[weekday],
-              hours: _selectedHoursForWeekday(schedule, weekday),
+              minutes: _scheduledMinutesForWeekday(schedule, weekday),
             ),
             if (weekday < _weekdayNames.length - 1) const SizedBox(height: 8),
           ],
@@ -432,7 +443,7 @@ class _ReferenceMetricTile extends StatelessWidget {
             metric.value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -451,7 +462,7 @@ class _ReferenceSectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: AppTypography.headlineBold.copyWith(color: AppColors.gray800),
+      style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
     );
   }
 }
@@ -479,24 +490,20 @@ class _ReferenceEmptyState extends StatelessWidget {
 }
 
 class _ScheduleDayPreviewRow extends StatelessWidget {
-  const _ScheduleDayPreviewRow({required this.dayLabel, required this.hours});
+  const _ScheduleDayPreviewRow({required this.dayLabel, required this.minutes});
 
   final String dayLabel;
-  final List<int> hours;
+  final int minutes;
 
   @override
   Widget build(BuildContext context) {
-    final bool hasHours = hours.isNotEmpty;
-    final String rangeText = hasHours
-        ? _formatHourRanges(hours).join(', ')
-        : '등록 없음';
-    final int allowedMinutes = hours.length * 60;
+    final bool hasMinutes = minutes > 0;
 
     return _ReferenceTile(
       leading: dayLabel,
-      value: hasHours ? _formatMinutes(allowedMinutes) : '00시간 00분',
-      detail: rangeText,
-      isMuted: !hasHours,
+      value: hasMinutes ? _formatMinutes(minutes) : '00시간 00분',
+      detail: hasMinutes ? '사용 시간' : '등록 없음',
+      isMuted: !hasMinutes,
     );
   }
 }
@@ -551,7 +558,9 @@ class _ReferenceTile extends StatelessWidget {
               leading,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.headlineBold.copyWith(color: contentColor),
+              style: AppTypography.headlineSemiBold.copyWith(
+                color: contentColor,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -566,7 +575,9 @@ class _ReferenceTile extends StatelessWidget {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelBold.copyWith(color: contentColor),
+                  style: AppTypography.labelSemiBold.copyWith(
+                    color: contentColor,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -792,40 +803,15 @@ class _AddCircleButton extends StatelessWidget {
   }
 }
 
-List<int> _selectedHoursForWeekday(TimeSchedule schedule, int weekday) {
-  final Set<int> hours = <int>{
-    for (final HourCell cell in schedule.allowedHours)
-      if (cell.weekday == weekday) cell.hour,
-  };
-  return hours.toList()..sort();
-}
-
-List<String> _formatHourRanges(List<int> hours) {
-  if (hours.isEmpty) return const <String>[];
-
-  final List<String> ranges = <String>[];
-  int rangeStart = hours.first;
-  int previous = hours.first;
-
-  for (final int hour in hours.skip(1)) {
-    if (hour == previous + 1) {
-      previous = hour;
-      continue;
+int _scheduledMinutesForWeekday(TimeSchedule schedule, int weekday) {
+  int total = 0;
+  for (final DayAllocation allocation in schedule.dayAllocations) {
+    if (allocation.weekdayIndices.contains(weekday)) {
+      total += allocation.totalMinutes;
     }
-    ranges.add(_formatHourRange(rangeStart, previous + 1));
-    rangeStart = hour;
-    previous = hour;
   }
-
-  ranges.add(_formatHourRange(rangeStart, previous + 1));
-  return ranges;
+  return total;
 }
-
-String _formatHourRange(int startHour, int endHour) {
-  return '${_formatClock(startHour)}-${_formatClock(endHour)}';
-}
-
-String _formatClock(int hour) => '${hour.toString().padLeft(2, '0')}:00';
 
 String _formatMinutes(int totalMinutes) {
   final int hours = totalMinutes ~/ 60;

@@ -21,18 +21,17 @@ class ApiNotificationRepository implements NotificationRepository {
   Future<Result<List<NotificationItem>>> listNotifications() async {
     try {
       final Response<dynamic> response = await _dio.get<dynamic>(
-        '/notifications',
+        '/api/v1/notifications',
       );
       final dynamic data = response.data;
-      if (data is! Map) {
-        throw const FormatException(
-          'Notifications response was not a JSON object.',
-        );
-      }
-      final dynamic raw = data['notifications'];
+      final dynamic raw = data is List
+          ? data
+          : data is Map
+          ? data['data'] ?? data['notifications']
+          : null;
       if (raw is! List) {
         throw const FormatException(
-          'Notifications response missing "notifications" array.',
+          'Notifications response was not a JSON array.',
         );
       }
       final List<NotificationItem> items = raw
@@ -47,8 +46,12 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<Result<void>> deleteNotification(String id) async {
+    final int? notificationId = _positiveNumericId(id);
+    if (notificationId == null) {
+      return Result<void>.failure('알림 정보를 다시 불러와 주세요.');
+    }
     try {
-      await _dio.delete<dynamic>('/notifications/$id');
+      await _dio.delete<dynamic>('/api/v1/notifications/$notificationId');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);
@@ -57,11 +60,23 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<Result<void>> markAsRead(String id) async {
+    final int? notificationId = _positiveNumericId(id);
+    if (notificationId == null) {
+      return Result<void>.failure('알림 정보를 다시 불러와 주세요.');
+    }
     try {
-      await _dio.patch<dynamic>('/notifications/$id/read');
+      await _dio.patch<dynamic>('/api/v1/notifications/$notificationId/read');
       return Result<void>.success(null);
     } on DioException catch (e) {
       return failureFromDioException<void>(e);
     }
+  }
+
+  int? _positiveNumericId(String id) {
+    final int? parsed = int.tryParse(id.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
   }
 }

@@ -27,7 +27,7 @@ class TimeSetupCompletePage extends StatelessWidget {
     const body = '이번주 시간 계획이 부모님께 전달되었어요.\n이제 계획대로 사용해봐요!';
 
     return Scaffold(
-      backgroundColor: AppColors.gray050,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -38,7 +38,7 @@ class TimeSetupCompletePage extends StatelessWidget {
               const Spacer(),
               Text(
                 title,
-                style: AppTypography.heading1Bold.copyWith(
+                style: AppTypography.heading1SemiBold.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,
@@ -68,7 +68,7 @@ class TimeSetupCompletePage extends StatelessWidget {
               const SizedBox(height: 40),
               Text(
                 body,
-                style: AppTypography.bodyBold.copyWith(
+                style: AppTypography.bodySemiBold.copyWith(
                   color: AppColors.textPrimary,
                 ),
                 textAlign: TextAlign.center,

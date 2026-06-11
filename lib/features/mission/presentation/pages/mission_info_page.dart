@@ -9,9 +9,61 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/inputs/bridge_photo_tile.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
+import '../../../../core/widgets/mixins/async_error_listener.dart';
 import '../../data/models/mission.dart';
 import '../../state/mission_controller.dart';
 import '../../state/mission_scope.dart';
+
+enum _MissionPhotoSource { gallery, camera }
+
+Future<void> _pickAndAttachMissionPhoto(
+  BuildContext context,
+  MissionController controller,
+) async {
+  final String? path = await _pickMissionPhoto(context);
+  if (path != null) {
+    await controller.addCapturedPhoto(path);
+  }
+}
+
+Future<String?> _pickMissionPhoto(BuildContext context) async {
+  final _MissionPhotoSource? source =
+      await showModalBottomSheet<_MissionPhotoSource>(
+        context: context,
+        backgroundColor: AppColors.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (BuildContext context) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text('앨범에서 선택', style: AppTypography.bodyMedium),
+                  onTap: () =>
+                      Navigator.of(context).pop(_MissionPhotoSource.gallery),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: Text('사진 촬영', style: AppTypography.bodyMedium),
+                  onTap: () =>
+                      Navigator.of(context).pop(_MissionPhotoSource.camera),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+  if (source == null) {
+    return null;
+  }
+  return switch (source) {
+    _MissionPhotoSource.gallery => CameraService.pickPhotoFromGallery(),
+    _MissionPhotoSource.camera => CameraService.capturePhoto(),
+  };
+}
 
 /// Root page for the mission detail / perform flow.
 ///
@@ -32,33 +84,22 @@ class MissionInfoPage extends StatefulWidget {
   State<MissionInfoPage> createState() => _MissionInfoPageState();
 }
 
-class _MissionInfoPageState extends State<MissionInfoPage> {
+class _MissionInfoPageState extends State<MissionInfoPage>
+    with AsyncErrorListenerMixin<MissionInfoPage> {
   late final MissionController _controller;
 
   @override
   void initState() {
     super.initState();
     _controller = MissionController(missionId: widget.missionId);
-    _controller.addListener(_listenForErrors);
+    bindAsyncErrorListener(_controller);
+    _controller.reload();
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_listenForErrors);
     _controller.dispose();
     super.dispose();
-  }
-
-  /// Surfaces controller errors as a SnackBar and clears them so the next
-  /// failure can fire again. The `mounted` guard prevents post-dispose
-  /// ScaffoldMessenger lookups when the page is being torn down.
-  void _listenForErrors() {
-    final String? message = _controller.errorMessage;
-    if (message == null || !mounted) return;
-    _controller.clearError();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
@@ -68,13 +109,83 @@ class _MissionInfoPageState extends State<MissionInfoPage> {
       child: AnimatedBuilder(
         animation: _controller,
         builder: (BuildContext context, _) {
-          return switch (_controller.step) {
+          final Widget currentView = switch (_controller.step) {
             MissionFlowStep.info => const _InfoView(),
             MissionFlowStep.cameraPrompt => const _CameraPromptView(),
             MissionFlowStep.photoPreview => const _PhotoPreviewView(),
             MissionFlowStep.submitted => const _SubmittedView(),
           };
+          return PopScope(
+            canPop: !_controller.isLoading,
+            child: Stack(
+              children: <Widget>[
+                currentView,
+                if (_controller.isLoading)
+                  const Positioned.fill(child: _MissionSubmitBlockingOverlay()),
+              ],
+            ),
+          );
         },
+      ),
+    );
+  }
+}
+
+class _MissionSubmitBlockingOverlay extends StatelessWidget {
+  const _MissionSubmitBlockingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: const <Widget>[
+        ModalBarrier(dismissible: false, color: Color(0x66000000)),
+        Center(child: _MissionSubmitLoadingPanel()),
+      ],
+    );
+  }
+}
+
+class _MissionSubmitLoadingPanel extends StatelessWidget {
+  const _MissionSubmitLoadingPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: '업로드 중',
+      child: Material(
+        type: MaterialType.transparency,
+        child: Container(
+          width: 118,
+          height: 118,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '업로드 중',
+                style: AppTypography.bodySemiBold.copyWith(
+                  color: AppColors.black,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -92,6 +203,9 @@ class _MissionInfoPageState extends State<MissionInfoPage> {
 class _InfoView extends StatelessWidget {
   const _InfoView();
 
+  static const double _tabTopGap = 16;
+  static const double _contentHorizontalPadding = AppTokens.pageHorizontal;
+
   @override
   Widget build(BuildContext context) {
     final MissionController controller = MissionScope.of(context);
@@ -101,18 +215,17 @@ class _InfoView extends StatelessWidget {
       length: 2,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: BridgeAppBar(title: mission.title),
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.pageHorizontal,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                const SizedBox(height: AppTokens.smallGap),
-                const _InfoTabsBar(),
-                Expanded(
+          child: Column(
+            children: [
+              BridgeAppBar(title: mission.title),
+              const SizedBox(height: _tabTopGap),
+              const _InfoTabsBar(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: _contentHorizontalPadding,
+                  ),
                   child: TabBarView(
                     physics: const NeverScrollableScrollPhysics(),
                     children: <Widget>[
@@ -121,8 +234,8 @@ class _InfoView extends StatelessWidget {
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -131,9 +244,6 @@ class _InfoView extends StatelessWidget {
 }
 
 /// Top tabs (`미션정보` / `수행정보`) for the info screen.
-///
-/// Lightweight wrapper around Material [TabBar] tuned to the spec's
-/// 1.4px underline + token typography. Sits inside a [DefaultTabController].
 class _InfoTabsBar extends StatelessWidget {
   const _InfoTabsBar();
 
@@ -142,18 +252,11 @@ class _InfoTabsBar extends StatelessWidget {
     return Center(
       child: SizedBox(
         width: 190,
-        child: TabBar(
-          labelColor: AppColors.textPrimary,
-          unselectedLabelColor: AppColors.gray400,
-          labelStyle: AppTypography.bodyBold,
-          unselectedLabelStyle: AppTypography.bodyMedium,
-          indicatorSize: TabBarIndicatorSize.tab,
-          indicatorColor: AppColors.textPrimary,
-          indicatorWeight: 1.4,
-          dividerColor: AppColors.border,
-          tabs: const <Widget>[
-            Tab(text: '미션정보'),
-            Tab(text: '수행정보'),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const <Widget>[
+            _InfoTabButton(index: 0, label: '미션정보'),
+            _InfoTabButton(index: 1, label: '수행정보'),
           ],
         ),
       ),
@@ -161,13 +264,67 @@ class _InfoTabsBar extends StatelessWidget {
   }
 }
 
-/// "미션정보" tab — 5 labeled rows per Figma 746-11392.
-///
-/// 카테고리 / 리셋주기 / 확인방식 are horizontal selectable chip rows;
-/// 지급시간 inlines a split-color reward chip on the right; 상세설명 is a
-/// read-only textarea.
+class _InfoTabButton extends StatelessWidget {
+  const _InfoTabButton({required this.index, required this.label});
+
+  final int index;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TabController controller = DefaultTabController.of(context);
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (BuildContext context, Widget? child) {
+        final bool selected = controller.index == index;
+        final Color feedbackColor = selected
+            ? AppColors.black
+            : AppColors.gray400;
+
+        return Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => controller.animateTo(index),
+            hoverColor: feedbackColor.withValues(alpha: 0.06),
+            highlightColor: feedbackColor.withValues(alpha: 0.10),
+            splashColor: feedbackColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: selected ? AppColors.black : Colors.transparent,
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              child: Text(
+                label,
+                style:
+                    (selected
+                            ? AppTypography.bodySemiBold
+                            : AppTypography.bodyMedium)
+                        .copyWith(
+                          color: selected ? AppColors.black : AppColors.gray400,
+                        ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// "미션정보" tab — labeled rows per Figma 746-11392.
 class _MissionInfoTab extends StatelessWidget {
   const _MissionInfoTab({required this.mission});
+
+  static const double _contentTopGap = 34;
 
   final Mission mission;
 
@@ -177,42 +334,58 @@ class _MissionInfoTab extends StatelessWidget {
         ? mission.description!
         : '상세 설명이 없어요.';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: AppTokens.itemGap + 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _ChipRowSection(
-            label: '카테고리',
-            options: mission.categoryOptions,
-            selected: mission.category,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints viewport) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: viewport.maxWidth,
+              minHeight: viewport.maxHeight,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const SizedBox(height: _contentTopGap),
+                _EvenChipRowSection(
+                  label: '카테고리',
+                  options: mission.categoryOptions,
+                  selected: mission.category,
+                  spacing: AppTokens.smallGap,
+                ),
+                const _MissionInfoSeparator(),
+                _FixedChipRowSection(
+                  label: '리셋주기',
+                  options: mission.resetCycleOptions,
+                  selected: mission.resetCycle,
+                  widths: const <double>[74, 88, 74],
+                ),
+                const _MissionInfoSeparator(),
+                _EvenChipRowSection(
+                  label: '확인방식',
+                  options: <String>[
+                    for (final ConfirmationMethod m
+                        in mission.confirmationMethodOptions)
+                      m.label,
+                  ],
+                  selected: mission.confirmationMethod.label,
+                ),
+                const _MissionInfoSeparator(),
+                _PayoutTimeSection(
+                  label: '지급시간',
+                  hours: mission.rewardHours,
+                  minutes: mission.rewardMinutes,
+                ),
+                const _MissionInfoSeparator(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: _DescriptionSection(label: '상세설명', value: detail),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
-          _ChipRowSection(
-            label: '리셋주기',
-            options: mission.resetCycleOptions,
-            selected: mission.resetCycle,
-          ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
-          _ChipRowSection(
-            label: '확인방식',
-            options: <String>[
-              for (final ConfirmationMethod m
-                  in mission.confirmationMethodOptions)
-                m.label,
-            ],
-            selected: mission.confirmationMethod.label,
-          ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
-          _PayoutTimeSection(
-            label: '지급시간',
-            hours: mission.rewardHours,
-            minutes: mission.rewardMinutes,
-          ),
-          const SizedBox(height: AppTokens.sectionGap - 8),
-          _DescriptionSection(label: '상세설명', value: detail),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -230,6 +403,8 @@ class _MissionPerformInfoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isRejected = controller.mission.status == MissionStatus.rejected;
+
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.itemGap, bottom: 24),
       child: Column(
@@ -238,7 +413,7 @@ class _MissionPerformInfoTab extends StatelessWidget {
           Expanded(
             child: Center(
               child: Text(
-                '미션이 아직 수행되지 않았어요.',
+                isRejected ? '미션이 반려되었어요.' : '미션이 아직 수행되지 않았어요.',
                 style: AppTypography.headlineMedium.copyWith(
                   color: AppColors.gray300,
                 ),
@@ -247,17 +422,13 @@ class _MissionPerformInfoTab extends StatelessWidget {
             ),
           ),
           BridgeButton(
-            label: '수행하기',
+            label: isRejected ? '다시 수행하기' : '수행하기',
             variant: BridgeButtonVariant.primary,
             size: BridgeButtonSize.large,
             fullWidth: true,
-            // No rejected-detail node exists in Figma — disable the CTA so
-            // rejected missions can't enter the perform flow until a retry
-            // design is supplied. Also disabled while the controller is
-            // mid-async (e.g. submit in flight) to prevent re-entry.
-            onPressed:
-                controller.mission.status == MissionStatus.rejected ||
-                        controller.isLoading
+            // Backend accepts a new performance after REJECTED; keep the retry
+            // path open and only guard against in-flight async re-entry.
+            onPressed: controller.isLoading
                 ? null
                 : controller.goToCameraPrompt,
           ),
@@ -267,34 +438,42 @@ class _MissionPerformInfoTab extends StatelessWidget {
   }
 }
 
-/// Section: 18 SemiBold label + horizontal selectable chip row.
-class _ChipRowSection extends StatelessWidget {
-  const _ChipRowSection({
+/// Section: fixed-width parent-app style chip row.
+class _FixedChipRowSection extends StatelessWidget {
+  const _FixedChipRowSection({
     required this.label,
     required this.options,
     required this.selected,
+    required this.widths,
   });
 
   final String label;
   final List<String> options;
   final String selected;
+  final List<double> widths;
+
+  static const double _spacing = 8;
+  static const double _labelControlGap = 14;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: AppTypography.headlineBold.copyWith(color: AppColors.gray800),
-        ),
-        const SizedBox(height: AppTokens.smallGap),
-        Wrap(
-          spacing: AppTokens.smallGap,
-          runSpacing: AppTokens.smallGap,
+        _MissionInfoSectionLabel(label),
+        const SizedBox(height: _labelControlGap),
+        Row(
           children: <Widget>[
-            for (final String option in options)
-              _SelectableChip(label: option, selected: option == selected),
+            for (int i = 0; i < options.length; i++) ...<Widget>[
+              if (i > 0) const SizedBox(width: _spacing),
+              SizedBox(
+                width: i < widths.length ? widths[i] : widths.last,
+                child: _SelectableChip(
+                  label: options[i],
+                  selected: options[i] == selected,
+                ),
+              ),
+            ],
           ],
         ),
       ],
@@ -302,8 +481,62 @@ class _ChipRowSection extends StatelessWidget {
   }
 }
 
+/// Section: equal-width parent-app style chip row.
+class _EvenChipRowSection extends StatelessWidget {
+  const _EvenChipRowSection({
+    required this.label,
+    required this.options,
+    required this.selected,
+    this.spacing = 8,
+  });
+
+  final String label;
+  final List<String> options;
+  final String selected;
+  final double spacing;
+  static const double _labelControlGap = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _MissionInfoSectionLabel(label),
+        const SizedBox(height: _labelControlGap),
+        Row(
+          children: <Widget>[
+            for (int i = 0; i < options.length; i++) ...<Widget>[
+              if (i > 0) SizedBox(width: spacing),
+              Expanded(
+                child: _SelectableChip(
+                  label: options[i],
+                  selected: options[i] == selected,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MissionInfoSectionLabel extends StatelessWidget {
+  const _MissionInfoSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: AppTypography.headlineSemiBold.copyWith(color: AppColors.gray800),
+    );
+  }
+}
+
 /// Single chip with selected (primary bg + white text) and unselected
-/// (gray100 bg + gray200 border) variants per Figma 746-11392.
+/// parent-app variants.
 class _SelectableChip extends StatelessWidget {
   const _SelectableChip({required this.label, required this.selected});
 
@@ -312,22 +545,50 @@ class _SelectableChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = selected ? AppColors.primary : AppColors.gray100;
+    final Color bg = selected ? AppColors.primary : AppColors.gray050;
     final Color textColor = selected ? AppColors.white : AppColors.gray600;
-    final TextStyle textStyle = selected
-        ? AppTypography.bodyBold.copyWith(color: textColor)
-        : AppTypography.bodyMedium.copyWith(color: textColor);
 
-    return Container(
+    return SizedBox(
       height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: AppTokens.mediumGap),
-      decoration: BoxDecoration(
-        color: bg,
-        border: selected ? null : Border.all(color: AppColors.gray200),
-        borderRadius: BorderRadius.circular(AppTokens.mediumGap),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.gray200,
+          ),
+          borderRadius: BorderRadius.circular(AppTokens.fieldRadius),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              label,
+              style:
+                  (selected
+                          ? AppTypography.bodySemiBold
+                          : AppTypography.bodyMedium)
+                      .copyWith(color: textColor),
+              maxLines: 1,
+              overflow: TextOverflow.visible,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
       ),
-      alignment: Alignment.center,
-      child: Text(label, style: textStyle),
+    );
+  }
+}
+
+class _MissionInfoSeparator extends StatelessWidget {
+  const _MissionInfoSeparator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 7,
+      margin: const EdgeInsets.symmetric(vertical: 24),
+      color: AppColors.gray100,
     );
   }
 }
@@ -347,17 +608,11 @@ class _PayoutTimeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        Expanded(
-          child: Text(
-            label,
-            style: AppTypography.headlineBold.copyWith(
-              color: AppColors.gray800,
-            ),
-          ),
-        ),
-        _RewardChip(hours: hours, minutes: minutes),
+        _MissionInfoSectionLabel(label),
+        _RewardTimeField(hours: hours, minutes: minutes),
       ],
     );
   }
@@ -375,17 +630,12 @@ class _DescriptionSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: AppTypography.headlineBold.copyWith(color: AppColors.gray800),
-        ),
-        const SizedBox(height: AppTokens.smallGap),
+        _MissionInfoSectionLabel(label),
+        const SizedBox(height: 14),
         Container(
+          height: 198,
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: AppTokens.mediumGap,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.gray050,
             border: Border.all(color: AppColors.gray200),
@@ -403,51 +653,59 @@ class _DescriptionSection extends StatelessWidget {
   }
 }
 
-/// Split-color reward chip: number in primary, unit in textPrimary.
-/// Renders only the segments that have a non-zero value. Used inline
-/// inside the 지급시간 row.
-class _RewardChip extends StatelessWidget {
-  const _RewardChip({required this.hours, required this.minutes});
+class _RewardTimeField extends StatelessWidget {
+  const _RewardTimeField({required this.hours, required this.minutes});
 
   final int hours;
   final int minutes;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle numberStyle = AppTypography.headlineBold.copyWith(
-      color: AppColors.primary,
-    );
-    final TextStyle unitStyle = AppTypography.headlineMedium.copyWith(
-      color: AppColors.textPrimary,
-    );
-
-    final List<InlineSpan> spans = <InlineSpan>[];
-    if (hours > 0) {
-      spans.add(
-        TextSpan(text: hours.toString().padLeft(2, '0'), style: numberStyle),
-      );
-      spans.add(TextSpan(text: ' 시간', style: unitStyle));
-    }
-    if (minutes > 0) {
-      if (spans.isNotEmpty) {
-        spans.add(
-          const WidgetSpan(child: SizedBox(width: AppTokens.smallGap)),
-        );
-      }
-      spans.add(
-        TextSpan(text: minutes.toString().padLeft(2, '0'), style: numberStyle),
-      );
-      spans.add(TextSpan(text: ' 분', style: unitStyle));
-    }
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.gray050,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.gray200),
         borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
       ),
-      child: RichText(text: TextSpan(children: spans)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _RewardTimePart(value: hours, label: '시간'),
+          const SizedBox(width: 16),
+          _RewardTimePart(value: minutes, label: '분'),
+        ],
+      ),
+    );
+  }
+}
+
+class _RewardTimePart extends StatelessWidget {
+  const _RewardTimePart({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        children: <InlineSpan>[
+          TextSpan(
+            text: value.toString().padLeft(2, '0'),
+            style: AppTypography.headlineSemiBold.copyWith(
+              color: AppColors.primary,
+            ),
+          ),
+          TextSpan(
+            text: ' $label',
+            style: AppTypography.headlineMedium.copyWith(
+              color: AppColors.inkBlack,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -477,55 +735,58 @@ class _CameraPromptView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(title: '미션수행', onBack: controller.goBack),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const SizedBox(height: AppTokens.pageTop),
-              Text(
-                mission.title,
-                style: AppTypography.heading1Bold,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
-              Text(
-                mission.captureInstruction,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray600,
+        child: Column(
+          children: [
+            BridgeAppBar(title: '미션수행', onBack: controller.goBack),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: _uploadSectionTopGap),
-              _CameraCTA(
-                onTap: () async {
-                  final String? path = await CameraService.capturePhoto();
-                  if (path != null) {
-                    await controller.addCapturedPhoto(path);
-                  }
-                },
-              ),
-              const Spacer(),
-              Text(
-                '최대 4장까지 올릴 수 있어요',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.gray600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: AppTokens.pageTop),
+                    Text(
+                      mission.title,
+                      style: AppTypography.heading1SemiBold,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.itemGap),
+                    Text(
+                      mission.captureInstruction,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: _uploadSectionTopGap),
+                    _CameraCTA(
+                      onTap: () async {
+                        await _pickAndAttachMissionPhoto(context, controller);
+                      },
+                    ),
+                    const Spacer(),
+                    Text(
+                      '최대 4장까지 올릴 수 있어요',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.mediumGap),
+                    // Disabled until at least one photo is captured. Once
+                    // [addPhoto] runs, the controller auto-transitions to
+                    // photoPreview so this view won't typically re-render
+                    // with an enabled submit — that lives in _PhotoPreviewView.
+                    const BridgeButton(label: '제출', onPressed: null),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppTokens.mediumGap),
-              // Disabled until at least one photo is captured. Once
-              // [addPhoto] runs, the controller auto-transitions to
-              // photoPreview so this view won't typically re-render
-              // with an enabled submit — that lives in _PhotoPreviewView.
-              const BridgeButton(label: '제출', onPressed: null),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -616,89 +877,97 @@ class _PhotoPreviewView extends StatelessWidget {
     final MissionController controller = MissionScope.of(context);
     final Mission mission = controller.mission;
     final int photoCount = controller.capturedPhotos.length;
-    final bool showAddTile = !controller.hasMaxPhotos;
+    final bool isSubmitting = controller.isLoading;
+    final bool showAddTile = !controller.hasMaxPhotos && !isSubmitting;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BridgeAppBar(title: '미션수행', onBack: controller.goBack),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const SizedBox(height: AppTokens.pageTop),
-              Text(
-                mission.title,
-                style: AppTypography.heading1Bold.copyWith(
-                  color: AppColors.textPrimary,
+        child: Column(
+          children: [
+            BridgeAppBar(title: '미션수행', onBack: controller.goBack),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
-              Text(
-                mission.captureInstruction,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: _photoGridTopGap),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: AppTokens.photoGap,
-                    crossAxisSpacing: AppTokens.photoGap,
-                    childAspectRatio: 157 / 156,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: <Widget>[
-                      for (int i = 0; i < photoCount; i++)
-                        BridgePhotoTile(
-                          path: controller.capturedPhotos[i],
-                          onDelete: () => controller.removePhoto(i),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: AppTokens.pageTop),
+                    Text(
+                      mission.title,
+                      style: AppTypography.heading1SemiBold.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.itemGap),
+                    Text(
+                      mission.captureInstruction,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: _photoGridTopGap),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: GridView.count(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: AppTokens.photoGap,
+                          crossAxisSpacing: AppTokens.photoGap,
+                          childAspectRatio: 157 / 156,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: <Widget>[
+                            for (int i = 0; i < photoCount; i++)
+                              BridgePhotoTile(
+                                path: controller.capturedPhotos[i],
+                                onDelete: isSubmitting
+                                    ? () {}
+                                    : () => controller.removePhoto(i),
+                              ),
+                            if (showAddTile)
+                              BridgeAddPhotoTile(
+                                onTap: () async {
+                                  await _pickAndAttachMissionPhoto(
+                                    context,
+                                    controller,
+                                  );
+                                },
+                              ),
+                          ],
                         ),
-                      if (showAddTile)
-                        BridgeAddPhotoTile(
-                          onTap: () async {
-                            final String? path =
-                                await CameraService.capturePhoto();
-                            if (path != null) {
-                              await controller.addCapturedPhoto(path);
+                      ),
+                    ),
+                    Text(
+                      '최대 4장까지 올릴 수 있어요',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.mediumGap),
+                    BridgeButton(
+                      label: '제출',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      // submit() is now async; canSubmit also gates on isLoading so
+                      // a double-tap can't kick off two in-flight submissions.
+                      onPressed: controller.canSubmit
+                          ? () {
+                              controller.submit();
                             }
-                          },
-                        ),
-                    ],
-                  ),
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-              Text(
-                '최대 4장까지 올릴 수 있어요',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.gray600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.mediumGap),
-              BridgeButton(
-                label: '제출',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                // submit() is now async; canSubmit also gates on isLoading so
-                // a double-tap can't kick off two in-flight submissions.
-                onPressed: controller.canSubmit
-                    ? () {
-                        controller.submit();
-                      }
-                    : null,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -737,56 +1006,66 @@ class _SubmittedView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BridgeAppBar(title: '미션수행', showBack: false),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.pageHorizontal,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              const SizedBox(height: _contentTopGap),
-              Text(
-                title,
-                style: AppTypography.heading1Bold.copyWith(
-                  color: AppColors.textPrimary,
+        child: Column(
+          children: [
+            const BridgeAppBar(title: '미션수행', showBack: false),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.pageHorizontal,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTokens.itemGap),
-              Text(
-                subtitle,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.gray600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: _contentTopGap),
+                    Text(
+                      title,
+                      style: AppTypography.heading1SemiBold.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTokens.itemGap),
+                    Text(
+                      subtitle,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.gray600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
+                    Center(
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.check,
+                            color: AppColors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    BridgeButton(
+                      label: '홈으로',
+                      variant: BridgeButtonVariant.primary,
+                      size: BridgeButtonSize.large,
+                      fullWidth: true,
+                      onPressed: () => context.go('/child-home'),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 40),
-              Center(
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.check, color: AppColors.white, size: 20),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              BridgeButton(
-                label: '홈으로',
-                variant: BridgeButtonVariant.primary,
-                size: BridgeButtonSize.large,
-                fullWidth: true,
-                onPressed: () => context.go('/child-home'),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -61,6 +61,5 @@ class MissionMock {
     ),
   ];
 
-  static Mission byId(String id) =>
-      all.firstWhere((m) => m.id == id, orElse: () => all.first);
+  static Mission byId(String id) => all.firstWhere((m) => m.id == id);
 }

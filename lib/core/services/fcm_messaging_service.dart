@@ -36,13 +36,18 @@ class FcmMessage {
 
   factory FcmMessage.fromRemoteMessage(RemoteMessage message) {
     final Map<String, dynamic> data = message.data;
-    final String? entityId = (data['missionId'] as String?) ??
-        (data['reportId'] as String?) ??
-        (data['scheduleId'] as String?);
+    final String? entityId =
+        _dataString(data, 'missionId') ??
+        _dataString(data, 'reportId') ??
+        _dataString(data, 'scheduleId');
+    final String type =
+        _dataString(data, 'type') ??
+        _dataString(data, 'notificationType') ??
+        'unknown';
     return FcmMessage(
-      type: data['type'] as String? ?? 'unknown',
-      deeplink: data['deeplink'] as String? ?? '/child-home',
-      notificationId: data['notificationId'] as String?,
+      type: type,
+      deeplink: _deeplinkFromData(data) ?? '/child-home',
+      notificationId: _dataString(data, 'notificationId'),
       entityId: entityId,
       title: message.notification?.title,
       body: message.notification?.body,
@@ -79,10 +84,15 @@ abstract interface class FcmMessagingService {
   Future<FcmMessage?> getInitialMessage();
 }
 
-FcmMessagingService createFcmMessagingService() {
-  if (currentEnvironment.useMocks) return const MockFcmMessagingService();
-  return ApiFcmMessagingService();
-}
+/// Cached singleton — lazy-initialized at first access. Sharing one
+/// instance matters here because [ApiFcmMessagingService] holds the
+/// stream subscriptions to the firebase plugin; re-creating it would
+/// fork the streams.
+final FcmMessagingService _fcmMessagingService = currentEnvironment.useMocks
+    ? const MockFcmMessagingService()
+    : ApiFcmMessagingService();
+
+FcmMessagingService createFcmMessagingService() => _fcmMessagingService;
 
 class MockFcmMessagingService implements FcmMessagingService {
   const MockFcmMessagingService();
@@ -101,8 +111,7 @@ class MockFcmMessagingService implements FcmMessagingService {
       const Stream<FcmMessage>.empty();
 
   @override
-  Stream<FcmMessage> get onMessageOpenedApp =>
-      const Stream<FcmMessage>.empty();
+  Stream<FcmMessage> get onMessageOpenedApp => const Stream<FcmMessage>.empty();
 
   @override
   Future<FcmMessage?> getInitialMessage() async => null;
@@ -113,12 +122,8 @@ class ApiFcmMessagingService implements FcmMessagingService {
 
   @override
   Future<bool> requestPermission() async {
-    final NotificationSettings settings =
-        await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    final NotificationSettings settings = await FirebaseMessaging.instance
+        .requestPermission(alert: true, badge: true, sound: true);
     return settings.authorizationStatus == AuthorizationStatus.authorized ||
         settings.authorizationStatus == AuthorizationStatus.provisional;
   }
@@ -140,9 +145,30 @@ class ApiFcmMessagingService implements FcmMessagingService {
 
   @override
   Future<FcmMessage?> getInitialMessage() async {
-    final RemoteMessage? msg =
-        await FirebaseMessaging.instance.getInitialMessage();
+    final RemoteMessage? msg = await FirebaseMessaging.instance
+        .getInitialMessage();
     if (msg == null) return null;
     return FcmMessage.fromRemoteMessage(msg);
   }
+}
+
+String? _dataString(Map<String, dynamic> data, String key) {
+  final Object? value = data[key];
+  final String? stringValue = value?.toString();
+  return stringValue == null || stringValue.isEmpty ? null : stringValue;
+}
+
+String? _deeplinkFromData(Map<String, dynamic> data) {
+  final String? explicitRoute =
+      _dataString(data, 'deeplink') ?? _dataString(data, 'targetRoute');
+  if (explicitRoute != null && explicitRoute.startsWith('/')) {
+    return explicitRoute;
+  }
+
+  final String? missionId = _dataString(data, 'missionId');
+  if (missionId != null) {
+    return '/child-home/mission/$missionId';
+  }
+
+  return null;
 }

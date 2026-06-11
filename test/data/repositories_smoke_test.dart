@@ -1,25 +1,40 @@
+import 'dart:io';
+
 import 'package:bridge_k/features/auth/data/models/auth_token.dart';
+import 'package:bridge_k/features/auth/data/repositories/api_auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/auth_repository.dart';
 import 'package:bridge_k/features/auth/data/repositories/mock_auth_repository.dart';
+import 'package:bridge_k/core/auth/auth_session.dart';
+import 'package:bridge_k/features/devices/data/repositories/api_device_repository.dart';
+import 'package:bridge_k/features/devices/data/repositories/device_repository.dart';
+import 'package:bridge_k/features/mission/data/listeners/api_mission_approval_listener.dart';
+import 'package:bridge_k/features/mission/data/listeners/mission_approval_listener.dart';
 import 'package:bridge_k/features/mission/data/models/mission.dart';
+import 'package:bridge_k/features/mission/data/repositories/api_mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mission_repository.dart';
 import 'package:bridge_k/features/mission/data/repositories/mock_mission_repository.dart';
 import 'package:bridge_k/features/my_page/data/models/user_profile.dart';
+import 'package:bridge_k/features/my_page/data/repositories/api_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/mock_my_page_repository.dart';
 import 'package:bridge_k/features/my_page/data/repositories/my_page_repository.dart';
 import 'package:bridge_k/features/notifications/data/models/notification_item.dart';
+import 'package:bridge_k/features/notifications/data/repositories/api_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/mock_notification_repository.dart';
 import 'package:bridge_k/features/notifications/data/repositories/notification_repository.dart';
 import 'package:bridge_k/features/report/data/models/usage_report.dart';
 import 'package:bridge_k/features/report/data/repositories/mock_usage_report_repository.dart';
+import 'package:bridge_k/features/report/data/repositories/api_usage_report_repository.dart';
 import 'package:bridge_k/features/report/data/repositories/usage_report_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/models/time_confirm_data.dart';
+import 'package:bridge_k/features/time_confirm/data/repositories/api_time_confirm_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/repositories/mock_time_confirm_repository.dart';
 import 'package:bridge_k/features/time_confirm/data/repositories/time_confirm_repository.dart';
 import 'package:bridge_k/features/time_setup/data/models/time_schedule.dart';
+import 'package:bridge_k/features/time_setup/data/repositories/api_time_setup_repository.dart';
 import 'package:bridge_k/features/time_setup/data/repositories/mock_time_setup_repository.dart';
 import 'package:bridge_k/features/time_setup/data/repositories/time_setup_repository.dart';
 import 'package:bridge_k/core/models/result.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,8 +42,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('mission repository', () {
-    test('createMissionRepository returns Mock in dev', () {
-      expect(createMissionRepository(), isA<MockMissionRepository>());
+    test('createMissionRepository returns Api in dev real API mode', () {
+      expect(createMissionRepository(), isA<ApiMissionRepository>());
     });
 
     test('listMissions returns Success with non-empty list', () async {
@@ -49,29 +64,291 @@ void main() {
       expect(result, isA<Success<Mission>>());
     });
 
-    test('submitMission returns Success and attaches photo paths', () async {
+    test('submitMission returns Success in mock mode', () async {
       final MissionRepository repo = MockMissionRepository();
-      final Result<Mission> result = await repo.submitMission(
+      final Result<MissionSubmissionResult> result = await repo.submitMission(
         id: '1',
         photoPaths: const <String>['/tmp/photo1.jpg'],
       );
-      switch (result) {
-        case Success<Mission>(:final Mission data):
-          expect(data.photoUrls, <String>['/tmp/photo1.jpg']);
-        case Failure<Mission>():
-          fail('submitMission should succeed in mock mode');
-      }
+      expect(result, isA<Success<MissionSubmissionResult>>());
+    });
+
+    test(
+      'api submitMission posts image and preserves performance state',
+      () async {
+        final File proof = await File(
+          '${Directory.systemTemp.path}/bridge-proof-${DateTime.now().microsecondsSinceEpoch}.jpg',
+        ).writeAsBytes(<int>[1, 2, 3, 4]);
+        addTearDown(() async {
+          if (await proof.exists()) {
+            await proof.delete();
+          }
+        });
+
+        FormData? postedFormData;
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/missions/42/performances') {
+                    postedFormData = options.data as FormData;
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <String, dynamic>{
+                            'isAccepted': false,
+                            'reason': '부모님 확인 대기중입니다.',
+                            'status': 'PENDING',
+                            'performanceId': 201,
+                          },
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'unexpected ${options.method} ${options.path}',
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<MissionSubmissionResult> result = await repo.submitMission(
+          id: '42',
+          photoPaths: <String>[proof.path],
+        );
+
+        switch (result) {
+          case Success<MissionSubmissionResult>(
+            :final MissionSubmissionResult data,
+          ):
+            expect(postedFormData, isNotNull);
+            expect(postedFormData!.files.single.key, 'image');
+            expect(
+              postedFormData!.files.single.value.filename,
+              proof.uri.pathSegments.last,
+            );
+            expect(data.performanceId, '201');
+            expect(
+              data.statusFor(ConfirmationMethod.parentApproval),
+              MissionStatus.reviewing,
+            );
+          case Failure<MissionSubmissionResult>(:final String message):
+            fail(
+              'api submitMission should parse wrapped response, got $message',
+            );
+        }
+      },
+    );
+
+    test(
+      'api submitMission rejects non-numeric mission id before network',
+      () async {
+        final List<String> calls = <String>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  calls.add('${options.method} ${options.path}');
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true},
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<MissionSubmissionResult> result = await repo.submitMission(
+          id: 'mission-42',
+          photoPaths: const <String>['/tmp/bridge-missing-proof.jpg'],
+        );
+
+        expect(result, isA<Failure<MissionSubmissionResult>>());
+        expect(
+          (result as Failure<MissionSubmissionResult>).message,
+          '미션을 찾을 수 없어요.',
+        );
+        expect(calls, isEmpty);
+      },
+    );
+
+    test(
+      'api submitMission rejects missing proof image before network',
+      () async {
+        final List<String> calls = <String>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  calls.add('${options.method} ${options.path}');
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true},
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<MissionSubmissionResult> result = await repo.submitMission(
+          id: '42',
+          photoPaths: const <String>['/tmp/bridge-missing-proof.jpg'],
+        );
+
+        expect(result, isA<Failure<MissionSubmissionResult>>());
+        expect(
+          (result as Failure<MissionSubmissionResult>).message,
+          '제출할 사진을 찾을 수 없어요.',
+        );
+        expect(calls, isEmpty);
+      },
+    );
+
+    test(
+      'api listMissions parses AWS ApiResponse-wrapped mission list',
+      () async {
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/missions') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <Map<String, dynamic>>[
+                            <String, dynamic>{
+                              'missionId': 42,
+                              'title': '방 청소하기',
+                              'category': 'CLEANING',
+                              'reward': 90,
+                            },
+                          ],
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  if (options.path == '/api/v1/missions/42') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <String, dynamic>{
+                            'missionId': 42,
+                            'title': '방 청소하기',
+                            'category': 'CLEANING',
+                            'resetCycle': 'WEEKLY',
+                            'verificationType': 'PARENT',
+                            'reward': 90,
+                            'description': '방 정리 인증',
+                          },
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  if (options.path == '/api/v1/missions/42/performance') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': <String, dynamic>{
+                            'performanceId': 201,
+                            'status': 'PENDING',
+                            'proofImageUrl': 'https://test.local/proof.jpg',
+                          },
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      response: Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 404,
+                      ),
+                    ),
+                  );
+                },
+          ),
+        );
+        final MissionRepository repo = ApiMissionRepository(dio);
+
+        final Result<List<Mission>> result = await repo.listMissions();
+
+        switch (result) {
+          case Success<List<Mission>>(:final List<Mission> data):
+            expect(data, hasLength(1));
+            expect(data.single.id, '42');
+            expect(data.single.category, '청소');
+            expect(data.single.resetCycle, '일주일');
+            expect(
+              data.single.confirmationMethod,
+              ConfirmationMethod.parentApproval,
+            );
+            expect(data.single.status, MissionStatus.reviewing);
+            expect(data.single.performanceId, '201');
+            expect(data.single.photoUrls, <String>[
+              'https://test.local/proof.jpg',
+            ]);
+          case Failure<List<Mission>>(:final String message):
+            fail(
+              'api listMissions should parse wrapped response, got $message',
+            );
+        }
+      },
+    );
+
+    test('createMissionApprovalListener returns Api in dev real API mode', () {
+      final MissionApprovalListener listener = createMissionApprovalListener();
+      expect(listener, isA<ApiMissionApprovalListener>());
+
+      final MissionApprovalSubscription subscription = listener.subscribe(
+        missionId: '1',
+        confirmationMethod: ConfirmationMethod.parentApproval,
+        onApproval: (_) =>
+            fail('real API listener placeholder should stay silent'),
+      );
+      subscription.cancel();
     });
   });
 
   group('time setup repository', () {
-    test('createTimeSetupRepository returns Mock in dev', () {
-      expect(createTimeSetupRepository(), isA<MockTimeSetupRepository>());
+    test('createTimeSetupRepository returns Api in dev real API mode', () {
+      expect(createTimeSetupRepository(), isA<ApiTimeSetupRepository>());
     });
 
     test('fetchPreviousWeekSchedule returns Success', () async {
       final TimeSetupRepository repo = MockTimeSetupRepository();
-      final Result<TimeSchedule> result = await repo.fetchPreviousWeekSchedule();
+      final Result<TimeSchedule> result = await repo
+          .fetchPreviousWeekSchedule();
       expect(result, isA<Success<TimeSchedule>>());
     });
 
@@ -86,6 +363,136 @@ void main() {
       }
     });
 
+    test(
+      'api fetchCurrentSchedule excludes reward pool from legacy policy total',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        await AuthSession.saveLogin(username: 'child', memberId: '22');
+
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/children/22/policies') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'yearMonth': '2026-07',
+                          'totalAvailableTime': 720,
+                          'accumulatedRewardTime': 120,
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  if (options.path == '/api/v1/schedules/routines') {
+                    handler.resolve(
+                      Response<dynamic>(
+                        requestOptions: options,
+                        statusCode: 200,
+                        data: <String, dynamic>{
+                          'isSuccess': true,
+                          'data': const <Map<String, dynamic>>[
+                            <String, dynamic>{
+                              'id': 1,
+                              'dayOfWeek': 'MONDAY',
+                              'startTime': '09:00:00',
+                              'endTime': '11:00:00',
+                            },
+                          ],
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'unexpected ${options.method} ${options.path}',
+                    ),
+                  );
+                },
+          ),
+        );
+
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<TimeSchedule?> result = await repo.fetchCurrentSchedule();
+
+        switch (result) {
+          case Success<TimeSchedule?>(:final TimeSchedule? data):
+            expect(data, isNotNull);
+            expect(data!.monthlyBudgetMinutes, 600);
+            expect(data.weeklyTotalCapMinutes, 600);
+            expect(data.yearMonth, '2026-07');
+            expect(
+              data.allowedHours,
+              containsAll(<HourCell>[
+                const HourCell(weekday: 0, hour: 9),
+                const HourCell(weekday: 0, hour: 10),
+              ]),
+            );
+          case Failure<TimeSchedule?>():
+            fail('fetchCurrentSchedule should parse policy fallback');
+        }
+      },
+    );
+
+    test(
+      'api fetchCurrentSchedule maps missing policy 400 to blocked message',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        await AuthSession.saveLogin(username: 'child', memberId: '22');
+
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  if (options.path == '/api/v1/children/22/policies') {
+                    handler.reject(
+                      DioException(
+                        requestOptions: options,
+                        response: Response<dynamic>(
+                          requestOptions: options,
+                          statusCode: 400,
+                          data: <String, dynamic>{
+                            'isSuccess': false,
+                            'code': 'COMMON400',
+                            'message': 'BAD_REQUEST',
+                            'data': '이번 달에 설정된 시간 정책이 없습니다.',
+                          },
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'unexpected ${options.method} ${options.path}',
+                    ),
+                  );
+                },
+          ),
+        );
+
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<TimeSchedule?> result = await repo.fetchCurrentSchedule();
+
+        switch (result) {
+          case Success<TimeSchedule?>():
+            fail('fetchCurrentSchedule should block when policy is missing');
+          case Failure<TimeSchedule?>(:final String message):
+            expect(message, '부모님이 아직 이번 달 시간을 설정하지 않았어요.');
+        }
+      },
+    );
+
     test('saveSchedule returns Success', () async {
       final TimeSetupRepository repo = MockTimeSetupRepository();
       final Result<void> result = await repo.saveSchedule(
@@ -97,11 +504,278 @@ void main() {
       );
       expect(result, isA<Success<void>>());
     });
+
+    test(
+      'api saveSchedule posts budgets, templates, then completion',
+      () async {
+        final List<RequestOptions> requests = <RequestOptions>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  requests.add(options);
+                  final Object? data = options.path.endsWith('/routines')
+                      ? <String, dynamic>{
+                          'isSuccess': true,
+                          'data': const <Map<String, dynamic>>[],
+                        }
+                      : null;
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: data,
+                    ),
+                  );
+                },
+          ),
+        );
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<void> result = await repo.saveSchedule(
+          const TimeSchedule(
+            allowedHours: <HourCell>{},
+            weeklyTotals: <WeeklyTotal>[
+              WeeklyTotal(weekIndex: 0, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 1, hours: 2, minutes: 0),
+              WeeklyTotal(weekIndex: 2, hours: 3, minutes: 0),
+              WeeklyTotal(weekIndex: 3, hours: 4, minutes: 0),
+            ],
+            dayAllocations: <DayAllocation>[
+              DayAllocation(
+                daysLabel: '월',
+                weekdayIndices: <int>[0],
+                hours: 1,
+                minutes: 0,
+              ),
+            ],
+            monthlyBudgetMinutes: 600,
+            yearMonth: '2026-08',
+          ),
+        );
+
+        expect(result, isA<Success<void>>());
+        expect(
+          requests.map((RequestOptions options) {
+            return '${options.method} ${options.path}';
+          }).toList(),
+          <String>[
+            'POST /api/v1/schedules/weekly-budgets',
+            'PUT /api/v1/schedules/templates',
+            'PUT /api/v1/schedules/templates',
+            'PUT /api/v1/schedules/templates',
+            'PUT /api/v1/schedules/templates',
+            'GET /api/v1/schedules/routines',
+            'POST /api/v1/schedules/complete',
+          ],
+        );
+
+        final RequestOptions budgetRequest = requests.first;
+        final String yearMonth = budgetRequest.queryParameters['yearMonth']
+            .toString();
+        expect(yearMonth, '2026-08');
+        expect(budgetRequest.data, <Map<String, dynamic>>[
+          <String, dynamic>{'weekNumber': 1, 'allocatedMinutes': 60},
+          <String, dynamic>{'weekNumber': 2, 'allocatedMinutes': 120},
+          <String, dynamic>{'weekNumber': 3, 'allocatedMinutes': 180},
+          <String, dynamic>{'weekNumber': 4, 'allocatedMinutes': 240},
+        ]);
+
+        final List<RequestOptions> templateRequests = requests
+            .where(
+              (RequestOptions options) =>
+                  options.method == 'PUT' &&
+                  options.path == '/api/v1/schedules/templates',
+            )
+            .toList();
+        expect(
+          templateRequests
+              .map((RequestOptions options) => options.data)
+              .toList(),
+          <Map<String, dynamic>>[
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 1,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 60,
+            },
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 2,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 120,
+            },
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 3,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 180,
+            },
+            <String, dynamic>{
+              'yearMonth': yearMonth,
+              'weekNumber': 4,
+              'dayOfWeek': 'MONDAY',
+              'baseMinutes': 240,
+            },
+          ],
+        );
+        expect(requests.last.queryParameters['yearMonth'], yearMonth);
+      },
+    );
+
+    test(
+      'api saveSchedule scales template totals to each weekly budget',
+      () async {
+        final List<RequestOptions> requests = <RequestOptions>[];
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  requests.add(options);
+                  final Object? data = options.path.endsWith('/routines')
+                      ? <String, dynamic>{
+                          'isSuccess': true,
+                          'data': const <Map<String, dynamic>>[],
+                        }
+                      : null;
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: data,
+                    ),
+                  );
+                },
+          ),
+        );
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<void> result = await repo.saveSchedule(
+          const TimeSchedule(
+            allowedHours: <HourCell>{},
+            weeklyTotals: <WeeklyTotal>[
+              WeeklyTotal(weekIndex: 0, hours: 1, minutes: 40),
+              WeeklyTotal(weekIndex: 1, hours: 3, minutes: 5),
+              WeeklyTotal(weekIndex: 2, hours: 3, minutes: 30),
+              WeeklyTotal(weekIndex: 3, hours: 5, minutes: 5),
+            ],
+            dayAllocations: <DayAllocation>[
+              DayAllocation(
+                daysLabel: '월',
+                weekdayIndices: <int>[0],
+                hours: 0,
+                minutes: 20,
+              ),
+              DayAllocation(
+                daysLabel: '수',
+                weekdayIndices: <int>[2],
+                hours: 0,
+                minutes: 40,
+              ),
+              DayAllocation(
+                daysLabel: '일',
+                weekdayIndices: <int>[6],
+                hours: 0,
+                minutes: 30,
+              ),
+            ],
+            monthlyBudgetMinutes: 800,
+            yearMonth: '2026-08',
+          ),
+        );
+
+        expect(result, isA<Success<void>>());
+
+        final RequestOptions budgetRequest = requests.singleWhere(
+          (RequestOptions options) =>
+              options.method == 'POST' &&
+              options.path == '/api/v1/schedules/weekly-budgets',
+        );
+        final List<Map<String, dynamic>> budgets =
+            (budgetRequest.data as List<dynamic>)
+                .cast<Map<String, dynamic>>()
+                .toList(growable: false);
+        final Map<int, int> budgetMinutesByWeek = <int, int>{
+          for (final Map<String, dynamic> budget in budgets)
+            budget['weekNumber'] as int: budget['allocatedMinutes'] as int,
+        };
+
+        final Map<int, int> templateMinutesByWeek = <int, int>{};
+        for (final RequestOptions request in requests.where(
+          (RequestOptions options) =>
+              options.method == 'PUT' &&
+              options.path == '/api/v1/schedules/templates',
+        )) {
+          final Map<String, dynamic> data =
+              request.data as Map<String, dynamic>;
+          final int weekNumber = data['weekNumber'] as int;
+          final int baseMinutes = data['baseMinutes'] as int;
+          templateMinutesByWeek[weekNumber] =
+              (templateMinutesByWeek[weekNumber] ?? 0) + baseMinutes;
+        }
+
+        expect(templateMinutesByWeek, budgetMinutesByWeek);
+        expect(requests.last.path, '/api/v1/schedules/complete');
+      },
+    );
+
+    test(
+      'api saveSchedule rejects weekly totals that do not match parent budget before network',
+      () async {
+        bool wasCalled = false;
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest:
+                (RequestOptions options, RequestInterceptorHandler handler) {
+                  wasCalled = true;
+                  handler.reject(
+                    DioException(
+                      requestOptions: options,
+                      message: 'network should not be called',
+                    ),
+                  );
+                },
+          ),
+        );
+        final TimeSetupRepository repo = ApiTimeSetupRepository(dio: dio);
+
+        final Result<void> result = await repo.saveSchedule(
+          const TimeSchedule(
+            allowedHours: <HourCell>{},
+            weeklyTotals: <WeeklyTotal>[
+              WeeklyTotal(weekIndex: 0, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 1, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 2, hours: 1, minutes: 0),
+              WeeklyTotal(weekIndex: 3, hours: 1, minutes: 0),
+            ],
+            dayAllocations: <DayAllocation>[
+              DayAllocation(
+                daysLabel: '월',
+                weekdayIndices: <int>[0],
+                hours: 1,
+                minutes: 0,
+              ),
+            ],
+            monthlyBudgetMinutes: 300,
+            yearMonth: '2026-08',
+          ),
+        );
+
+        expect(result, isA<Failure<void>>());
+        expect(wasCalled, isFalse);
+        if (result case Failure<void>(:final String message)) {
+          expect(message, contains('월 총 시간'));
+        }
+      },
+    );
   });
 
   group('time confirm repository', () {
-    test('createTimeConfirmRepository returns Mock in dev', () {
-      expect(createTimeConfirmRepository(), isA<MockTimeConfirmRepository>());
+    test('createTimeConfirmRepository returns Api in dev real API mode', () {
+      expect(createTimeConfirmRepository(), isA<ApiTimeConfirmRepository>());
     });
 
     test('fetchCurrentSchedule returns Success', () async {
@@ -109,6 +783,36 @@ void main() {
       final Result<TimeConfirmData> result = await repo.fetchCurrentSchedule();
       expect(result, isA<Success<TimeConfirmData>>());
     });
+
+    test(
+      'api fetchCurrentSchedule maps wrapped daily schedule to target week',
+      () async {
+        final TimeConfirmRepository repo = ApiTimeConfirmRepository(
+          dio: _dioReturning(<String, dynamic>{
+            'isSuccess': true,
+            'data': <String, dynamic>{
+              'targetDate': '2026-06-08',
+              'baseMinutes': 30,
+              'extendedMinutes': 0,
+              'totalAvailableMinutes': 30,
+            },
+          }),
+        );
+
+        final Result<TimeConfirmData> result = await repo
+            .fetchCurrentSchedule();
+
+        switch (result) {
+          case Success<TimeConfirmData>(:final TimeConfirmData data):
+            final TimeSchedule schedule = data.schedule!;
+            expect(schedule.weeklyTotalMinutesAt(1), 30);
+            expect(schedule.dayAllocations.single.daysLabel, '월');
+            expect(schedule.dayAllocations.single.totalMinutes, 30);
+          case Failure<TimeConfirmData>(:final String message):
+            fail('api fetchCurrentSchedule should succeed, got $message');
+        }
+      },
+    );
 
     test('requestModification returns Success', () async {
       final TimeConfirmRepository repo = MockTimeConfirmRepository();
@@ -122,37 +826,301 @@ void main() {
   });
 
   group('notification repository', () {
-    test('createNotificationRepository returns Mock in dev', () {
-      expect(createNotificationRepository(), isA<MockNotificationRepository>());
+    test('createNotificationRepository returns Api in dev real API mode', () {
+      expect(createNotificationRepository(), isA<ApiNotificationRepository>());
     });
 
     test('listNotifications returns Success with non-empty list', () async {
       final NotificationRepository repo = MockNotificationRepository();
-      final Result<List<NotificationItem>> result =
-          await repo.listNotifications();
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
       switch (result) {
-        case Success<List<NotificationItem>>(:final List<NotificationItem> data):
+        case Success<List<NotificationItem>>(
+          :final List<NotificationItem> data,
+        ):
           expect(data, isNotEmpty);
         case Failure<List<NotificationItem>>():
           fail('listNotifications should not fail in mock mode');
       }
     });
 
+    test('api listNotifications parses AWS ApiResponse-wrapped inbox', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/notifications') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{
+                        'isSuccess': true,
+                        'data': <Map<String, dynamic>>[
+                          <String, dynamic>{
+                            'notificationId': 17,
+                            'notificationType': 'MISSION_APPROVED',
+                            'title': '미션 승인 완료',
+                            'content': '부모님이 미션을 승인했습니다.',
+                            'createdAt': '2026-06-09T12:30:00',
+                            'isRead': false,
+                            'targetRoute': '/child-home/mission/21',
+                          },
+                        ],
+                      },
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    response: Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 404,
+                    ),
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
+
+      switch (result) {
+        case Success<List<NotificationItem>>(
+          :final List<NotificationItem> data,
+        ):
+          expect(data, hasLength(1));
+          expect(data.single.id, '17');
+          expect(data.single.type, NotificationType.missionCompleted);
+          expect(data.single.deeplink, '/child-home/mission/21');
+          expect(data.single.isRead, isFalse);
+        case Failure<List<NotificationItem>>(:final String message):
+          fail(
+            'api listNotifications should parse wrapped response, got $message',
+          );
+      }
+    });
+
+    test('api deleteNotification calls backend delete endpoint', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                if (options.path == '/api/v1/notifications/17' &&
+                    options.method == 'DELETE') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true, 'data': 'ok'},
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    message: 'unexpected ${options.method} ${options.path}',
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.deleteNotification('17');
+
+      expect(result, isA<Success<void>>());
+      expect(calls, <String>['DELETE /api/v1/notifications/17']);
+    });
+
+    test('api deleteNotification rejects invalid id before network', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                handler.resolve(
+                  Response<dynamic>(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: <String, dynamic>{'isSuccess': true},
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.deleteNotification(
+        'weekly-report',
+      );
+
+      expect(result, isA<Failure<void>>());
+      expect((result as Failure<void>).message, '알림 정보를 다시 불러와 주세요.');
+      expect(calls, isEmpty);
+    });
+
+    test('api markAsRead calls backend read endpoint', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                if (options.path == '/api/v1/notifications/17/read' &&
+                    options.method == 'PATCH') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{'isSuccess': true, 'data': 'ok'},
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    message: 'unexpected ${options.method} ${options.path}',
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.markAsRead('17');
+
+      expect(result, isA<Success<void>>());
+      expect(calls, <String>['PATCH /api/v1/notifications/17/read']);
+    });
+
+    test('api markAsRead rejects invalid id before network', () async {
+      final List<String> calls = <String>[];
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                calls.add('${options.method} ${options.path}');
+                handler.resolve(
+                  Response<dynamic>(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: <String, dynamic>{'isSuccess': true},
+                  ),
+                );
+              },
+        ),
+      );
+      final NotificationRepository repo = ApiNotificationRepository(dio: dio);
+
+      final Result<void> result = await repo.markAsRead(' ');
+
+      expect(result, isA<Failure<void>>());
+      expect((result as Failure<void>).message, '알림 정보를 다시 불러와 주세요.');
+      expect(calls, isEmpty);
+    });
+
     test('deleteNotification returns Success', () async {
       final NotificationRepository repo = MockNotificationRepository();
-      expect(await repo.deleteNotification('weekly-report'),
-          isA<Success<void>>());
+      expect(
+        await repo.deleteNotification('weekly-report'),
+        isA<Success<void>>(),
+      );
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
+      switch (result) {
+        case Success<List<NotificationItem>>(:final data):
+          expect(
+            data.any((NotificationItem item) => item.id == 'weekly-report'),
+            isFalse,
+          );
+        case Failure<List<NotificationItem>>(:final message):
+          fail('listNotifications should succeed after delete, got $message');
+      }
     });
 
     test('markAsRead returns Success', () async {
       final NotificationRepository repo = MockNotificationRepository();
       expect(await repo.markAsRead('weekly-report'), isA<Success<void>>());
+      final Result<List<NotificationItem>> result = await repo
+          .listNotifications();
+      switch (result) {
+        case Success<List<NotificationItem>>(:final data):
+          final NotificationItem item = data.singleWhere(
+            (NotificationItem item) => item.id == 'weekly-report',
+          );
+          expect(item.isRead, isTrue);
+        case Failure<List<NotificationItem>>(:final message):
+          fail('listNotifications should succeed after read, got $message');
+      }
+    });
+  });
+
+  group('device repository', () {
+    test('api registerDevice unwraps FCM token response data', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest:
+              (RequestOptions options, RequestInterceptorHandler handler) {
+                if (options.path == '/api/v1/fcm/token') {
+                  handler.resolve(
+                    Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 200,
+                      data: <String, dynamic>{
+                        'isSuccess': true,
+                        'data': 'FCM 토큰 저장 완료',
+                      },
+                    ),
+                  );
+                  return;
+                }
+                handler.reject(
+                  DioException(
+                    requestOptions: options,
+                    response: Response<dynamic>(
+                      requestOptions: options,
+                      statusCode: 404,
+                    ),
+                  ),
+                );
+              },
+        ),
+      );
+      final DeviceRepository repo = ApiDeviceRepository(dio: dio);
+
+      final Result<String> result = await repo.registerDevice(
+        fcmToken: 'token-1',
+        platform: 'android',
+      );
+
+      switch (result) {
+        case Success<String>(:final String data):
+          expect(data, 'FCM 토큰 저장 완료');
+        case Failure<String>(:final String message):
+          fail('registerDevice should parse wrapped response, got $message');
+      }
     });
   });
 
   group('usage report repository', () {
-    test('createUsageReportRepository returns Mock in dev', () {
-      expect(createUsageReportRepository(), isA<MockUsageReportRepository>());
+    test('createUsageReportRepository returns Api in dev real API mode', () {
+      expect(createUsageReportRepository(), isA<ApiUsageReportRepository>());
     });
 
     test('fetchCurrentWeekReport returns Success', () async {
@@ -160,6 +1128,25 @@ void main() {
       final Result<UsageReport> result = await repo.fetchCurrentWeekReport();
       expect(result, isA<Success<UsageReport>>());
     });
+
+    test(
+      'api fetchCurrentWeekReport avoids side-effect daily endpoint',
+      () async {
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+        final UsageReportRepository repo = ApiUsageReportRepository(dio);
+
+        final Result<UsageReport> result = await repo.fetchCurrentWeekReport();
+
+        switch (result) {
+          case Success<UsageReport>():
+            fail(
+              'real weekly report should stay disabled until a read-only API exists',
+            );
+          case Failure<UsageReport>(:final String message):
+            expect(message, contains('주간 리포트 API'));
+        }
+      },
+    );
   });
 
   group('my page repository', () {
@@ -168,8 +1155,8 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
-    test('createMyPageRepository returns Mock in dev', () {
-      expect(createMyPageRepository(), isA<MockMyPageRepository>());
+    test('createMyPageRepository returns Api in dev real API mode', () {
+      expect(createMyPageRepository(), isA<ApiMyPageRepository>());
     });
 
     test('fetchProfile returns Success', () async {
@@ -178,25 +1165,46 @@ void main() {
       expect(result, isA<Success<UserProfile>>());
     });
 
-    test('changePassword with correct current password returns Success',
-        () async {
-      final MyPageRepository repo = MockMyPageRepository();
-      final Result<void> result = await repo.changePassword(
-        currentPassword: 'Gdg123456789!',
-        newPassword: 'NewPass123!',
-      );
-      expect(result, isA<Success<void>>());
+    test('api fetchProfile does not invent a child code', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        AuthSession.usernameKey: 'child01',
+      });
+      final MyPageRepository repo = ApiMyPageRepository();
+
+      final Result<UserProfile> result = await repo.fetchProfile();
+
+      switch (result) {
+        case Success<UserProfile>(:final UserProfile data):
+          expect(data.username, 'child01');
+          expect(data.childCode, '-');
+        case Failure<UserProfile>(:final String message):
+          fail('api fetchProfile should derive local profile, got $message');
+      }
     });
 
-    test('changePassword with wrong current password returns Failure',
-        () async {
-      final MyPageRepository repo = MockMyPageRepository();
-      final Result<void> result = await repo.changePassword(
-        currentPassword: 'wrong-password',
-        newPassword: 'NewPass123!',
-      );
-      expect(result, isA<Failure<void>>());
-    });
+    test(
+      'changePassword with correct current password returns Success',
+      () async {
+        final MyPageRepository repo = MockMyPageRepository();
+        final Result<void> result = await repo.changePassword(
+          currentPassword: 'Gdg123456789!',
+          newPassword: 'NewPass123!',
+        );
+        expect(result, isA<Success<void>>());
+      },
+    );
+
+    test(
+      'changePassword with wrong current password returns Failure',
+      () async {
+        final MyPageRepository repo = MockMyPageRepository();
+        final Result<void> result = await repo.changePassword(
+          currentPassword: 'wrong-password',
+          newPassword: 'NewPass123!',
+        );
+        expect(result, isA<Failure<void>>());
+      },
+    );
 
     test('deleteAccount returns Success', () async {
       final MyPageRepository repo = MockMyPageRepository();
@@ -205,8 +1213,8 @@ void main() {
   });
 
   group('auth repository', () {
-    test('createAuthRepository returns Mock in dev', () {
-      expect(createAuthRepository(), isA<MockAuthRepository>());
+    test('createAuthRepository returns Api in dev real API mode', () {
+      expect(createAuthRepository(), isA<ApiAuthRepository>());
     });
 
     test('login with correct credentials returns Success', () async {
@@ -252,9 +1260,64 @@ void main() {
       }
     });
 
+    test('api login parses AWS ApiResponse-wrapped auth response', () async {
+      final AuthRepository repo = ApiAuthRepository(
+        dio: _dioReturning(<String, dynamic>{
+          'isSuccess': true,
+          'code': 'COMMON200',
+          'message': 'OK',
+          'data': <String, dynamic>{
+            'accessToken': 'access-token',
+            'refreshToken': 'refresh-token',
+            'memberId': 42,
+            'name': 'Child User',
+          },
+        }),
+      );
+      final Result<AuthToken> result = await repo.login(
+        username: 'child@test.com',
+        password: 'Test1234567!',
+      );
+
+      switch (result) {
+        case Success<AuthToken>(:final AuthToken data):
+          expect(data.accessToken, 'access-token');
+          expect(data.refreshToken, 'refresh-token');
+          expect(data.username, 'child@test.com');
+        case Failure<AuthToken>(:final String message):
+          fail('wrapped auth response should parse, got $message');
+      }
+    });
+
+    test('api signup tolerates tokenless success response', () async {
+      final AuthRepository repo = ApiAuthRepository(
+        dio: _dioReturning(<String, dynamic>{
+          'isSuccess': true,
+          'code': 'COMMON200',
+          'message': 'OK',
+          'data': null,
+        }),
+      );
+      final Result<AuthToken> result = await repo.signup(
+        name: 'Brand New',
+        username: 'brand-new-user@test.com',
+        password: 'Whatever123!',
+      );
+
+      switch (result) {
+        case Success<AuthToken>(:final AuthToken data):
+          expect(data.accessToken, isEmpty);
+          expect(data.refreshToken, isNull);
+          expect(data.username, 'brand-new-user@test.com');
+        case Failure<AuthToken>(:final String message):
+          fail('tokenless signup response should not crash, got $message');
+      }
+    });
+
     test('signup with new username returns Success', () async {
       final AuthRepository repo = MockAuthRepository();
       final Result<AuthToken> result = await repo.signup(
+        name: 'Brand New',
         username: 'brand-new-user',
         password: 'Whatever123!',
       );
@@ -269,6 +1332,7 @@ void main() {
     test('signup with duplicated username returns Failure', () async {
       final AuthRepository repo = MockAuthRepository();
       final Result<AuthToken> result = await repo.signup(
+        name: 'Duplicate',
         username: 'gdg12',
         password: 'Whatever123!',
       );
@@ -280,4 +1344,22 @@ void main() {
       }
     });
   });
+}
+
+Dio _dioReturning(Map<String, dynamic> data) {
+  final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+        handler.resolve(
+          Response<dynamic>(
+            requestOptions: options,
+            statusCode: 200,
+            data: data,
+          ),
+        );
+      },
+    ),
+  );
+  return dio;
 }

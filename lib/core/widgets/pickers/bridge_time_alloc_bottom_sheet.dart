@@ -256,7 +256,7 @@ class _BridgeTimeAllocBottomSheetState
                 left: 0,
                 right: 0,
                 child: Center(
-                  child: Text(headerText, style: AppTypography.headlineBold),
+                  child: Text(headerText, style: AppTypography.headlineSemiBold),
                 ),
               ),
 
@@ -494,7 +494,7 @@ class _TimeRow extends StatelessWidget {
         ? AppColors.gray300
         : AppColors.primary;
 
-    final TextStyle numberStyle = AppTypography.headlineBold.copyWith(
+    final TextStyle numberStyle = AppTypography.headlineSemiBold.copyWith(
       color: numberColor,
     );
     final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(

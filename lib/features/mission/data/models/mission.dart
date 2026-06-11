@@ -5,6 +5,52 @@ enum MissionStatus {
   rejected, // 반려됨
 }
 
+class MissionSubmissionResult {
+  const MissionSubmissionResult({
+    this.isAccepted,
+    this.reason,
+    this.status,
+    this.performanceId,
+  });
+
+  final bool? isAccepted;
+  final String? reason;
+  final MissionStatus? status;
+  final String? performanceId;
+
+  factory MissionSubmissionResult.fromJson(Map<String, dynamic> json) {
+    return MissionSubmissionResult(
+      isAccepted: json['isAccepted'] as bool?,
+      reason: json['reason'] as String?,
+      status: _missionStatusFromNameOrNull(json['status']?.toString()),
+      performanceId: json['performanceId']?.toString(),
+    );
+  }
+
+  MissionStatus statusFor(ConfirmationMethod confirmationMethod) {
+    final MissionStatus? submittedStatus = status;
+    if (submittedStatus != null) {
+      if (submittedStatus == MissionStatus.reviewing &&
+          confirmationMethod == ConfirmationMethod.childSelf) {
+        return MissionStatus.completed;
+      }
+      return submittedStatus;
+    }
+    switch (confirmationMethod) {
+      case ConfirmationMethod.childSelf:
+        return MissionStatus.completed;
+      case ConfirmationMethod.parentApproval:
+        return MissionStatus.reviewing;
+      case ConfirmationMethod.aiAuto:
+        return switch (isAccepted) {
+          true => MissionStatus.completed,
+          false => MissionStatus.rejected,
+          null => MissionStatus.reviewing,
+        };
+    }
+  }
+}
+
 /// Mission confirmation method — drives the submit-flow branching in
 /// [MissionController.submit]:
 /// - [aiAuto]         → reviewing → auto-approve after a short delay
@@ -51,11 +97,97 @@ enum ConfirmationMethod {
 /// JSON name lookup for [MissionStatus]; defaults to
 /// [MissionStatus.pendingCheck] when [name] is null or unknown.
 MissionStatus _missionStatusFromName(String? name) {
-  if (name == null) return MissionStatus.pendingCheck;
+  return _missionStatusFromNameOrNull(name) ?? MissionStatus.pendingCheck;
+}
+
+MissionStatus? _missionStatusFromNameOrNull(String? name) {
+  if (name == null) return null;
+  switch (name.toUpperCase()) {
+    case 'PENDING':
+      return MissionStatus.reviewing;
+    case 'ACCEPTED':
+      return MissionStatus.completed;
+    case 'REJECTED':
+      return MissionStatus.rejected;
+  }
   for (final MissionStatus s in MissionStatus.values) {
     if (s.name == name) return s;
   }
-  return MissionStatus.pendingCheck;
+  return null;
+}
+
+const List<String> missionDefaultCategoryOptions = <String>[
+  '학습',
+  '운동',
+  '청소',
+  '기타',
+];
+
+/// Backend mission category enum (`CLEANING`/`STUDY`/…) → the Korean label the
+/// child app stores in [Mission.category]. Lookup is case-insensitive.
+/// Legacy/unsupported categories are folded into `기타` so the child app stays
+/// aligned with the parent app's current four-category surface.
+String _categoryFromWire(Object? raw) {
+  if (raw == null) return '기타';
+  const Map<String, String> map = <String, String>{
+    'CLEANING': '청소',
+    'STUDY': '학습',
+    'EXERCISE': '운동',
+    'ERRAND': '기타',
+    'ROUTINE': '기타',
+    'ETC': '기타',
+  };
+  final String value = raw.toString().trim();
+  final String category = map[value.toUpperCase()] ?? value;
+  return missionDefaultCategoryOptions.contains(category) ? category : '기타';
+}
+
+List<String> _categoryOptionsFromWire(Object? raw) {
+  if (raw is! List) return missionDefaultCategoryOptions;
+  final Set<String> decoded = <String>{
+    for (final Object? item in raw) _categoryFromWire(item),
+  };
+  final List<String> options = <String>[
+    for (final String option in missionDefaultCategoryOptions)
+      if (decoded.contains(option)) option,
+  ];
+  return options.isEmpty ? missionDefaultCategoryOptions : options;
+}
+
+/// Backend reset-cycle enum (`DAILY`/`WEEKLY`/`MONTHLY`) → Korean label.
+/// Case-insensitive; Korean/contract values pass through unchanged.
+String _resetCycleFromWire(Object? raw) {
+  if (raw == null) return '매일';
+  const Map<String, String> map = <String, String>{
+    'DAILY': '매일',
+    'WEEKLY': '일주일',
+    'MONTHLY': '한 달',
+  };
+  final String value = raw.toString();
+  return map[value.toUpperCase()] ?? value;
+}
+
+ConfirmationMethod _confirmationMethodFromWire(Object? raw) {
+  if (raw != null) {
+    switch (raw.toString().toUpperCase()) {
+      case 'AI':
+        return ConfirmationMethod.aiAuto;
+      case 'CHILD':
+        return ConfirmationMethod.childSelf;
+      case 'PARENT':
+        return ConfirmationMethod.parentApproval;
+    }
+  }
+  return ConfirmationMethod.fromName(raw?.toString());
+}
+
+/// Resolve [ConfirmationMethod] from either the child app's own field
+/// (`confirmationMethod`: `aiAuto`/`childSelf`/`parentApproval`) or the
+/// backend mission's `verificationType` enum (`AI`/`CHILD`/`PARENT`).
+ConfirmationMethod _confirmationFromWire(Map<String, dynamic> json) {
+  return json['verificationType'] != null
+      ? _confirmationMethodFromWire(json['verificationType'])
+      : _confirmationMethodFromWire(json['confirmationMethod']);
 }
 
 class Mission {
@@ -68,9 +200,10 @@ class Mission {
     this.description,
     this.assignedBy = 'parent', // 'parent' or 'ai'
     this.photoUrls = const [],
+    this.performanceId,
     this.deadline,
-    this.category = '루틴',
-    this.categoryOptions = const <String>['루틴', '학습', '운동', '청소', '심부름'],
+    this.category = '기타',
+    this.categoryOptions = missionDefaultCategoryOptions,
     this.resetCycle = '매일',
     this.resetCycleOptions = const <String>['매일', '일주일', '한 달'],
     this.confirmationMethod = ConfirmationMethod.childSelf,
@@ -80,7 +213,7 @@ class Mission {
       ConfirmationMethod.parentApproval,
     ],
     this.payoutTime,
-    this.captureInstruction = '깨끗해진 방을 찍어서 올려주세요!',
+    this.captureInstruction = '미션을 인증할 수 있는 사진을 올려주세요!',
   });
 
   final String id;
@@ -91,10 +224,11 @@ class Mission {
   final String? description;
   final String assignedBy;
   final List<String> photoUrls;
+  final String? performanceId;
   final DateTime? deadline;
 
-  /// Mission info section fields (frame 746-11392 — 5 chip rows).
-  /// Each `*Options` list drives the horizontal selectable-chip row;
+  /// Mission info section fields (frame 746-11392).
+  /// Each `*Options` list drives the read-only selectable controls;
   /// the singular field (e.g. [category]) marks the selected option.
   final String category;
   final List<String> categoryOptions;
@@ -106,7 +240,8 @@ class Mission {
 
   /// Mission-specific copy shown above the camera CTA on frames
   /// 426-18960 / 426-19035 / 426-18995 / 426-18974. Defaults to the
-  /// Figma verbatim string for the `방청소 하기` mission.
+  /// Generic copy used when the backend does not provide mission-specific
+  /// photo guidance.
   final String captureInstruction;
 
   /// Display string for the "지급시간" row. Falls back to a derived label
@@ -121,7 +256,11 @@ class Mission {
     return '$rewardMinutes분 지급';
   }
 
-  Mission copyWith({MissionStatus? status, List<String>? photoUrls}) => Mission(
+  Mission copyWith({
+    MissionStatus? status,
+    List<String>? photoUrls,
+    String? performanceId,
+  }) => Mission(
     id: id,
     title: title,
     rewardHours: rewardHours,
@@ -130,6 +269,7 @@ class Mission {
     description: description,
     assignedBy: assignedBy,
     photoUrls: photoUrls ?? this.photoUrls,
+    performanceId: performanceId ?? this.performanceId,
     deadline: deadline,
     category: category,
     categoryOptions: categoryOptions,
@@ -155,77 +295,87 @@ class Mission {
         : const <String>[];
 
     final dynamic rawCategoryOptions = json['categoryOptions'];
-    final List<String> categoryOptions = rawCategoryOptions is List
-        ? rawCategoryOptions.map((dynamic e) => e.toString()).toList()
-        : const <String>['루틴', '학습', '운동', '청소', '심부름'];
+    final List<String> categoryOptions = _categoryOptionsFromWire(
+      rawCategoryOptions,
+    );
 
     final dynamic rawResetCycleOptions = json['resetCycleOptions'];
     final List<String> resetCycleOptions = rawResetCycleOptions is List
-        ? rawResetCycleOptions.map((dynamic e) => e.toString()).toList()
+        ? rawResetCycleOptions.map(_resetCycleFromWire).toList()
         : const <String>['매일', '일주일', '한 달'];
 
     final dynamic rawConfirmationOptions = json['confirmationMethodOptions'];
     final List<ConfirmationMethod> confirmationOptions =
         rawConfirmationOptions is List
-            ? rawConfirmationOptions
-                .map((dynamic e) => ConfirmationMethod.fromName(e?.toString()))
-                .toList()
-            : const <ConfirmationMethod>[
-                ConfirmationMethod.aiAuto,
-                ConfirmationMethod.childSelf,
-                ConfirmationMethod.parentApproval,
-              ];
+        ? rawConfirmationOptions.map(_confirmationMethodFromWire).toList()
+        : const <ConfirmationMethod>[
+            ConfirmationMethod.aiAuto,
+            ConfirmationMethod.childSelf,
+            ConfirmationMethod.parentApproval,
+          ];
 
     final dynamic rawDeadline = json['deadline'];
     final DateTime? deadline = rawDeadline is String
         ? DateTime.tryParse(rawDeadline)
         : null;
 
+    // Reward: backend mission DTOs send a single `reward` (total minutes);
+    // the app's own shape splits it into rewardHours + rewardMinutes. Prefer
+    // the backend field when present, else fall back to the split fields.
+    final num? rawReward = json['reward'] as num?;
+    final int rewardHours = rawReward != null
+        ? rawReward.toInt() ~/ 60
+        : (json['rewardHours'] as num?)?.toInt() ?? 0;
+    final int rewardMinutes = rawReward != null
+        ? rawReward.toInt() % 60
+        : (json['rewardMinutes'] as num?)?.toInt() ?? 0;
+
     return Mission(
-      id: (json['id'] ?? '').toString(),
+      // Backend summary/detail key is `missionId`; the app's own shape uses `id`.
+      id: (json['missionId'] ?? json['id'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
-      rewardHours: (json['rewardHours'] as num?)?.toInt() ?? 0,
-      rewardMinutes: (json['rewardMinutes'] as num?)?.toInt() ?? 0,
+      rewardHours: rewardHours,
+      rewardMinutes: rewardMinutes,
       status: _missionStatusFromName(json['status']?.toString()),
       description: json['description']?.toString(),
       assignedBy: (json['assignedBy'] ?? 'parent').toString(),
       photoUrls: photoUrls,
+      performanceId: json['performanceId']?.toString(),
       deadline: deadline,
-      category: (json['category'] ?? '루틴').toString(),
+      category: _categoryFromWire(json['category']),
       categoryOptions: categoryOptions,
-      resetCycle: (json['resetCycle'] ?? '매일').toString(),
+      resetCycle: _resetCycleFromWire(json['resetCycle']),
       resetCycleOptions: resetCycleOptions,
-      confirmationMethod: ConfirmationMethod.fromName(
-        json['confirmationMethod']?.toString(),
-      ),
+      confirmationMethod: _confirmationFromWire(json),
       confirmationMethodOptions: confirmationOptions,
       payoutTime: json['payoutTime']?.toString(),
       captureInstruction:
-          (json['captureInstruction'] ?? '깨끗해진 방을 찍어서 올려주세요!').toString(),
+          (json['captureInstruction'] ?? '미션을 인증할 수 있는 사진을 올려주세요!').toString(),
     );
   }
 
   /// Hand-written JSON encoder. Enums are serialised via [Enum.name] so the
   /// payload matches what [Mission.fromJson] expects.
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'rewardHours': rewardHours,
-        'rewardMinutes': rewardMinutes,
-        'status': status.name,
-        'description': description,
-        'assignedBy': assignedBy,
-        'photoUrls': photoUrls,
-        'deadline': deadline?.toIso8601String(),
-        'category': category,
-        'categoryOptions': categoryOptions,
-        'resetCycle': resetCycle,
-        'resetCycleOptions': resetCycleOptions,
-        'confirmationMethod': confirmationMethod.name,
-        'confirmationMethodOptions': <String>[
-          for (final ConfirmationMethod m in confirmationMethodOptions) m.name,
-        ],
-        'payoutTime': payoutTime,
-        'captureInstruction': captureInstruction,
-      };
+    'id': id,
+    'title': title,
+    'rewardHours': rewardHours,
+    'rewardMinutes': rewardMinutes,
+    'status': status.name,
+    'description': description,
+    'assignedBy': assignedBy,
+    'photoUrls': photoUrls,
+    'performanceId': performanceId,
+    'deadline': deadline?.toIso8601String(),
+    'category': category,
+    'categoryOptions': categoryOptions,
+    'resetCycle': resetCycle,
+    'resetCycleOptions': resetCycleOptions,
+    'confirmationMethod': confirmationMethod.name,
+    'confirmationMethodOptions': <String>[
+      for (final ConfirmationMethod m in confirmationMethodOptions) m.name,
+    ],
+    'payoutTime': payoutTime,
+    'captureInstruction': captureInstruction,
+  };
 }

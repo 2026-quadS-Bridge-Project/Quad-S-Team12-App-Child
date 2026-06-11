@@ -110,7 +110,7 @@ class _NotificationCardState extends State<NotificationCard>
                   width: _maxSlide + 22,
                   decoration: BoxDecoration(
                     color: AppColors.destructiveSubtle,
-                    borderRadius: BorderRadius.circular(14.385),
+                    borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
                   ),
                   child: Align(
                     alignment: Alignment.centerRight,
@@ -151,7 +151,7 @@ class _NotificationCardState extends State<NotificationCard>
                             child: Text(
                               widget.item.title,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.captionBold.copyWith(
+                              style: AppTypography.captionSemiBold.copyWith(
                                 color: style.accentColor,
                                 decoration: TextDecoration.none,
                               ),

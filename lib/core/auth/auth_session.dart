@@ -3,16 +3,38 @@ import 'package:shared_preferences/shared_preferences.dart';
 abstract final class AuthSession {
   static const String loggedInKey = 'bridge_k.is_logged_in';
   static const String usernameKey = 'bridge_k.username';
+  static const String memberIdKey = 'bridge_k.member_id';
+  static const String nameKey = 'bridge_k.name';
+  static const String childCodeKey = 'bridge_k.child_code';
   static const String fallbackUsername = 'abcd00';
 
   // Token storage keys (Phase 2A scaffolding — wired to interceptors).
   static const String _accessTokenKey = 'bridge_k.access_token';
   static const String _refreshTokenKey = 'bridge_k.refresh_token';
 
-  static Future<void> saveLogin({required String username}) async {
+  static Future<void> saveLogin({
+    required String username,
+    String? memberId,
+    String? name,
+    String? childCode,
+  }) async {
     final SharedPreferences preferences = await SharedPreferences.getInstance();
     await preferences.setBool(loggedInKey, true);
     await preferences.setString(usernameKey, username);
+    await _setOptionalString(preferences, memberIdKey, memberId);
+    await _setOptionalString(preferences, nameKey, name);
+    await _setOptionalString(preferences, childCodeKey, childCode);
+  }
+
+  static Future<void> saveProfile({
+    String? memberId,
+    String? name,
+    String? childCode,
+  }) async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    await _saveOptionalString(preferences, memberIdKey, memberId);
+    await _saveOptionalString(preferences, nameKey, name);
+    await _saveOptionalString(preferences, childCodeKey, childCode);
   }
 
   static Future<bool> isLoggedIn() async {
@@ -25,10 +47,28 @@ abstract final class AuthSession {
     return preferences.getString(usernameKey) ?? fallbackUsername;
   }
 
+  static Future<String?> memberId() async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    return preferences.getString(memberIdKey);
+  }
+
+  static Future<String?> name() async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    return preferences.getString(nameKey);
+  }
+
+  static Future<String?> childCode() async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    return preferences.getString(childCodeKey);
+  }
+
   static Future<void> clearLogin() async {
     final SharedPreferences preferences = await SharedPreferences.getInstance();
     await preferences.remove(loggedInKey);
     await preferences.remove(usernameKey);
+    await preferences.remove(memberIdKey);
+    await preferences.remove(nameKey);
+    await preferences.remove(childCodeKey);
   }
 
   /// Persist an [accessToken] (and optional [refreshToken]) in
@@ -63,5 +103,28 @@ abstract final class AuthSession {
     final SharedPreferences preferences = await SharedPreferences.getInstance();
     await preferences.remove(_accessTokenKey);
     await preferences.remove(_refreshTokenKey);
+  }
+
+  static Future<void> _saveOptionalString(
+    SharedPreferences preferences,
+    String key,
+    String? value,
+  ) async {
+    if (value == null || value.isEmpty) {
+      return;
+    }
+    await preferences.setString(key, value);
+  }
+
+  static Future<void> _setOptionalString(
+    SharedPreferences preferences,
+    String key,
+    String? value,
+  ) async {
+    if (value == null || value.isEmpty) {
+      await preferences.remove(key);
+      return;
+    }
+    await preferences.setString(key, value);
   }
 }

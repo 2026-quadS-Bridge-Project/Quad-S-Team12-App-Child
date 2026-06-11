@@ -8,7 +8,7 @@ import '../../theme/app_typography.dart';
 ///
 /// Visual:
 /// - Circle of [size] (default 28) filled with [AppColors.primarySubtle].
-/// - Centered number rendered with [AppTypography.bodyBold] in
+/// - Centered number rendered with [AppTypography.bodySemiBold] in
 ///   [AppColors.primary].
 ///
 /// Spec: docs/figma-specs/08a-time-v1-entry-weekly.md
@@ -33,7 +33,7 @@ class BridgeStepCircle extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         '$number',
-        style: AppTypography.bodyBold.copyWith(color: AppColors.primary),
+        style: AppTypography.bodySemiBold.copyWith(color: AppColors.primary),
       ),
     );
   }

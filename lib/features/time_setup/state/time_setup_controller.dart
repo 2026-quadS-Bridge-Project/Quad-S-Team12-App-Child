@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/models/result.dart';
+import '../../../core/widgets/mixins/async_error_listener.dart';
 import '../data/mock/time_schedule_mock.dart';
 import '../data/models/time_schedule.dart';
 import '../data/repositories/time_setup_repository.dart';
@@ -18,7 +19,8 @@ enum TimeSetupStep {
 
 enum TimeSetupMode { v1Initial, v2NextWeek }
 
-class TimeSetupController extends ChangeNotifier {
+class TimeSetupController extends ChangeNotifier
+    implements AsyncErrorController {
   TimeSetupController({
     TimeSchedule? initial,
     TimeSetupMode mode = TimeSetupMode.v1Initial,
@@ -67,6 +69,7 @@ class TimeSetupController extends ChangeNotifier {
   TimeSetupStep get step => _step;
   TimeSetupMode get mode => _mode;
   bool get isSaving => _isSaving;
+  @override
   String? get errorMessage => _errorMessage;
   bool get showPastWeekDim => _mode == TimeSetupMode.v2NextWeek;
   int get currentWeekIndex => showPastWeekDim ? 1 : 0;
@@ -80,7 +83,7 @@ class TimeSetupController extends ChangeNotifier {
       showPastWeekDim ? _previousWeek?.weeklyTotalMinutesAt(0) ?? 0 : 0;
   int get weeklyDistributionCapMinutes {
     if (!showPastWeekDim) {
-      return _schedule.weeklyTotalCapMinutes;
+      return _schedule.monthlyBudgetMinutes ?? 0;
     }
 
     final int previousMonthCap =
@@ -122,6 +125,8 @@ class TimeSetupController extends ChangeNotifier {
       allowedHours: newSet,
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: _schedule.dayAllocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -155,6 +160,8 @@ class TimeSetupController extends ChangeNotifier {
       allowedHours: _schedule.allowedHours,
       weeklyTotals: next,
       dayAllocations: _schedule.dayAllocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -166,9 +173,11 @@ class TimeSetupController extends ChangeNotifier {
       return false;
     }
     if (!showPastWeekDim) {
-      return _schedule.weeklyTotals.every(
+      final bool allWeeksFilled = _schedule.weeklyTotals.every(
         (WeeklyTotal w) => w.totalMinutes > 0,
       );
+      return allWeeksFilled &&
+          editableWeeklyTotalMinutes == weeklyDistributionCapMinutes;
     }
 
     final bool allEditableWeeksFilled = editableWeekIndices.every(
@@ -209,6 +218,8 @@ class TimeSetupController extends ChangeNotifier {
       allowedHours: _schedule.allowedHours,
       weeklyTotals: next,
       dayAllocations: _schedule.dayAllocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -286,6 +297,8 @@ class TimeSetupController extends ChangeNotifier {
       allowedHours: _schedule.allowedHours,
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: allocations,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -298,6 +311,8 @@ class TimeSetupController extends ChangeNotifier {
       allowedHours: _schedule.allowedHours,
       weeklyTotals: _schedule.weeklyTotals,
       dayAllocations: list,
+      monthlyBudgetMinutes: _schedule.monthlyBudgetMinutes,
+      yearMonth: _schedule.yearMonth,
     );
     notifyListeners();
   }
@@ -320,6 +335,11 @@ class TimeSetupController extends ChangeNotifier {
     if (_isSaving) {
       return;
     }
+    if (!canProceedToStep3 || !isAllocationBalanced) {
+      _errorMessage = '월 총 시간과 일별 시간 분배를 다시 확인해 주세요.';
+      notifyListeners();
+      return;
+    }
     _isSaving = true;
     _errorMessage = null;
     notifyListeners();
@@ -339,6 +359,7 @@ class TimeSetupController extends ChangeNotifier {
   }
 
   /// Clears [errorMessage] so the same failure can re-fire on the next submit.
+  @override
   void clearError() {
     if (_errorMessage == null) return;
     _errorMessage = null;
@@ -377,6 +398,8 @@ class TimeSetupController extends ChangeNotifier {
           WeeklyTotal(weekIndex: weekIndex, hours: 0, minutes: 0),
       ],
       dayAllocations: previousWeek.dayAllocations,
+      monthlyBudgetMinutes: previousWeek.weeklyTotalCapMinutes,
+      yearMonth: previousWeek.yearMonth,
     );
   }
 

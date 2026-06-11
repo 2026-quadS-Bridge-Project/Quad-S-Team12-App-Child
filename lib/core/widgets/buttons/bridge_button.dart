@@ -220,21 +220,21 @@ class BridgeButton extends StatelessWidget {
             height: 54,
             fixedWidth: null,
             horizontalPadding: 8,
-            textStyle: AppTypography.bodyBold,
+            textStyle: AppTypography.bodySemiBold,
           );
         case BridgeButtonSize.medium:
           return _ButtonMetrics(
             height: 42,
             fixedWidth: null,
             horizontalPadding: 8,
-            textStyle: AppTypography.bodyBold,
+            textStyle: AppTypography.bodySemiBold,
           );
         case BridgeButtonSize.small:
           return _ButtonMetrics(
             height: 35,
             fixedWidth: null,
             horizontalPadding: 8,
-            textStyle: AppTypography.captionBold,
+            textStyle: AppTypography.captionSemiBold,
           );
       }
     }
@@ -254,7 +254,7 @@ class BridgeButton extends StatelessWidget {
           // fullWidth (e.g. stacked confirm flows).
           fixedWidth: fullWidth ? null : 120,
           horizontalPadding: 16,
-          textStyle: AppTypography.bodyBold,
+          textStyle: AppTypography.bodySemiBold,
         );
       case BridgeButtonSize.small:
         // Compact 80×35 chip (Figma mypage 탈퇴하기 257:3713).
@@ -264,7 +264,7 @@ class BridgeButton extends StatelessWidget {
           height: 35,
           fixedWidth: fullWidth ? null : 80,
           horizontalPadding: 12,
-          textStyle: AppTypography.captionBold,
+          textStyle: AppTypography.captionSemiBold,
         );
     }
   }

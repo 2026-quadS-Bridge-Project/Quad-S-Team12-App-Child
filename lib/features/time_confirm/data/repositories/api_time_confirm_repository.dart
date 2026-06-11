@@ -3,16 +3,16 @@ import 'package:dio/dio.dart';
 import '../../../../core/config/dio_config.dart';
 import '../../../../core/models/result.dart';
 import '../../../../core/network/api_error.dart';
+import '../../../time_setup/data/models/time_schedule.dart';
 import '../models/time_confirm_data.dart';
 import 'time_confirm_repository.dart';
 
 /// Network-backed [TimeConfirmRepository].
 ///
-/// Implements the three endpoints listed under "Time Confirm" in
-/// `docs/api-contract.md`:
-///   * `GET  /time-confirm/current`
-///   * `POST /time-confirm/request-modification`
-///   * `POST /time-confirm/acknowledge`
+/// Implements the AWS schedule endpoints exposed by Swagger. There are no
+/// `time-confirm` endpoints on the deployed API, so this repository reads the
+/// current day via `GET /api/v1/schedules/daily` and treats modification /
+/// acknowledgement as local-only UI actions.
 ///
 /// Errors are funnelled through [failureFromDioException] so callers receive
 /// contract-shaped Korean messages. The helper already surfaces the
@@ -28,19 +28,16 @@ class ApiTimeConfirmRepository implements TimeConfirmRepository {
   Future<Result<TimeConfirmData>> fetchCurrentSchedule() async {
     try {
       final Response<dynamic> response = await _dio.get<dynamic>(
-        '/time-confirm/current',
+        '/api/v1/schedules/daily',
+        queryParameters: <String, dynamic>{'date': _yyyyMmDd(DateTime.now())},
       );
-      final dynamic data = response.data;
-      if (data is! Map) {
-        return Result<TimeConfirmData>.failure(
-          '요청을 처리할 수 없어요.',
-          cause: 'malformed-response',
-        );
+      final Map<String, dynamic>? data = _responseObject(response.data);
+      if (data == null) {
+        return const Success<TimeConfirmData>(TimeConfirmData(schedule: null));
       }
-      final TimeConfirmData parsed = TimeConfirmData.fromJson(
-        Map<String, dynamic>.from(data),
+      return Result<TimeConfirmData>.success(
+        TimeConfirmData(schedule: dailyScheduleToTimeSchedule(data)),
       );
-      return Result<TimeConfirmData>.success(parsed);
     } on DioException catch (e) {
       return failureFromDioException<TimeConfirmData>(e);
     }
@@ -48,27 +45,27 @@ class ApiTimeConfirmRepository implements TimeConfirmRepository {
 
   @override
   Future<Result<void>> requestModification() async {
-    try {
-      await _dio.post<dynamic>(
-        '/time-confirm/request-modification',
-        data: <String, dynamic>{},
-      );
-      return const Success<void>(null);
-    } on DioException catch (e) {
-      return failureFromDioException<void>(e);
-    }
+    return const Success<void>(null);
   }
 
   @override
   Future<Result<void>> acknowledgeSchedule() async {
-    try {
-      await _dio.post<dynamic>(
-        '/time-confirm/acknowledge',
-        data: <String, dynamic>{},
-      );
-      return const Success<void>(null);
-    } on DioException catch (e) {
-      return failureFromDioException<void>(e);
+    return const Success<void>(null);
+  }
+
+  String _yyyyMmDd(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Map<String, dynamic>? _responseObject(dynamic data) {
+    if (data is Map && data['data'] is Map) {
+      return Map<String, dynamic>.from(data['data'] as Map);
     }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return null;
   }
 }

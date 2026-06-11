@@ -109,7 +109,7 @@ class _BridgeWheelPickerState extends State<BridgeWheelPicker> {
             return Center(
               child: Text(
                 widget.values[index],
-                style: AppTypography.heading1Bold.copyWith(
+                style: AppTypography.heading1SemiBold.copyWith(
                   color: isSelected ? AppColors.gray800 : AppColors.gray200,
                 ),
               ),

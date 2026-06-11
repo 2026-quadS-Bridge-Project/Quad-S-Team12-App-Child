@@ -1,38 +1,473 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../core/auth/auth_session.dart';
+import '../../../../core/config/dio_config.dart';
+import '../../../../core/config/environment.dart';
 import '../../../../core/models/result.dart';
+import '../../../../core/network/api_error.dart';
+import '../../../../core/services/device_block_controller.dart';
+import '../../../../core/services/fcm_bootstrap.dart';
+import '../../../../core/services/fcm_messaging_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../mission/data/mock/mission_mock.dart';
+import '../../../../core/widgets/pickers/bridge_time_bottom_sheet.dart';
 import '../../../mission/data/models/mission.dart' as mission_model;
 import '../../../mission/data/repositories/mission_repository.dart';
+import '../../../notifications/data/models/notification_item.dart';
+import '../../../notifications/data/repositories/notification_repository.dart';
 
 class ChildHomePage extends StatefulWidget {
   const ChildHomePage({
     super.key,
     this.showContent = true,
+    this.dio,
+    this.notificationRepository,
+    this.missionRepository,
   });
 
   final bool showContent;
+  @visibleForTesting
+  final Dio? dio;
+  @visibleForTesting
+  final NotificationRepository? notificationRepository;
+  @visibleForTesting
+  final MissionRepository? missionRepository;
 
   @override
   State<ChildHomePage> createState() => _ChildHomePageState();
 }
 
-class _ChildHomePageState extends State<ChildHomePage> {
-  // TODO: Wire `_hasSchedule` to real schedule state once persistence lands.
-  // Default false so the empty-state + button is reachable on first run.
-  // Long-press the time card to toggle for debug (see _toggleHasScheduleForDebug).
+class _ChildHomePageState extends State<ChildHomePage>
+    with WidgetsBindingObserver {
+  late final Dio _dio = widget.dio ?? DioConfig.create();
+  bool get _ownsDio => widget.dio == null;
+  late final NotificationRepository _notificationRepository =
+      widget.notificationRepository ?? createNotificationRepository();
+
   bool _hasSchedule = false;
+  bool _hasNotification = false;
+  _HomeTimeSnapshot? _timeSnapshot;
+  int _remainingSeconds = 0;
+  Timer? _countdownTimer;
+  StreamSubscription<FcmMessage>? _notificationRefreshSub;
+  int _missionRefreshRevision = 0;
+  bool _appliedExpiryBlock = false;
+  bool _isReadingRemainingSeconds = false;
+  bool _isExtendingTime = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.showContent) {
+      unawaited(_refreshHomeData(refreshMissions: false));
+      _notificationRefreshSub = FcmBootstrap.notificationRefreshes.listen((_) {
+        unawaited(_refreshHomeData(optimisticUnread: true));
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _countdownTimer?.cancel();
+    unawaited(_notificationRefreshSub?.cancel());
+    if (_ownsDio) {
+      _dio.close(force: true);
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      return;
+    }
+    if (widget.showContent) {
+      unawaited(_refreshHomeData());
+    }
+  }
+
+  Future<void> _refreshHomeData({
+    bool optimisticUnread = false,
+    bool refreshMissions = true,
+  }) async {
+    if (!widget.showContent) {
+      return;
+    }
+    if (refreshMissions && mounted) {
+      setState(() {
+        _missionRefreshRevision += 1;
+      });
+    }
+    await Future.wait<void>(<Future<void>>[
+      _loadHomeTime(),
+      _loadNotificationIndicator(optimisticUnread: optimisticUnread),
+    ]);
+  }
+
+  Future<void> _loadHomeTime() async {
+    try {
+      final _HomeTimeSnapshot? snapshot = await _fetchHomeTimeSnapshot();
+      final int remainingSeconds = snapshot == null
+          ? 0
+          : await _configureScreenTimeAndReadRemaining(snapshot);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _timeSnapshot = snapshot;
+        _hasSchedule = snapshot != null;
+        _remainingSeconds = remainingSeconds;
+        _appliedExpiryBlock = false;
+      });
+      if (snapshot == null) {
+        _countdownTimer?.cancel();
+        unawaited(DeviceBlockController.instance.clearScreenTime());
+        return;
+      }
+      _syncDeviceBlocker();
+      _restartCountdown();
+    } on DioException catch (e) {
+      debugPrint('Child home time load failed: ${e.message}');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _hasSchedule = false;
+        _timeSnapshot = null;
+        _remainingSeconds = 0;
+      });
+      unawaited(DeviceBlockController.instance.clearScreenTime());
+    } on FormatException catch (e) {
+      debugPrint('Child home time parse failed: ${e.message}');
+    }
+  }
+
+  Future<void> _loadNotificationIndicator({
+    bool optimisticUnread = false,
+  }) async {
+    if (optimisticUnread && mounted && !_hasNotification) {
+      setState(() {
+        _hasNotification = true;
+      });
+    }
+    final Result<List<NotificationItem>> result = await _notificationRepository
+        .listNotifications();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Success<List<NotificationItem>>(:final List<NotificationItem> data):
+        setState(() {
+          _hasNotification = data.any((NotificationItem item) => !item.isRead);
+        });
+      case Failure<List<NotificationItem>>(:final String message):
+        debugPrint('Child home notifications load failed: $message');
+    }
+  }
+
+  Future<_HomeTimeSnapshot?> _fetchHomeTimeSnapshot() async {
+    if (currentEnvironment.useMocks && widget.dio == null) {
+      return null;
+    }
+    final DateTime today = DateTime.now();
+    final String dateKey = _yyyyMmDd(today);
+    try {
+      final Response<dynamic> dailyResponse = await _dio.get<dynamic>(
+        '/api/v1/schedules/daily',
+        queryParameters: <String, dynamic>{'date': dateKey},
+      );
+      final Map<String, dynamic>? daily = _jsonMap(dailyResponse.data);
+      if (daily != null) {
+        final int baseMinutes = _intValue(daily['baseMinutes']);
+        final int extendedMinutes = _intValue(daily['extendedMinutes']);
+        final int totalMinutes = _intValue(
+          daily['totalAvailableMinutes'],
+          fallback: baseMinutes + extendedMinutes,
+        );
+        return _HomeTimeSnapshot(
+          dateKey: dateKey,
+          baseMinutes: _intValue(daily['baseMinutes']),
+          monthlyRemainingMinutes: await _fetchMonthlyRemainingMinutes(),
+          totalMinutes: totalMinutes < 0 ? 0 : totalMinutes,
+        );
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+
+    return null;
+  }
+
+  Future<int> _fetchMonthlyRemainingMinutes() async {
+    final String? memberId = await AuthSession.memberId();
+    if (memberId == null || memberId.isEmpty) {
+      return 0;
+    }
+
+    try {
+      final Response<dynamic> policyResponse = await _dio.get<dynamic>(
+        '/api/v1/children/$memberId/policies',
+      );
+      final Map<String, dynamic>? policy = _jsonMap(policyResponse.data);
+      if (policy == null) {
+        return 0;
+      }
+      return _intValue(
+        policy['totalAvailableTime'],
+        fallback:
+            _intValue(policy['baseTime']) +
+            _intValue(policy['accumulatedRewardTime']),
+      );
+    } on DioException catch (e) {
+      debugPrint('Child home monthly remaining load failed: ${e.message}');
+      return 0;
+    }
+  }
+
+  Future<int> _configureScreenTimeAndReadRemaining(
+    _HomeTimeSnapshot snapshot,
+  ) async {
+    final String? memberId = await AuthSession.memberId();
+    final String memberKey = memberId ?? 'child';
+    await _settlePreviousTrackerIfNeeded(
+      memberKey: memberKey,
+      todayDateKey: snapshot.dateKey,
+    );
+    final String trackerKey =
+        '$memberKey:${snapshot.dateKey}:today-screen-time';
+    final int allocatedSeconds = snapshot.totalMinutes * 60;
+    await DeviceBlockController.instance.configureScreenTime(
+      key: trackerKey,
+      allocatedSeconds: allocatedSeconds,
+    );
+    await _storeActiveTrackerMetadata(memberKey: memberKey, snapshot: snapshot);
+    return await DeviceBlockController.instance.remainingScreenTimeSeconds() ??
+        allocatedSeconds;
+  }
+
+  Future<void> _storeActiveTrackerMetadata({
+    required String memberKey,
+    required _HomeTimeSnapshot snapshot,
+  }) async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _screenTimeDateKey(memberKey),
+      snapshot.dateKey,
+    );
+    await preferences.setInt(
+      _screenTimeAllocatedMinutesKey(memberKey),
+      snapshot.totalMinutes,
+    );
+  }
+
+  Future<void> _settlePreviousTrackerIfNeeded({
+    required String memberKey,
+    required String todayDateKey,
+  }) async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    final String? previousDateKey = preferences.getString(
+      _screenTimeDateKey(memberKey),
+    );
+    if (previousDateKey == null || previousDateKey == todayDateKey) {
+      return;
+    }
+    if (preferences.getString(_screenTimeSettledDateKey(memberKey)) ==
+        previousDateKey) {
+      return;
+    }
+    final int allocatedMinutes =
+        preferences.getInt(_screenTimeAllocatedMinutesKey(memberKey)) ?? 0;
+    if (allocatedMinutes <= 0) {
+      return;
+    }
+
+    final int? nativeRemainingSeconds = await DeviceBlockController.instance
+        .remainingScreenTimeSeconds();
+    if (nativeRemainingSeconds == null) {
+      return;
+    }
+    final int allocatedSeconds = allocatedMinutes * 60;
+    final int usedSeconds = (allocatedSeconds - nativeRemainingSeconds).clamp(
+      0,
+      allocatedSeconds,
+    );
+    final int actualUsedMinutes = (usedSeconds + 59) ~/ 60;
+    final bool settled = await _settleUsage(
+      dateKey: previousDateKey,
+      actualUsedMinutes: actualUsedMinutes,
+    );
+    if (settled) {
+      await preferences.setString(
+        _screenTimeSettledDateKey(memberKey),
+        previousDateKey,
+      );
+    }
+  }
+
+  Future<bool> _settleUsage({
+    required String dateKey,
+    required int actualUsedMinutes,
+  }) async {
+    if (currentEnvironment.useMocks && widget.dio == null) {
+      return false;
+    }
+    try {
+      await _dio.post<dynamic>(
+        '/api/v1/schedules/settle',
+        queryParameters: <String, dynamic>{
+          'date': dateKey,
+          'actualUsed': actualUsedMinutes,
+        },
+      );
+      return true;
+    } on DioException catch (e) {
+      debugPrint('Child home usage settle failed: ${e.message}');
+      return false;
+    }
+  }
+
+  void _restartCountdown() {
+    _countdownTimer?.cancel();
+    if (_remainingSeconds <= 0) {
+      return;
+    }
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (!mounted) {
+        return;
+      }
+      if (_isReadingRemainingSeconds) {
+        return;
+      }
+      _isReadingRemainingSeconds = true;
+      final int? nativeRemaining = await DeviceBlockController.instance
+          .remainingScreenTimeSeconds();
+      if (!mounted) {
+        _isReadingRemainingSeconds = false;
+        return;
+      }
+      setState(() {
+        _remainingSeconds =
+            nativeRemaining ??
+            (_remainingSeconds > 0 ? _remainingSeconds - 1 : 0);
+      });
+      _isReadingRemainingSeconds = false;
+      _syncDeviceBlocker();
+      if (_remainingSeconds <= 0) {
+        _countdownTimer?.cancel();
+      }
+    });
+  }
+
+  void _syncDeviceBlocker() {
+    final int remainingMinutes = _remainingSeconds <= 0
+        ? 0
+        : (_remainingSeconds / 60).ceil();
+    if (remainingMinutes <= 0) {
+      if (_appliedExpiryBlock) {
+        return;
+      }
+      _appliedExpiryBlock = true;
+    }
+    unawaited(
+      DeviceBlockController.instance.applyForRemainingMinutes(remainingMinutes),
+    );
+  }
+
+  Future<void> _handleAddTimePressed() async {
+    final _HomeTimeSnapshot? snapshot = _timeSnapshot;
+    if (snapshot == null || _isExtendingTime) {
+      return;
+    }
+
+    final int monthlyRemainingMinutes = snapshot.monthlyRemainingMinutes;
+    if (monthlyRemainingMinutes <= 0) {
+      _showSnackBar('이번 달 남은 시간이 없어요.');
+      return;
+    }
+
+    final int initialMinutes = monthlyRemainingMinutes >= 30
+        ? 30
+        : monthlyRemainingMinutes;
+    final TimeOfDayPick? pick = await BridgeTimeBottomSheet.show(
+      context,
+      initialHours: initialMinutes ~/ 60,
+      initialMinutes: initialMinutes % 60,
+      maxHours: monthlyRemainingMinutes ~/ 60,
+      minuteStep: 1,
+    );
+    if (!mounted || pick == null) {
+      return;
+    }
+
+    final int extraMinutes = pick.hours * 60 + pick.minutes;
+    if (extraMinutes <= 0) {
+      _showSnackBar('추가할 시간을 선택해 주세요.');
+      return;
+    }
+    if (extraMinutes > monthlyRemainingMinutes) {
+      _showSnackBar('월간 남은시간을 초과할 수 없어요.');
+      return;
+    }
+
+    setState(() {
+      _isExtendingTime = true;
+    });
+    try {
+      await _dio.post<dynamic>(
+        '/api/v1/schedules/extend',
+        data: <String, dynamic>{
+          'targetDate': snapshot.dateKey,
+          'extraMinutes': extraMinutes,
+        },
+      );
+      await _loadHomeTime();
+    } on DioException catch (e) {
+      final Failure<void> failure = failureFromDioException<void>(e);
+      _showSnackBar(failure.message);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExtendingTime = false;
+        });
+      }
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   void _toggleHasScheduleForDebug() {
     setState(() {
       _hasSchedule = !_hasSchedule;
+      if (_hasSchedule && _timeSnapshot == null) {
+        _timeSnapshot = _HomeTimeSnapshot(
+          dateKey: _yyyyMmDd(DateTime.now()),
+          baseMinutes: 90,
+          monthlyRemainingMinutes: 30,
+          totalMinutes: 120,
+        );
+        _remainingSeconds = 120 * 60;
+      }
     });
   }
 
@@ -42,20 +477,52 @@ class _ChildHomePageState extends State<ChildHomePage> {
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: AppColors.gray100,
-        body: Center(
+        body: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: AppTokens.mobileFrameWidth,
             ),
             child: SafeArea(
               bottom: false,
-              child: _ChildHomeContent(
-                hasContent: widget.showContent,
-                hasSchedule: _hasSchedule,
-                onDebugToggleSchedule: kDebugMode
-                    ? _toggleHasScheduleForDebug
-                    : null,
-              ),
+              child: widget.showContent
+                  ? RefreshIndicator(
+                      color: AppColors.primary,
+                      triggerMode: RefreshIndicatorTriggerMode.anywhere,
+                      onRefresh: _refreshHomeData,
+                      child: _ChildHomeContent(
+                        hasContent: widget.showContent,
+                        hasSchedule: _hasSchedule,
+                        hasNotification: _hasNotification,
+                        timeSnapshot: _timeSnapshot,
+                        remainingSeconds: _remainingSeconds,
+                        missionRefreshRevision: _missionRefreshRevision,
+                        missionRepository: widget.missionRepository,
+                        onNotificationsChanged: () =>
+                            unawaited(_refreshHomeData()),
+                        isExtendingTime: _isExtendingTime,
+                        onAddTimePressed: _handleAddTimePressed,
+                        onDebugToggleSchedule: kDebugMode
+                            ? _toggleHasScheduleForDebug
+                            : null,
+                      ),
+                    )
+                  : _ChildHomeContent(
+                      hasContent: widget.showContent,
+                      hasSchedule: _hasSchedule,
+                      hasNotification: _hasNotification,
+                      timeSnapshot: _timeSnapshot,
+                      remainingSeconds: _remainingSeconds,
+                      missionRefreshRevision: _missionRefreshRevision,
+                      missionRepository: widget.missionRepository,
+                      onNotificationsChanged: () =>
+                          unawaited(_refreshHomeData()),
+                      isExtendingTime: _isExtendingTime,
+                      onAddTimePressed: _handleAddTimePressed,
+                      onDebugToggleSchedule: kDebugMode
+                          ? _toggleHasScheduleForDebug
+                          : null,
+                    ),
             ),
           ),
         ),
@@ -64,15 +531,94 @@ class _ChildHomePageState extends State<ChildHomePage> {
   }
 }
 
+class _HomeTimeSnapshot {
+  const _HomeTimeSnapshot({
+    required this.dateKey,
+    required this.baseMinutes,
+    required this.monthlyRemainingMinutes,
+    required this.totalMinutes,
+  });
+
+  final String dateKey;
+  final int baseMinutes;
+  final int monthlyRemainingMinutes;
+  final int totalMinutes;
+}
+
+Map<String, dynamic>? _jsonMap(dynamic data) {
+  if (data is Map && data['data'] is Map) {
+    return Map<String, dynamic>.from(data['data'] as Map);
+  }
+  if (data is Map) {
+    return Map<String, dynamic>.from(data);
+  }
+  return null;
+}
+
+int _intValue(Object? value, {int fallback = 0}) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+String _yyyyMmDd(DateTime date) {
+  final String year = date.year.toString().padLeft(4, '0');
+  final String month = date.month.toString().padLeft(2, '0');
+  final String day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+String _screenTimeDateKey(String memberKey) =>
+    'child_home.screen_time.$memberKey.date';
+
+String _screenTimeAllocatedMinutesKey(String memberKey) =>
+    'child_home.screen_time.$memberKey.allocated_minutes';
+
+String _screenTimeSettledDateKey(String memberKey) =>
+    'child_home.screen_time.$memberKey.settled_date';
+
+String _formatMinutes(int totalMinutes) {
+  final int safeMinutes = totalMinutes < 0 ? 0 : totalMinutes;
+  final int hours = safeMinutes ~/ 60;
+  final int minutes = safeMinutes % 60;
+  return '${hours.toString().padLeft(2, '0')}:'
+      '${minutes.toString().padLeft(2, '0')}';
+}
+
+String _formatRemainingSeconds(int totalSeconds) {
+  final int safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
+  final int hours = safeSeconds ~/ 3600;
+  final int minutes = (safeSeconds % 3600) ~/ 60;
+  return '${hours.toString().padLeft(2, '0')}:'
+      '${minutes.toString().padLeft(2, '0')}';
+}
+
 class _ChildHomeContent extends StatelessWidget {
   const _ChildHomeContent({
     required this.hasContent,
     required this.hasSchedule,
+    required this.hasNotification,
+    required this.timeSnapshot,
+    required this.remainingSeconds,
+    required this.missionRefreshRevision,
+    required this.missionRepository,
+    required this.onNotificationsChanged,
+    required this.isExtendingTime,
+    required this.onAddTimePressed,
     required this.onDebugToggleSchedule,
   });
 
   final bool hasContent;
   final bool hasSchedule;
+  final bool hasNotification;
+  final _HomeTimeSnapshot? timeSnapshot;
+  final int remainingSeconds;
+  final int missionRefreshRevision;
+  final MissionRepository? missionRepository;
+  final VoidCallback onNotificationsChanged;
+  final bool isExtendingTime;
+  final VoidCallback onAddTimePressed;
   // Null in release builds — see ChildHomePage build(). Keeps the long-press
   // debug toggle from silently flipping schedule state for end users.
   final VoidCallback? onDebugToggleSchedule;
@@ -87,7 +633,7 @@ class _ChildHomeContent extends StatelessWidget {
 
     return SingleChildScrollView(
       physics: hasContent
-          ? const BouncingScrollPhysics()
+          ? const AlwaysScrollableScrollPhysics()
           : const NeverScrollableScrollPhysics(),
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: visibleHeight),
@@ -99,7 +645,10 @@ class _ChildHomeContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppTokens.mediumGap),
-              _TopBar(hasNotification: hasContent),
+              _TopBar(
+                hasNotification: hasContent && hasNotification,
+                onNotificationsChanged: onNotificationsChanged,
+              ),
               // Figma: topbar bottom y=88, content y=108 (empty) / 118 (v2).
               SizedBox(
                 height: hasContent
@@ -109,10 +658,18 @@ class _ChildHomeContent extends StatelessWidget {
               _TodayTimeSection(
                 hasContent: hasContent,
                 hasSchedule: hasSchedule,
+                timeSnapshot: timeSnapshot,
+                remainingSeconds: remainingSeconds,
+                isExtendingTime: isExtendingTime,
+                onAddTimePressed: onAddTimePressed,
                 onDebugToggleSchedule: onDebugToggleSchedule,
               ),
               const SizedBox(height: 50),
-              _MissionSection(hasContent: hasContent),
+              _MissionSection(
+                hasContent: hasContent,
+                refreshRevision: missionRefreshRevision,
+                repository: missionRepository,
+              ),
               if (hasContent) const SizedBox(height: AppTokens.sectionGap),
             ],
           ),
@@ -123,9 +680,13 @@ class _ChildHomeContent extends StatelessWidget {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.hasNotification});
+  const _TopBar({
+    required this.hasNotification,
+    required this.onNotificationsChanged,
+  });
 
   final bool hasNotification;
+  final VoidCallback onNotificationsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -135,35 +696,65 @@ class _TopBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const _MyPageButton(),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => context.push('/child-home/notifications'),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  size: 30,
-                  color: AppColors.gray900,
-                ),
-                if (hasNotification)
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.destructive,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () async {
+                await context.push('/child-home/notifications');
+                onNotificationsChanged();
+              },
+              hoverColor: AppColors.gray800.withValues(alpha: 0.06),
+              highlightColor: AppColors.gray800.withValues(alpha: 0.10),
+              splashColor: AppColors.gray800.withValues(alpha: 0.12),
+              customBorder: const CircleBorder(),
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: _NotificationIcon(hasUnread: hasNotification),
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NotificationIcon extends StatelessWidget {
+  const _NotificationIcon({required this.hasUnread});
+
+  final bool hasUnread;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Center(
+          child: SvgPicture.asset(
+            'assets/icons/속성 1=알림없음.svg',
+            width: 32,
+            height: 32,
+          ),
+        ),
+        if (hasUnread)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Container(
+              key: const ValueKey('child-home-notification-unread-dot'),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.destructive,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.white, width: 1),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -190,9 +781,6 @@ class _MyPageButton extends StatelessWidget {
               'my',
               style: AppTypography.labelRegular.copyWith(
                 color: AppColors.gray800,
-                fontSize: 14,
-                height: 1.429,
-                letterSpacing: 0.203,
               ),
             ),
           ),
@@ -206,19 +794,29 @@ class _TodayTimeSection extends StatelessWidget {
   const _TodayTimeSection({
     required this.hasContent,
     required this.hasSchedule,
+    required this.timeSnapshot,
+    required this.remainingSeconds,
+    required this.isExtendingTime,
+    required this.onAddTimePressed,
     required this.onDebugToggleSchedule,
   });
 
   final bool hasContent;
   final bool hasSchedule;
+  final _HomeTimeSnapshot? timeSnapshot;
+  final int remainingSeconds;
+  final bool isExtendingTime;
+  final VoidCallback onAddTimePressed;
   // Null in release builds; long-press becomes a no-op.
   final VoidCallback? onDebugToggleSchedule;
 
   @override
   Widget build(BuildContext context) {
-    // Donut + bonus details only when there's actually a registered schedule.
+    // Donut + time details only when there's actually a registered schedule.
     // All other states fall through to the empty card with a tappable + button.
-    final bool showDonut = hasContent && hasSchedule;
+    final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
+    final bool showAddTimeButton =
+        showDonut && timeSnapshot!.monthlyRemainingMinutes > 0;
 
     return SizedBox(
       height: 223,
@@ -234,7 +832,6 @@ class _TodayTimeSection extends StatelessWidget {
                   '오늘의 시간',
                   style: AppTypography.heading2Bold.copyWith(
                     color: AppColors.black,
-                    letterSpacing: -0.24,
                   ),
                 ),
                 const SizedBox(width: AppTokens.smallGap),
@@ -305,18 +902,19 @@ class _TodayTimeSection extends StatelessWidget {
                     color: AppColors.gray300,
                     size: 22,
                   ),
-                if (!hasContent) ...[
-                  const Spacer(),
+                const Spacer(),
+                if (showAddTimeButton)
+                  _AddTimeButton(
+                    isLoading: isExtendingTime,
+                    onPressed: onAddTimePressed,
+                  )
+                else if (!hasContent)
                   Text(
                     '사용 리포트',
-                    style: AppTypography.labelBold.copyWith(
+                    style: AppTypography.labelSemiBold.copyWith(
                       color: AppColors.gray400,
-                      fontSize: 14,
-                      height: 1.429,
-                      letterSpacing: 0.203,
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -333,7 +931,9 @@ class _TodayTimeSection extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.white,
-                  borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
+                  borderRadius: BorderRadius.circular(
+                    AppTokens.cardRadiusSmall,
+                  ),
                   boxShadow: const [
                     BoxShadow(
                       color: AppTokens.cardShadowColor,
@@ -343,18 +943,55 @@ class _TodayTimeSection extends StatelessWidget {
                   ],
                 ),
                 // Three card states:
-                // - has schedule: donut + bonus details
+                // - has schedule: donut + time details
                 // - no schedule (normal path): empty-state with tappable + button
                 // - hasContent=false (legacy onboarding path): same empty-state
                 //   so the + button is always reachable.
                 child: showDonut
-                    ? const _TimeSummaryContent()
+                    ? _TimeSummaryContent(
+                        snapshot: timeSnapshot!,
+                        remainingSeconds: remainingSeconds,
+                      )
                     : const _ScheduleEmptyState(),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AddTimeButton extends StatelessWidget {
+  const _AddTimeButton({required this.isLoading, required this.onPressed});
+
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle textStyle = AppTypography.labelSemiBold.copyWith(
+      color: AppColors.primary,
+      fontSize: 13,
+      height: 1.2,
+    );
+
+    return TextButton(
+      onPressed: isLoading ? null : onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.primary,
+        disabledBackgroundColor: AppColors.primaryLight,
+        disabledForegroundColor: AppColors.primary,
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.buttonRadius),
+        ),
+        textStyle: textStyle,
+      ),
+      child: Text(isLoading ? '추가 중' : '시간 추가', style: textStyle),
     );
   }
 }
@@ -393,17 +1030,26 @@ class _ScheduleEmptyState extends StatelessWidget {
 }
 
 class _TimeSummaryContent extends StatelessWidget {
-  const _TimeSummaryContent();
+  const _TimeSummaryContent({
+    required this.snapshot,
+    required this.remainingSeconds,
+  });
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
       child: Row(
-        children: const [
-          _TimeDonutChart(),
-          SizedBox(width: 40),
-          _TimeDetails(),
+        children: [
+          _TimeDonutChart(
+            snapshot: snapshot,
+            remainingSeconds: remainingSeconds,
+          ),
+          const SizedBox(width: 40),
+          _TimeDetails(snapshot: snapshot, remainingSeconds: remainingSeconds),
         ],
       ),
     );
@@ -411,19 +1057,38 @@ class _TimeSummaryContent extends StatelessWidget {
 }
 
 class _TimeDonutChart extends StatelessWidget {
-  const _TimeDonutChart();
+  const _TimeDonutChart({
+    required this.snapshot,
+    required this.remainingSeconds,
+  });
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 124,
       height: 124,
-      child: CustomPaint(painter: _TimeDonutChartPainter()),
+      child: CustomPaint(
+        painter: _TimeDonutChartPainter(
+          snapshot: snapshot,
+          remainingSeconds: remainingSeconds,
+        ),
+      ),
     );
   }
 }
 
 class _TimeDonutChartPainter extends CustomPainter {
+  const _TimeDonutChartPainter({
+    required this.snapshot,
+    required this.remainingSeconds,
+  });
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
+
   @override
   void paint(Canvas canvas, Size size) {
     final Offset center = size.center(Offset.zero);
@@ -456,57 +1121,73 @@ class _TimeDonutChartPainter extends CustomPainter {
       );
     }
 
+    final int totalSeconds = snapshot.totalMinutes * 60;
+    final double remainingProgress = totalSeconds <= 0
+        ? 0
+        : (remainingSeconds / totalSeconds).clamp(0, 1).toDouble();
+    final double monthlyRemainingProgress = snapshot.totalMinutes <= 0
+        ? 0
+        : (snapshot.monthlyRemainingMinutes / snapshot.totalMinutes)
+              .clamp(0, 1)
+              .toDouble();
+
     drawRing(
       radius: 55,
       strokeWidth: 14,
       baseColor: AppColors.gray150,
       progressColor: AppColors.primary,
-      progress: 0.76,
+      progress: remainingProgress,
     );
     drawRing(
       radius: 39,
       strokeWidth: 11,
       baseColor: AppColors.gray150,
       progressColor: AppColors.bonusAmber,
-      progress: 0.78,
+      progress: monthlyRemainingProgress,
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TimeDonutChartPainter oldDelegate) {
+    return oldDelegate.remainingSeconds != remainingSeconds ||
+        oldDelegate.snapshot != snapshot;
+  }
 }
 
 class _TimeDetails extends StatelessWidget {
-  const _TimeDetails();
+  const _TimeDetails({required this.snapshot, required this.remainingSeconds});
+
+  final _HomeTimeSnapshot snapshot;
+  final int remainingSeconds;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 101,
       height: 124,
-      child: Stack(
-        children: const [
-          Positioned(
-            left: 0,
-            top: 0,
-            right: 0,
-            child: _TimeDetailGroup(
-              label: '기본시간',
-              value: '01:30',
-              color: AppColors.primary,
-            ),
+      child: FittedBox(
+        alignment: Alignment.centerLeft,
+        fit: BoxFit.scaleDown,
+        child: SizedBox(
+          width: 101,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TimeDetailGroup(
+                label: '남은시간',
+                value: _formatRemainingSeconds(remainingSeconds),
+                color: AppColors.primary,
+              ),
+              const SizedBox(height: 14),
+              _TimeDetailGroup(
+                label: '월간 남은시간',
+                value: _formatMinutes(snapshot.monthlyRemainingMinutes),
+                color: AppColors.bonusAmber,
+              ),
+            ],
           ),
-          Positioned(
-            left: 0,
-            top: 72,
-            right: 0,
-            child: _TimeDetailGroup(
-              label: '보너스시간',
-              value: '00:30',
-              color: AppColors.bonusAmber,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -525,45 +1206,39 @@ class _TimeDetailGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTypography.labelMedium.copyWith(
-              color: color,
-              fontSize: 14,
-              height: 1.429,
-              letterSpacing: 0.203,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: AppTypography.heading1Bold.copyWith(
-              color: color,
-              fontSize: 24,
-              height: 1.364,
-              letterSpacing: -0.466,
-            ),
-          ),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppTypography.labelMedium.copyWith(color: color)),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTypography.heading1SemiBold.copyWith(color: color),
+        ),
+      ],
     );
   }
 }
 
 class _MissionSection extends StatelessWidget {
-  const _MissionSection({required this.hasContent});
+  const _MissionSection({
+    required this.hasContent,
+    required this.refreshRevision,
+    required this.repository,
+  });
 
   final bool hasContent;
+  final int refreshRevision;
+  final MissionRepository? repository;
 
   @override
   Widget build(BuildContext context) {
     if (hasContent) {
-      return const _MissionListSection();
+      return _MissionListSection(
+        refreshRevision: refreshRevision,
+        repository: repository,
+      );
     }
 
     return SizedBox(
@@ -578,17 +1253,13 @@ class _MissionSection extends StatelessWidget {
                 '오늘의 미션',
                 style: AppTypography.heading2Bold.copyWith(
                   color: AppColors.black,
-                  letterSpacing: -0.24,
                 ),
               ),
               const Spacer(),
               Text(
                 '0개 완료',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray700,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
               const SizedBox(width: AppTokens.smallGap),
@@ -596,11 +1267,8 @@ class _MissionSection extends StatelessWidget {
               const SizedBox(width: AppTokens.smallGap),
               Text(
                 '0',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray200,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
             ],
@@ -614,9 +1282,6 @@ class _MissionSection extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.gray500,
-                fontSize: 14,
-                height: 1.429,
-                letterSpacing: 0.203,
               ),
             ),
           ),
@@ -627,20 +1292,26 @@ class _MissionSection extends StatelessWidget {
 }
 
 class _MissionListSection extends StatefulWidget {
-  const _MissionListSection();
+  const _MissionListSection({
+    required this.refreshRevision,
+    required this.repository,
+  });
+
+  final int refreshRevision;
+  final MissionRepository? repository;
 
   @override
   State<_MissionListSection> createState() => _MissionListSectionState();
 }
 
 class _MissionListSectionState extends State<_MissionListSection> {
-  // Source of truth post-Phase-2B: the repository. We seed synchronously
-  // from MissionMock.all so the first paint matches today's behavior, then
-  // [_loadMissions] hydrates the list from the repo (mock today, HTTP once
-  // useMocks flips off). No loading/error UI by design — the seed bridges
-  // the (currently instant) async window.
-  late final MissionRepository _repository = createMissionRepository();
-  late List<_MissionItemData> _missions = _mapMissions(MissionMock.all);
+  // Source of truth post-Phase-2B: the repository. The list starts empty and
+  // [_loadMissions] hydrates it from the repo (mock today, HTTP once
+  // useMocks flips off). No loading/error UI by design — the repo load fills
+  // the (currently instant) async window; an empty list is retained on failure.
+  late final MissionRepository _repository =
+      widget.repository ?? createMissionRepository();
+  late List<_MissionItemData> _missions = <_MissionItemData>[];
 
   @override
   void initState() {
@@ -648,9 +1319,17 @@ class _MissionListSectionState extends State<_MissionListSection> {
     _loadMissions();
   }
 
+  @override
+  void didUpdateWidget(covariant _MissionListSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshRevision != widget.refreshRevision) {
+      unawaited(_loadMissions());
+    }
+  }
+
   Future<void> _loadMissions() async {
-    final Result<List<mission_model.Mission>> result =
-        await _repository.listMissions();
+    final Result<List<mission_model.Mission>> result = await _repository
+        .listMissions();
     if (!mounted) return;
     if (result case Success<List<mission_model.Mission>>(data: final fresh)) {
       setState(() {
@@ -658,11 +1337,11 @@ class _MissionListSectionState extends State<_MissionListSection> {
       });
     } else {
       // Keep silent for the user — home is a low-frequency view and a SnackBar
-      // on open would be intrusive. Surface a dev-only warning so stale seed
-      // data from MissionMock isn't mistaken for a successful repo fetch.
+      // on open would be intrusive. Surface a dev-only warning so an empty
+      // mission list isn't mistaken for a successful repo fetch.
       debugPrint(
         '[_MissionListSection] listMissions() failed; '
-        'retaining seeded MissionMock list.',
+        'retaining empty mission list.',
       );
     }
   }
@@ -691,9 +1370,9 @@ class _MissionListSectionState extends State<_MissionListSection> {
     final int totalCount = missions.length;
 
     return SizedBox(
-      height: 520,
       width: double.infinity,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -701,17 +1380,13 @@ class _MissionListSectionState extends State<_MissionListSection> {
                 '오늘의 미션',
                 style: AppTypography.heading2Bold.copyWith(
                   color: AppColors.black,
-                  letterSpacing: -0.24,
                 ),
               ),
               const Spacer(),
               Text(
                 '$completedCount개 완료',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray700,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
               const SizedBox(width: AppTokens.smallGap),
@@ -719,11 +1394,8 @@ class _MissionListSectionState extends State<_MissionListSection> {
               const SizedBox(width: AppTokens.smallGap),
               Text(
                 '$totalCount',
-                style: AppTypography.labelBold.copyWith(
+                style: AppTypography.labelSemiBold.copyWith(
                   color: AppColors.gray200,
-                  fontSize: 14,
-                  height: 1.429,
-                  letterSpacing: 0.203,
                 ),
               ),
             ],
@@ -756,8 +1428,8 @@ _MissionStatus _statusFromModel(mission_model.MissionStatus status) {
 }
 
 /// Maps a Mission.category to its SVG asset on disk. Falls back to the
-/// generic 루틴 icon when an unknown category arrives, matching the default
-/// from [mission_model.Mission].
+/// generic 기타 icon when an unknown or legacy category arrives, matching the
+/// current parent-app category surface.
 String _iconAssetForCategory(String category) {
   switch (category) {
     case '청소':
@@ -766,11 +1438,11 @@ String _iconAssetForCategory(String category) {
       return 'assets/icons/학습.svg';
     case '운동':
       return 'assets/icons/운동.svg';
-    case '심부름':
-      return 'assets/icons/심부름.svg';
+    case '기타':
     case '루틴':
+    case '심부름':
     default:
-      return 'assets/icons/루틴.svg';
+      return 'assets/icons/icn/light-bulb.svg';
   }
 }
 
@@ -799,35 +1471,41 @@ class _MissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Mission detail route `/child-home/mission/:id` lands in Phase 6;
-    // until then go_router surfaces its default 404 on tap.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => context.push('/child-home/mission/${data.id}'),
-      child: Container(
-        height: 84,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
-        decoration: BoxDecoration(
-          color: _isCompleted ? AppColors.gray150 : AppColors.white,
-          borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
-        ),
-        child: Row(
-          children: [
-            Opacity(
-              opacity: _isCompleted ? 0.3 : 1,
-              child: SvgPicture.asset(data.iconAsset, width: 48, height: 48),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 84),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _isCompleted ? AppColors.gray150 : AppColors.white,
+            borderRadius: BorderRadius.circular(AppTokens.cardRadiusSmall),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
+            child: Row(
+              children: [
+                Opacity(
+                  opacity: _isCompleted ? 0.3 : 1,
+                  child: SvgPicture.asset(
+                    data.iconAsset,
+                    width: 48,
+                    height: 48,
+                  ),
+                ),
+                const SizedBox(width: 19),
+                Expanded(
+                  child: _MissionText(
+                    title: data.title,
+                    rewardText: data.rewardText,
+                    completed: _isCompleted,
+                  ),
+                ),
+                const SizedBox(width: AppTokens.mediumGap),
+                _MissionStatusIcon(status: data.status),
+              ],
             ),
-            const SizedBox(width: 19),
-            Expanded(
-              child: _MissionText(
-                title: data.title,
-                rewardText: data.rewardText,
-                completed: _isCompleted,
-              ),
-            ),
-            _MissionStatusIcon(status: data.status),
-          ],
+          ),
         ),
       ),
     );
@@ -853,27 +1531,25 @@ class _MissionText extends StatelessWidget {
         : TextDecoration.none;
 
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: AppTypography.bodyMedium.copyWith(
             color: color,
-            fontSize: 16,
-            height: 1.5,
-            letterSpacing: 0.0912,
             decoration: decoration,
           ),
         ),
         const SizedBox(height: 3),
         Text(
           rewardText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: AppTypography.captionRegular.copyWith(
             color: completed ? AppColors.gray300 : AppColors.gray500,
-            fontSize: 12,
-            height: 1.334,
-            letterSpacing: 0.302,
             decoration: decoration,
           ),
         ),
@@ -944,4 +1620,3 @@ class _ReviewingStatusIcon extends StatelessWidget {
     );
   }
 }
-

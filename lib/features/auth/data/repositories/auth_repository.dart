@@ -17,6 +17,7 @@ abstract interface class AuthRepository {
   });
 
   Future<Result<AuthToken>> signup({
+    required String name,
     required String username,
     required String password,
   });
@@ -30,15 +31,15 @@ abstract interface class AuthRepository {
   Future<Result<AuthToken>> refreshToken(String refreshToken);
 }
 
-/// Factory that resolves the active [AuthRepository] implementation based on
-/// [currentEnvironment.useMocks]. Pages call this once via a `late final`
-/// field so the choice is made lazily but cached for the widget's lifetime.
-AuthRepository createAuthRepository() {
-  if (currentEnvironment.useMocks) {
-    return MockAuthRepository();
-  }
-  return ApiAuthRepository();
-}
+/// Cached singleton — lazy-initialized at first access.
+final AuthRepository _authRepository = currentEnvironment.useMocks
+    ? MockAuthRepository()
+    : ApiAuthRepository();
+
+/// Factory that resolves the active [AuthRepository] implementation. The
+/// instance is cached so every call site shares the same Dio (and therefore
+/// the same interceptor chain).
+AuthRepository createAuthRepository() => _authRepository;
 
 /// Canonical failure messages emitted by [MockAuthRepository.login]. Exposed
 /// as constants so the login page can do an exact-match string comparison
@@ -48,4 +49,5 @@ abstract final class AuthFailureMessages {
   static const String unknownUser = '아이디를 다시 확인해 주세요.';
   static const String wrongPassword = '비밀번호가 일치하지 않아요.';
   static const String duplicatedUsername = '이미 사용 중인 아이디예요.';
+  static const String invalidAuthResponse = '인증 응답을 확인할 수 없어요. 다시 시도해 주세요.';
 }

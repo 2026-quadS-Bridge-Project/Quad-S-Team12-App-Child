@@ -36,10 +36,9 @@ abstract interface class MissionApprovalSubscription {
 /// Phase 2B factory: selects mock vs. real implementation based on
 /// [currentEnvironment.useMocks].
 ///
-/// Returns [MockMissionApprovalListener] today; will return
-/// [ApiMissionApprovalListener] once the backend ships and `useMocks` is
-/// flipped off in [EnvironmentConfig].
+/// Returns [MockMissionApprovalListener] while mocks are enabled and
+/// [ApiMissionApprovalListener] in real API mode.
 MissionApprovalListener createMissionApprovalListener() {
   if (currentEnvironment.useMocks) return const MockMissionApprovalListener();
-  return ApiMissionApprovalListener();
+  return const ApiMissionApprovalListener();
 }

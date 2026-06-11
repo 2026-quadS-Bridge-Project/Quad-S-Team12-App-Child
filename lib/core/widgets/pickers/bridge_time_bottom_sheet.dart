@@ -36,7 +36,7 @@ class TimeOfDayPick {
 ///
 /// Anatomy (top → bottom):
 ///   1. Drag handle — 4 × 40 `AppColors.gray200` pill, 8px from sheet top.
-///   2. Header `시간 선택` — `AppTypography.headlineBold`, centered, 27px
+///   2. Header `시간 선택` — `AppTypography.headlineSemiBold`, centered, 27px
 ///      from sheet top.
 ///   3. Two [BridgeWheelPicker] columns (hour, minute) side-by-side, centered.
 ///   4. Selection band overlay — 324 × 50, top & bottom 2px primary borders,
@@ -205,7 +205,7 @@ class _BridgeTimeBottomSheetState extends State<BridgeTimeBottomSheet> {
               child: Text(
                 widget.title,
                 textAlign: TextAlign.center,
-                style: AppTypography.headlineBold,
+                style: AppTypography.headlineSemiBold,
               ),
             ),
 

@@ -169,9 +169,7 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
 
     switch (result) {
       case Success<void>():
-        messenger.showSnackBar(
-          const SnackBar(content: Text('비밀번호가 변경되었어요.')),
-        );
+        messenger.showSnackBar(const SnackBar(content: Text('비밀번호가 변경되었어요.')));
         navigator.pop();
       case Failure<void>(:final String message):
         setState(() {
@@ -215,7 +213,7 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.pageHorizontal,
+                      horizontal: 22,
                       vertical: 12,
                     ),
                     child: Column(
@@ -292,8 +290,8 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
             ),
             child: Padding(
               padding: EdgeInsets.only(
-                left: AppTokens.pageHorizontal,
-                right: AppTokens.pageHorizontal,
+                left: 22,
+                right: 22,
                 bottom: MediaQuery.viewInsetsOf(context).bottom + 28,
               ),
               child: _PasswordChangeButton(

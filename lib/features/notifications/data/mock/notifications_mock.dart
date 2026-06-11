@@ -25,7 +25,7 @@ class NotificationsMock {
       title: '시간설정 완료',
       message: '부모님이 1월달 총 사용 시간을 설정했어요!\n이제 시간을 분배할 시간이에요!',
       createdAt: DateTime(2026, 5, 25, 14, 30),
-      deeplink: '/child-home/time-setup/confirm',
+      deeplink: '/child-home/time-setup',
     ),
     NotificationItem(
       id: 'mission-completed-ai',

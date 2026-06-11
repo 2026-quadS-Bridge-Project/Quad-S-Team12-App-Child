@@ -11,7 +11,6 @@ import '../../../../core/widgets/buttons/bridge_button.dart';
 import '../../../../core/widgets/charts/bridge_bar_chart.dart';
 import '../../../../core/widgets/charts/bridge_pie_chart.dart';
 import '../../../../core/widgets/layout/bridge_app_bar.dart';
-import '../../data/mock/usage_report_mock.dart';
 import '../../data/models/usage_report.dart';
 import '../../data/repositories/usage_report_repository.dart';
 
@@ -36,14 +35,10 @@ import '../../data/repositories/usage_report_repository.dart';
 /// with a back button that pops via `context.pop()`. The in-body weekly
 /// period header (`_WeeklyIntroCard`) is retained per Figma `662:11497`.
 ///
-/// Phase 2A: the page now consults [UsageReportRepository] via
-/// [createUsageReportRepository] so backend wiring can be swapped in
-/// without touching the widget tree. The state seed is the synchronous
-/// [UsageReportMock.currentWeek] fixture to avoid a cold-open flicker;
-/// [initState] then dispatches `_load()` which calls the repository and
-/// `setState`s on Success. Failure outcomes retain the seed data and
-/// surface a one-time SnackBar so the user knows the refresh failed
-/// (no auto-retry).
+/// Phase 2A: the page consults [UsageReportRepository] via
+/// [createUsageReportRepository]. Real API mode must not seed mock report data:
+/// until a read-only weekly report endpoint exists, failures render an empty
+/// state instead of showing fixture analytics.
 class ReportPage extends StatefulWidget {
   const ReportPage({super.key});
 
@@ -54,13 +49,9 @@ class ReportPage extends StatefulWidget {
 class _ReportPageState extends State<ReportPage> {
   late final UsageReportRepository _repository = createUsageReportRepository();
 
-  /// Synchronous seed avoids a one-frame empty state on cold open.
-  /// `_load()` overwrites this with whatever the repository returns.
-  late UsageReport _report = UsageReportMock.currentWeek;
-
-  /// Guards the failure SnackBar so we surface it at most once per page
-  /// lifetime (no auto-retry; user can navigate back/in to re-fetch).
-  bool _didNotifyLoadFailure = false;
+  UsageReport? _report;
+  String? _errorMessage;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -69,57 +60,70 @@ class _ReportPageState extends State<ReportPage> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     final result = await _repository.fetchCurrentWeekReport();
     if (!mounted) return;
     switch (result) {
       case Success<UsageReport>(:final data):
-        setState(() => _report = data);
-      case Failure<UsageReport>():
-        // Retain the seed fixture and notify the user once.
-        if (!_didNotifyLoadFailure) {
-          _didNotifyLoadFailure = true;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('리포트를 새로고침하지 못했어요.')),
-          );
-        }
+        setState(() {
+          _report = data;
+          _isLoading = false;
+        });
+      case Failure<UsageReport>(:final message):
+        setState(() {
+          _report = null;
+          _errorMessage = message;
+          _isLoading = false;
+        });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final UsageReport report = _report;
+    final UsageReport? report = _report;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BridgeAppBar(title: '사용 리포트'),
       body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppTokens.pageHorizontal,
-            0,
-            AppTokens.pageHorizontal,
-            16,
-          ),
+        child: Column(
           children: [
-            _WeeklyIntroCard(weekLabel: report.weekLabel),
-            const SizedBox(height: 20),
-            _PlanCard(plan: report.plan),
-            const SizedBox(height: 20),
-            _BarChartCard(dailyRows: report.dailyRows),
-            const SizedBox(height: 20),
-            _PieChartCard(compliance: report.compliance),
-            const SizedBox(height: 20),
-            _SuggestionCard(suggestions: report.suggestions),
-            const SizedBox(height: 24),
-            BridgeButton(
-              label: '다음주 계획 짜러가기 →',
-              variant: BridgeButtonVariant.primary,
-              size: BridgeButtonSize.large,
-              fullWidth: true,
-              onPressed: () => context.push('/child-home/time-setup/v2'),
+            const BridgeAppBar(title: '사용 리포트'),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : report == null
+                  ? _ReportUnavailable(
+                      message: _errorMessage ?? '리포트를 불러오지 못했어요.',
+                      onRetry: _load,
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      children: [
+                        _WeeklyIntroCard(weekLabel: report.weekLabel),
+                        const SizedBox(height: 20),
+                        _PlanCard(plan: report.plan),
+                        const SizedBox(height: 20),
+                        _BarChartCard(dailyRows: report.dailyRows),
+                        const SizedBox(height: 20),
+                        _PieChartCard(compliance: report.compliance),
+                        const SizedBox(height: 20),
+                        _SuggestionCard(suggestions: report.suggestions),
+                        const SizedBox(height: 24),
+                        BridgeButton(
+                          label: '다음주 계획 짜러가기 →',
+                          variant: BridgeButtonVariant.primary,
+                          size: BridgeButtonSize.large,
+                          fullWidth: true,
+                          onPressed: () =>
+                              context.push('/child-home/time-setup/v2'),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
             ),
-            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -128,6 +132,37 @@ class _ReportPageState extends State<ReportPage> {
 }
 
 // region: shared building blocks ---------------------------------------------
+
+class _ReportUnavailable extends StatelessWidget {
+  const _ReportUnavailable({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.gray600,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('다시 시도')),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// White card chrome shared by every section card on this screen.
 class _ReportCard extends StatelessWidget {
@@ -348,7 +383,7 @@ class _PlanDaySetRow extends StatelessWidget {
           Expanded(
             child: Text(
               daySet.daysLabel,
-              style: AppTypography.headlineBold.copyWith(
+              style: AppTypography.headlineSemiBold.copyWith(
                 color: AppColors.gray800,
               ),
             ),
@@ -455,7 +490,7 @@ class _DayBreakdownRow extends StatelessWidget {
         children: [
           Text(
             row.dayKor,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -552,7 +587,7 @@ class _PieChartCard extends StatelessWidget {
               ),
               Text(
                 '${compliance.overallCompliancePct.toInt()}%',
-                style: AppTypography.headlineBold.copyWith(
+                style: AppTypography.headlineSemiBold.copyWith(
                   color: AppColors.primary,
                 ),
               ),
@@ -706,7 +741,7 @@ class _SuggestionRow extends StatelessWidget {
         children: [
           Text(
             suggestion.daysLabel,
-            style: AppTypography.headlineBold.copyWith(
+            style: AppTypography.headlineSemiBold.copyWith(
               color: AppColors.gray800,
             ),
           ),
@@ -755,7 +790,7 @@ class _ReportTimeText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle numberStyle = AppTypography.headlineBold.copyWith(
+    final TextStyle numberStyle = AppTypography.headlineSemiBold.copyWith(
       color: AppColors.gray800,
     );
     final TextStyle unitStyle = AppTypography.headlineRegular.copyWith(

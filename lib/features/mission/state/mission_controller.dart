@@ -5,6 +5,7 @@ import '../data/mock/mission_mock.dart';
 import '../data/repositories/mission_repository.dart';
 import '../../../core/models/result.dart';
 import '../../../core/services/photo_upload_service.dart';
+import '../../../core/widgets/mixins/async_error_listener.dart';
 
 /// Flow steps for the mission detail screen.
 ///
@@ -14,7 +15,7 @@ import '../../../core/services/photo_upload_service.dart';
 /// tab active).
 enum MissionFlowStep { info, cameraPrompt, photoPreview, submitted }
 
-class MissionController extends ChangeNotifier {
+class MissionController extends ChangeNotifier implements AsyncErrorController {
   /// Public constructor.
   ///
   /// [repository] is injectable for tests; production callers can omit it
@@ -32,19 +33,19 @@ class MissionController extends ChangeNotifier {
     PhotoUploadService? uploadService,
     MissionApprovalListener? approvalListener,
   }) : this._(
-          MissionMock.byId(missionId),
-          repository ?? createMissionRepository(),
-          uploadService ?? createPhotoUploadService(),
-          approvalListener ?? createMissionApprovalListener(),
-        );
+         _initialMissionFor(missionId),
+         repository ?? createMissionRepository(),
+         uploadService ?? createPhotoUploadService(),
+         approvalListener ?? createMissionApprovalListener(),
+       );
 
   MissionController._(
     Mission mission,
     this._repository,
     this._uploadService,
     this._approvalListener,
-  )   : _mission = mission,
-        _step = _initialStepFor(mission);
+  ) : _mission = mission,
+      _step = _initialStepFor(mission);
 
   final MissionRepository _repository;
   final PhotoUploadService _uploadService;
@@ -63,6 +64,7 @@ class MissionController extends ChangeNotifier {
   bool get canSubmit => _capturedPhotoPaths.isNotEmpty && !_isLoading;
   bool get hasMaxPhotos => _capturedPhotoPaths.length >= 4;
   bool get isLoading => _isLoading;
+  @override
   String? get errorMessage => _errorMessage;
 
   void goToCameraPrompt() {
@@ -75,12 +77,12 @@ class MissionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Uploads a freshly captured photo via [_uploadService] and, on success,
-  /// appends the returned URL/path to [_capturedPhotoPaths].
+  /// Registers a freshly captured photo via [_uploadService] and, on success,
+  /// appends the returned local path to [_capturedPhotoPaths].
   ///
-  /// Mock builds resolve immediately (echoing the local path), so the UI
-  /// can `await` this without needing a spinner. Real backend uploads will
-  /// surface failures via [errorMessage] without mutating the photo list.
+  /// Mock and api builds currently resolve immediately because the actual
+  /// upload happens when [MissionRepository.submitMission] sends multipart
+  /// form data. Failures surface via [errorMessage] without mutating the list.
   /// The 4-photo cap is enforced before the upload starts to avoid
   /// pointless network work.
   Future<void> addCapturedPhoto(String localPath) async {
@@ -88,8 +90,8 @@ class MissionController extends ChangeNotifier {
     final Result<String> result = await _uploadService.uploadPhoto(localPath);
     if (_disposed) return;
     switch (result) {
-      case Success<String>(data: final String remotePathOrUrl):
-        _capturedPhotoPaths.add(remotePathOrUrl);
+      case Success<String>(data: final String localPath):
+        _capturedPhotoPaths.add(localPath);
         if (_step == MissionFlowStep.cameraPrompt) {
           _step = MissionFlowStep.photoPreview;
         }
@@ -115,25 +117,29 @@ class MissionController extends ChangeNotifier {
   /// channel is delegated to [_approvalListener] (mock fires after 2s; the
   /// api impl will wire WebSocket/SSE later) and is cancelled in [dispose].
   Future<void> submit({bool? aiAutoApprove}) async {
+    if (!canSubmit) return;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final Result<Mission> result = await _repository.submitMission(
-        id: _mission.id,
-        photoPaths: List.of(_capturedPhotoPaths),
-      );
+      final Result<MissionSubmissionResult> result = await _repository
+          .submitMission(
+            id: _mission.id,
+            photoPaths: List.of(_capturedPhotoPaths),
+          );
 
       switch (result) {
-        case Success<Mission>():
-          final bool completesImmediately =
-              _mission.confirmationMethod == ConfirmationMethod.childSelf;
+        case Success<MissionSubmissionResult>(
+          data: final MissionSubmissionResult submission,
+        ):
+          final MissionStatus nextStatus = submission.statusFor(
+            _mission.confirmationMethod,
+          );
           _mission = _mission.copyWith(
-            status: completesImmediately
-                ? MissionStatus.completed
-                : MissionStatus.reviewing,
+            status: nextStatus,
             photoUrls: List.of(_capturedPhotoPaths),
+            performanceId: submission.performanceId,
           );
           _step = MissionFlowStep.submitted;
 
@@ -141,9 +147,10 @@ class MissionController extends ChangeNotifier {
           // fires after 2s for aiAuto and stays silent otherwise, preserving
           // the original inline-Timer behavior verbatim.
           _approvalSubscription?.cancel();
-          final bool shouldAutoApprove = aiAutoApprove ??
+          final bool shouldAutoApprove =
+              aiAutoApprove ??
               (_mission.confirmationMethod == ConfirmationMethod.aiAuto);
-          if (!completesImmediately && shouldAutoApprove) {
+          if (nextStatus == MissionStatus.reviewing && shouldAutoApprove) {
             _approvalSubscription = _approvalListener.subscribe(
               missionId: _mission.id,
               confirmationMethod: _mission.confirmationMethod,
@@ -156,7 +163,7 @@ class MissionController extends ChangeNotifier {
               },
             );
           }
-        case Failure<Mission>(message: final String message):
+        case Failure<MissionSubmissionResult>(message: final String message):
           _errorMessage = message;
       }
     } finally {
@@ -173,6 +180,7 @@ class MissionController extends ChangeNotifier {
     switch (result) {
       case Success<Mission>(data: final Mission fresh):
         _mission = fresh;
+        _step = _initialStepFor(fresh);
         if (!_disposed) notifyListeners();
       case Failure<Mission>(message: final String message):
         _errorMessage = message;
@@ -183,6 +191,7 @@ class MissionController extends ChangeNotifier {
   /// Clears the current [errorMessage] so re-entry into an error-bearing
   /// state can surface a fresh failure (e.g. after a SnackBar has been
   /// shown). No-op when there is no active error.
+  @override
   void clearError() {
     if (_errorMessage == null) return;
     _errorMessage = null;
@@ -190,6 +199,7 @@ class MissionController extends ChangeNotifier {
   }
 
   void goBack() {
+    if (_isLoading) return;
     switch (_step) {
       case MissionFlowStep.cameraPrompt:
         _step = MissionFlowStep.info;
@@ -221,5 +231,21 @@ class MissionController extends ChangeNotifier {
       MissionStatus.rejected ||
       MissionStatus.pendingCheck => MissionFlowStep.info,
     };
+  }
+
+  static Mission _initialMissionFor(String missionId) {
+    for (final Mission mission in MissionMock.all) {
+      if (mission.id == missionId) {
+        return mission;
+      }
+    }
+    return Mission(
+      id: missionId,
+      title: '미션 정보를 불러오는 중',
+      rewardHours: 0,
+      rewardMinutes: 0,
+      status: MissionStatus.pendingCheck,
+      description: '미션 상세 정보를 불러오고 있어요.',
+    );
   }
 }

@@ -13,6 +13,7 @@ class NotificationItem {
     required this.title,
     required this.message,
     required this.createdAt,
+    this.isRead = false,
     this.actionLabel = '확인하러 가기',
     this.deeplink,
   });
@@ -21,19 +22,88 @@ class NotificationItem {
   /// against [NotificationType.values] by `.name`; [createdAt] is parsed as
   /// ISO-8601 via [DateTime.parse]. [deeplink] is optional.
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
-    final String typeName = json['type'] as String;
-    final NotificationType type = NotificationType.values.firstWhere(
-      (NotificationType candidate) => candidate.name == typeName,
-    );
     return NotificationItem(
-      id: json['id'] as String,
-      type: type,
-      title: json['title'] as String,
-      message: json['message'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      // Backend sends notificationId as a number (Long); stringify to avoid a
+      // cast crash that would take down the whole list parse.
+      id: (json['notificationId'] ?? '').toString(),
+      type: _typeFromName((json['notificationType'] ?? '').toString()),
+      title: (json['title'] ?? '').toString(),
+      message: (json['content'] ?? '').toString(),
+      createdAt:
+          DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
+          DateTime.now(),
+      isRead: _boolValue(json['isRead']),
       actionLabel: json['actionLabel'] as String? ?? '확인하러 가기',
-      deeplink: json['deeplink'] as String?,
+      deeplink: _deeplinkFromJson(json),
     );
+  }
+
+  NotificationItem copyWith({bool? isRead}) {
+    return NotificationItem(
+      id: id,
+      type: type,
+      title: title,
+      message: message,
+      createdAt: createdAt,
+      isRead: isRead ?? this.isRead,
+      actionLabel: actionLabel,
+      deeplink: deeplink,
+    );
+  }
+
+  static String? _deeplinkFromJson(Map<String, dynamic> json) {
+    for (final Object? value in <Object?>[
+      json['deeplink'],
+      json['targetRoute'],
+      if (json['payload'] is Map) (json['payload'] as Map)['deeplink'],
+      if (json['payload'] is Map) (json['payload'] as Map)['targetRoute'],
+    ]) {
+      if (value != null && value.toString().startsWith('/')) {
+        return value.toString();
+      }
+    }
+
+    final Object? missionId =
+        json['missionId'] ??
+        (json['payload'] is Map ? (json['payload'] as Map)['missionId'] : null);
+    if (missionId != null && missionId.toString().isNotEmpty) {
+      return '/child-home/mission/${missionId.toString()}';
+    }
+    return null;
+  }
+
+  static bool _boolValue(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is String) {
+      return value.toLowerCase() == 'true';
+    }
+    return false;
+  }
+
+  /// Resolve [NotificationType] from a wire name. Matches the app enum names
+  /// first (mock compatibility), then maps the backend NotificationType enum
+  /// {MISSION_CREATED, MISSION_APPROVED, MISSION_REJECTED, GENERAL}. Falls back
+  /// to a safe default instead of throwing on unknown values.
+  static NotificationType _typeFromName(String name) {
+    for (final NotificationType t in NotificationType.values) {
+      if (t.name == name) {
+        return t;
+      }
+    }
+    switch (name) {
+      case 'MISSION_APPROVED':
+        return NotificationType.missionCompleted;
+      case 'MISSION_REJECTED':
+        return NotificationType.missionRejected;
+      case 'MISSION_CREATED':
+      case 'MISSION_REQUESTED':
+        return NotificationType.missionConfirmationRequested;
+      case 'GENERAL':
+      default:
+        return NotificationType.timeConfigured;
+    }
   }
 
   final String id;
@@ -41,6 +111,7 @@ class NotificationItem {
   final String title;
   final String message;
   final DateTime createdAt;
+  final bool isRead;
   final String actionLabel;
 
   /// Optional per-item override for tap routing. When `null`, the page falls
@@ -48,14 +119,16 @@ class NotificationItem {
   /// Backend will populate this once notification deeplinks land.
   final String? deeplink;
 
-  /// Serialize to the wire format the backend expects. Mirrors [fromJson].
+  /// Serialize to the wire format. Keys mirror [fromJson] (backend contract:
+  /// notificationId / notificationType / content) so toJson→fromJson round-trips.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'id': id,
-      'type': type.name,
+      'notificationId': id,
+      'notificationType': type.name,
       'title': title,
-      'message': message,
+      'content': message,
       'createdAt': createdAt.toIso8601String(),
+      'isRead': isRead,
       'actionLabel': actionLabel,
       'deeplink': deeplink,
     };
