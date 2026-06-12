@@ -32,7 +32,7 @@ class BridgeTimeGrid extends StatelessWidget {
   const BridgeTimeGrid({
     super.key,
     required this.selected,
-    required this.onToggle,
+    this.onToggle,
     this.weekdays = const ['월', '화', '수', '목', '금', '토', '일'],
     this.hours = const [
       '7',
@@ -59,9 +59,9 @@ class BridgeTimeGrid extends StatelessWidget {
   /// Currently selected `(weekday, hour)` cells.
   final Set<({int weekday, int hour})> selected;
 
-  /// Invoked when a body cell is tapped. The caller is expected to update
-  /// [selected] and rebuild.
-  final void Function(int weekday, int hour) onToggle;
+  /// Invoked when a body cell is tapped. When null, the grid is rendered as a
+  /// read-only schedule preview.
+  final void Function(int weekday, int hour)? onToggle;
 
   /// Weekday column headers (left → right). Length should equal 7.
   final List<String> weekdays;
@@ -191,7 +191,7 @@ class BridgeTimeGrid extends StatelessWidget {
               width: dayWidth,
               height: _cellHeight,
               isSelected: selected.contains((weekday: col, hour: rowIndex)),
-              onTap: () => onToggle(col, rowIndex),
+              onTap: onToggle == null ? null : () => onToggle!(col, rowIndex),
               weekdayLabel: weekdays[col],
               hourOfDay: startHourOfDay + rowIndex,
             ),
@@ -207,7 +207,7 @@ class _GridCell extends StatelessWidget {
     required this.width,
     required this.height,
     required this.isSelected,
-    required this.onTap,
+    this.onTap,
     required this.weekdayLabel,
     required this.hourOfDay,
   });
@@ -215,7 +215,7 @@ class _GridCell extends StatelessWidget {
   final double width;
   final double height;
   final bool isSelected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final String weekdayLabel;
   final int hourOfDay;
 
@@ -224,7 +224,7 @@ class _GridCell extends StatelessWidget {
     final bg = isSelected ? AppColors.primary : AppColors.gray150;
 
     return Semantics(
-      button: true,
+      button: onTap != null,
       selected: isSelected,
       label: '$weekdayLabel요일 $hourOfDay시',
       child: GestureDetector(
