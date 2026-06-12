@@ -137,7 +137,8 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
     // three schedule endpoints (all identified by the child JWT). The backend
     // enforces a strict order — a week's budget must exist before its day
     // templates, and each week's template sum is validated against that budget
-    // (and the budget total against the parent's monthly baseTime). So we call
+    // (and the budget total must not exceed the parent's monthly baseTime).
+    // Unallocated monthly time is moved to the reward pool on complete. So we call
     // them in the mandated order and let the first failure surface verbatim:
     //   1. POST /weekly-budgets   (weeklyTotals)   — must precede templates
     //   2. PUT  /templates        (dayAllocations) — per week × weekday
@@ -220,8 +221,8 @@ class ApiTimeSetupRepository implements TimeSetupRepository {
       0,
       (int sum, WeeklyTotal total) => sum + total.totalMinutes,
     );
-    if (distributedMinutes != monthlyBudgetMinutes) {
-      return '주별 시간 합계가 부모님이 설정한 월 총 시간과 맞지 않아요.';
+    if (distributedMinutes > monthlyBudgetMinutes) {
+      return '주별 시간 합계가 부모님이 설정한 월 총 시간을 초과할 수 없어요.';
     }
 
     if (schedule.dayAllocations.isEmpty) {

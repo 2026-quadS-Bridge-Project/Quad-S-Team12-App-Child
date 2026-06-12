@@ -149,30 +149,27 @@ void main() {
     expect(controller.canProceedToStep3, isFalse);
   });
 
-  test(
-    'v1 weekly distribution must match parent monthly budget when present',
-    () {
-      final TimeSetupController controller = TimeSetupController(
-        initial: scheduleWith(
-          weeklyMinutes: const <int>[120, 120, 720, 1380],
-          monthlyBudgetMinutes: 116 * 60,
-        ),
-      );
+  test('v1 weekly distribution may be below parent monthly budget', () {
+    final TimeSetupController controller = TimeSetupController(
+      initial: scheduleWith(
+        weeklyMinutes: const <int>[120, 120, 720, 1380],
+        monthlyBudgetMinutes: 116 * 60,
+      ),
+    );
 
-      expect(controller.weeklyDistributionCapMinutes, 116 * 60);
-      expect(controller.editableWeeklyTotalMinutes, 39 * 60);
-      expect(controller.canProceedToStep3, isFalse);
+    expect(controller.weeklyDistributionCapMinutes, 116 * 60);
+    expect(controller.editableWeeklyTotalMinutes, 39 * 60);
+    expect(controller.canProceedToStep3, isTrue);
 
-      controller.autoDistributeWeeklyTotals();
+    controller.autoDistributeWeeklyTotals();
 
-      expect(controller.schedule.weeklyTotalMinutesAt(0), 29 * 60);
-      expect(controller.schedule.weeklyTotalMinutesAt(1), 29 * 60);
-      expect(controller.schedule.weeklyTotalMinutesAt(2), 29 * 60);
-      expect(controller.schedule.weeklyTotalMinutesAt(3), 29 * 60);
-      expect(controller.editableWeeklyTotalMinutes, 116 * 60);
-      expect(controller.canProceedToStep3, isTrue);
-    },
-  );
+    expect(controller.schedule.weeklyTotalMinutesAt(0), 29 * 60);
+    expect(controller.schedule.weeklyTotalMinutesAt(1), 29 * 60);
+    expect(controller.schedule.weeklyTotalMinutesAt(2), 29 * 60);
+    expect(controller.schedule.weeklyTotalMinutesAt(3), 29 * 60);
+    expect(controller.editableWeeklyTotalMinutes, 116 * 60);
+    expect(controller.canProceedToStep3, isTrue);
+  });
 
   test('daily allocation validation counts time once per selected weekday', () {
     final TimeSetupController controller = TimeSetupController(

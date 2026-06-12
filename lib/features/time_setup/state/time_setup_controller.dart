@@ -167,7 +167,8 @@ class TimeSetupController extends ChangeNotifier
   }
 
   /// v1 requires all four weeks to be populated. v2 validates only editable
-  /// weeks 2-4, and their sum must match the remaining cap after locked week 1.
+  /// weeks 2-4. The sum may be lower than the available cap; the backend moves
+  /// the unallocated remainder into the reward pool when the plan completes.
   bool get canProceedToStep3 {
     if (_schedule.weeklyTotals.isEmpty) {
       return false;
@@ -177,7 +178,8 @@ class TimeSetupController extends ChangeNotifier
         (WeeklyTotal w) => w.totalMinutes > 0,
       );
       return allWeeksFilled &&
-          editableWeeklyTotalMinutes == weeklyDistributionCapMinutes;
+          weeklyDistributionCapMinutes > 0 &&
+          editableWeeklyTotalMinutes <= weeklyDistributionCapMinutes;
     }
 
     final bool allEditableWeeksFilled = editableWeekIndices.every(
@@ -185,7 +187,7 @@ class TimeSetupController extends ChangeNotifier
     );
     return weeklyDistributionCapMinutes > 0 &&
         allEditableWeeksFilled &&
-        editableWeeklyTotalMinutes == weeklyDistributionCapMinutes;
+        editableWeeklyTotalMinutes <= weeklyDistributionCapMinutes;
   }
 
   void autoDistributeWeeklyTotals() {
