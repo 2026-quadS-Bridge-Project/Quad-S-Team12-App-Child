@@ -16,6 +16,7 @@ import '../../../../core/widgets/pickers/bridge_time_alloc_bottom_sheet.dart';
 import '../../data/models/time_schedule.dart';
 import '../../state/time_setup_controller.dart';
 import '../../state/time_setup_scope.dart';
+import 'time_setup_schedule_preview_page.dart';
 
 /// Step 3 of the initial 시간 설정 wizard — child distributes the weekly
 /// budget across the 7 days via [BridgeTimeAllocBottomSheet].
@@ -116,7 +117,6 @@ class DailyTimeSetupPage extends StatelessWidget {
                                 schedule: controller.showPastWeekDim
                                     ? controller.previousWeek ?? schedule
                                     : schedule,
-                                isPastReference: controller.showPastWeekDim,
                               ),
                               onUsageReportPressed: () =>
                                   _openUsageReportPreview(
@@ -196,18 +196,15 @@ class DailyTimeSetupPage extends StatelessWidget {
     }
   }
 
-  /// Opens the read-only schedule reference in-flow — this deliberately avoids
-  /// pushing a route so the wizard stack and draft allocation state stay put.
+  /// Opens the cached schedule in a read-only full screen while keeping the
+  /// draft wizard state beneath the pushed route.
   Future<void> _openSchedulePreview(
     BuildContext context, {
     required TimeSchedule schedule,
-    required bool isPastReference,
-  }) {
-    return _showReferenceSheet(
-      context,
-      child: _SchedulePreviewSheet(
-        schedule: schedule,
-        isPastReference: isPastReference,
+  }) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TimeSetupSchedulePreviewPage(schedule: schedule),
       ),
     );
   }
@@ -250,57 +247,6 @@ class DailyTimeSetupPage extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-const List<String> _weekdayNames = <String>['월', '화', '수', '목', '금', '토', '일'];
-
-class _SchedulePreviewSheet extends StatelessWidget {
-  const _SchedulePreviewSheet({
-    required this.schedule,
-    required this.isPastReference,
-  });
-
-  final TimeSchedule schedule;
-  final bool isPastReference;
-
-  @override
-  Widget build(BuildContext context) {
-    final int scheduledMinutes = schedule.allocatedMinutes;
-
-    return _ReferenceSheetScaffold(
-      title: isPastReference ? '지난 주 스케줄' : '스케줄 보기',
-      subtitle: isPastReference
-          ? '지난 주에 분배한 일별 사용 시간을 확인해요.'
-          : '이번 주에 분배한 일별 사용 시간을 확인해요.',
-      children: <Widget>[
-        _ReferenceMetricRow(
-          metrics: <_ReferenceMetric>[
-            _ReferenceMetric(
-              label: '총 분배',
-              value: _formatMinutes(scheduledMinutes),
-            ),
-            _ReferenceMetric(
-              label: '분배 그룹',
-              value: '${schedule.dayAllocations.length}개',
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        const _ReferenceSectionTitle('요일별 사용 시간'),
-        const SizedBox(height: 10),
-        if (scheduledMinutes == 0)
-          const _ReferenceEmptyState('등록된 스케줄이 아직 없어요.')
-        else
-          for (int weekday = 0; weekday < _weekdayNames.length; weekday++) ...[
-            _ScheduleDayPreviewRow(
-              dayLabel: _weekdayNames[weekday],
-              minutes: _scheduledMinutesForWeekday(schedule, weekday),
-            ),
-            if (weekday < _weekdayNames.length - 1) const SizedBox(height: 8),
-          ],
-      ],
     );
   }
 }
@@ -489,25 +435,6 @@ class _ReferenceEmptyState extends StatelessWidget {
   }
 }
 
-class _ScheduleDayPreviewRow extends StatelessWidget {
-  const _ScheduleDayPreviewRow({required this.dayLabel, required this.minutes});
-
-  final String dayLabel;
-  final int minutes;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool hasMinutes = minutes > 0;
-
-    return _ReferenceTile(
-      leading: dayLabel,
-      value: hasMinutes ? _formatMinutes(minutes) : '00시간 00분',
-      detail: hasMinutes ? '사용 시간' : '등록 없음',
-      isMuted: !hasMinutes,
-    );
-  }
-}
-
 class _UsageAllocationPreviewRow extends StatelessWidget {
   const _UsageAllocationPreviewRow({required this.allocation});
 
@@ -531,18 +458,14 @@ class _ReferenceTile extends StatelessWidget {
     required this.leading,
     required this.value,
     required this.detail,
-    this.isMuted = false,
   });
 
   final String leading;
   final String value;
   final String detail;
-  final bool isMuted;
 
   @override
   Widget build(BuildContext context) {
-    final Color contentColor = isMuted ? AppColors.gray400 : AppColors.gray800;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -559,7 +482,7 @@ class _ReferenceTile extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.headlineSemiBold.copyWith(
-                color: contentColor,
+                color: AppColors.gray800,
               ),
             ),
           ),
@@ -576,7 +499,7 @@ class _ReferenceTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.labelSemiBold.copyWith(
-                    color: contentColor,
+                    color: AppColors.gray800,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -585,7 +508,7 @@ class _ReferenceTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.captionMedium.copyWith(
-                    color: isMuted ? AppColors.gray400 : AppColors.gray500,
+                    color: AppColors.gray500,
                   ),
                 ),
               ],
@@ -801,16 +724,6 @@ class _AddCircleButton extends StatelessWidget {
       ),
     );
   }
-}
-
-int _scheduledMinutesForWeekday(TimeSchedule schedule, int weekday) {
-  int total = 0;
-  for (final DayAllocation allocation in schedule.dayAllocations) {
-    if (allocation.weekdayIndices.contains(weekday)) {
-      total += allocation.totalMinutes;
-    }
-  }
-  return total;
 }
 
 String _formatMinutes(int totalMinutes) {

@@ -15,6 +15,7 @@ import '../../../../core/widgets/mixins/async_error_listener.dart';
 import '../../data/models/time_schedule.dart';
 import '../../state/time_setup_controller.dart';
 import '../../state/time_setup_scope.dart';
+import 'time_setup_schedule_preview_page.dart';
 
 /// Step 3 review screen ("완성" / `695:11487`).
 ///
@@ -165,122 +166,11 @@ class _TimeSetupReviewPageState extends State<TimeSetupReviewPage>
   Future<void> _openSchedulePreview(
     BuildContext context,
     TimeSchedule schedule,
-  ) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTokens.bottomSheetTopRadius),
-        ),
-      ),
-      builder: (BuildContext sheetContext) {
-        final double maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.84;
-        return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.gray200,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    '스케줄 보기',
-                    style: AppTypography.heading2Bold.copyWith(
-                      color: AppColors.gray800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '분배한 일별 사용 시간을 다시 확인해요.',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.gray500,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  for (
-                    int weekday = 0;
-                    weekday < _weekdayNames.length;
-                    weekday++
-                  )
-                    _ScheduleSummaryRow(
-                      dayLabel: _weekdayNames[weekday],
-                      minutes: _scheduledMinutesForWeekday(schedule, weekday),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-const List<String> _weekdayNames = <String>['월', '화', '수', '목', '금', '토', '일'];
-
-class _ScheduleSummaryRow extends StatelessWidget {
-  const _ScheduleSummaryRow({required this.dayLabel, required this.minutes});
-
-  final String dayLabel;
-  final int minutes;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool hasMinutes = minutes > 0;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.gray100,
-          borderRadius: BorderRadius.circular(AppTokens.dialogRadius),
-        ),
-        child: Row(
-          children: <Widget>[
-            Text(
-              dayLabel,
-              style: AppTypography.headlineSemiBold.copyWith(
-                color: hasMinutes ? AppColors.gray800 : AppColors.gray400,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(width: 1, height: 22, color: AppColors.gray200),
-            const SizedBox(width: 10),
-            Text(
-              hasMinutes
-                  ? '${(minutes ~/ 60).toString().padLeft(2, '0')}시간 ${(minutes % 60).toString().padLeft(2, '0')}분'
-                  : '등록 없음',
-              style: AppTypography.labelSemiBold.copyWith(
-                color: hasMinutes ? AppColors.gray800 : AppColors.gray400,
-              ),
-            ),
-          ],
-        ),
+  ) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TimeSetupSchedulePreviewPage(schedule: schedule),
       ),
     );
   }
-}
-
-int _scheduledMinutesForWeekday(TimeSchedule schedule, int weekday) {
-  int total = 0;
-  for (final DayAllocation allocation in schedule.dayAllocations) {
-    if (allocation.weekdayIndices.contains(weekday)) {
-      total += allocation.totalMinutes;
-    }
-  }
-  return total;
 }
