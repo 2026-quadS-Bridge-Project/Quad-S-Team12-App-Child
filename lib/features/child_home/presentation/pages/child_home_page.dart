@@ -198,7 +198,7 @@ class _ChildHomePageState extends State<ChildHomePage>
         return _HomeTimeSnapshot(
           dateKey: dateKey,
           baseMinutes: _intValue(daily['baseMinutes']),
-          monthlyRemainingMinutes: await _fetchMonthlyRemainingMinutes(),
+          bonusMinutes: await _fetchBonusMinutes(),
           totalMinutes: totalMinutes < 0 ? 0 : totalMinutes,
         );
       }
@@ -212,7 +212,7 @@ class _ChildHomePageState extends State<ChildHomePage>
     return null;
   }
 
-  Future<int> _fetchMonthlyRemainingMinutes() async {
+  Future<int> _fetchBonusMinutes() async {
     final String? memberId = await AuthSession.memberId();
     if (memberId == null || memberId.isEmpty) {
       return 0;
@@ -226,14 +226,15 @@ class _ChildHomePageState extends State<ChildHomePage>
       if (policy == null) {
         return 0;
       }
-      return _intValue(
-        policy['totalAvailableTime'],
+      final int bonusMinutes = _intValue(
+        policy['accumulatedRewardTime'],
         fallback:
-            _intValue(policy['baseTime']) +
-            _intValue(policy['accumulatedRewardTime']),
+            _intValue(policy['totalAvailableTime']) -
+            _intValue(policy['baseTime']),
       );
+      return bonusMinutes > 0 ? bonusMinutes : 0;
     } on DioException catch (e) {
-      debugPrint('Child home monthly remaining load failed: ${e.message}');
+      debugPrint('Child home bonus time load failed: ${e.message}');
       return 0;
     }
   }
@@ -393,20 +394,18 @@ class _ChildHomePageState extends State<ChildHomePage>
       return;
     }
 
-    final int monthlyRemainingMinutes = snapshot.monthlyRemainingMinutes;
-    if (monthlyRemainingMinutes <= 0) {
-      _showSnackBar('이번 달 남은 시간이 없어요.');
+    final int bonusMinutes = snapshot.bonusMinutes;
+    if (bonusMinutes <= 0) {
+      _showSnackBar('사용할 수 있는 보너스 시간이 없어요.');
       return;
     }
 
-    final int initialMinutes = monthlyRemainingMinutes >= 30
-        ? 30
-        : monthlyRemainingMinutes;
+    final int initialMinutes = bonusMinutes >= 30 ? 30 : bonusMinutes;
     final TimeOfDayPick? pick = await BridgeTimeBottomSheet.show(
       context,
       initialHours: initialMinutes ~/ 60,
       initialMinutes: initialMinutes % 60,
-      maxHours: monthlyRemainingMinutes ~/ 60,
+      maxHours: bonusMinutes ~/ 60,
       minuteStep: 1,
     );
     if (!mounted || pick == null) {
@@ -418,8 +417,8 @@ class _ChildHomePageState extends State<ChildHomePage>
       _showSnackBar('추가할 시간을 선택해 주세요.');
       return;
     }
-    if (extraMinutes > monthlyRemainingMinutes) {
-      _showSnackBar('월간 남은시간을 초과할 수 없어요.');
+    if (extraMinutes > bonusMinutes) {
+      _showSnackBar('보너스 시간을 초과할 수 없어요.');
       return;
     }
 
@@ -463,7 +462,7 @@ class _ChildHomePageState extends State<ChildHomePage>
         _timeSnapshot = _HomeTimeSnapshot(
           dateKey: _yyyyMmDd(DateTime.now()),
           baseMinutes: 90,
-          monthlyRemainingMinutes: 30,
+          bonusMinutes: 30,
           totalMinutes: 120,
         );
         _remainingSeconds = 120 * 60;
@@ -535,13 +534,13 @@ class _HomeTimeSnapshot {
   const _HomeTimeSnapshot({
     required this.dateKey,
     required this.baseMinutes,
-    required this.monthlyRemainingMinutes,
+    required this.bonusMinutes,
     required this.totalMinutes,
   });
 
   final String dateKey;
   final int baseMinutes;
-  final int monthlyRemainingMinutes;
+  final int bonusMinutes;
   final int totalMinutes;
 }
 
@@ -815,8 +814,7 @@ class _TodayTimeSection extends StatelessWidget {
     // Donut + time details only when there's actually a registered schedule.
     // All other states fall through to the empty card with a tappable + button.
     final bool showDonut = hasContent && hasSchedule && timeSnapshot != null;
-    final bool showAddTimeButton =
-        showDonut && timeSnapshot!.monthlyRemainingMinutes > 0;
+    final bool showAddTimeButton = showDonut && timeSnapshot!.bonusMinutes > 0;
 
     return SizedBox(
       height: 223,
@@ -1125,9 +1123,9 @@ class _TimeDonutChartPainter extends CustomPainter {
     final double remainingProgress = totalSeconds <= 0
         ? 0
         : (remainingSeconds / totalSeconds).clamp(0, 1).toDouble();
-    final double monthlyRemainingProgress = snapshot.totalMinutes <= 0
+    final double bonusProgress = snapshot.totalMinutes <= 0
         ? 0
-        : (snapshot.monthlyRemainingMinutes / snapshot.totalMinutes)
+        : (snapshot.bonusMinutes / snapshot.totalMinutes)
               .clamp(0, 1)
               .toDouble();
 
@@ -1143,7 +1141,7 @@ class _TimeDonutChartPainter extends CustomPainter {
       strokeWidth: 11,
       baseColor: AppColors.gray150,
       progressColor: AppColors.bonusAmber,
-      progress: monthlyRemainingProgress,
+      progress: bonusProgress,
     );
   }
 
@@ -1181,8 +1179,8 @@ class _TimeDetails extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _TimeDetailGroup(
-                label: '월간 남은시간',
-                value: _formatMinutes(snapshot.monthlyRemainingMinutes),
+                label: '보너스 시간',
+                value: _formatMinutes(snapshot.bonusMinutes),
                 color: AppColors.bonusAmber,
               ),
             ],

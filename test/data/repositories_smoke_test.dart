@@ -722,7 +722,7 @@ void main() {
     );
 
     test(
-      'api saveSchedule rejects weekly totals that do not match parent budget before network',
+      'api saveSchedule rejects weekly totals above parent budget before network',
       () async {
         bool wasCalled = false;
         final Dio dio = Dio(BaseOptions(baseUrl: 'https://test.local'));
@@ -759,7 +759,7 @@ void main() {
                 minutes: 0,
               ),
             ],
-            monthlyBudgetMinutes: 300,
+            monthlyBudgetMinutes: 180,
             yearMonth: '2026-08',
           ),
         );
