@@ -218,128 +218,122 @@ class _BridgeTimeAllocBottomSheetState
     final headerText = _mode == BottomSheetMode.dayPicker ? '요일 선택' : '시간 선택';
 
     return Material(
-      color: Colors.transparent,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: _sheetHeight,
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(_sheetRadius),
-              topRight: Radius.circular(_sheetRadius),
+      color: AppColors.white,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(_sheetRadius),
+        topRight: Radius.circular(_sheetRadius),
+      ),
+      child: SizedBox(
+        height: _sheetHeight,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            // Drag handle.
+            Positioned(
+              top: _handleTop,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  width: _handleWidth,
+                  height: _handleHeight,
+                  decoration: BoxDecoration(
+                    color: AppColors.gray200,
+                    borderRadius: BorderRadius.circular(_handleHeight / 2),
+                  ),
+                ),
+              ),
             ),
-          ),
-          child: Stack(
-            children: [
-              // Drag handle.
+
+            // Header.
+            Positioned(
+              top: _headerTop,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(headerText, style: AppTypography.headlineSemiBold),
+              ),
+            ),
+
+            // Body — mode-dependent.
+            if (_mode == BottomSheetMode.dayPicker)
+              Positioned.fill(
+                top: _headerTop + 40,
+                bottom: _ctaBottom + 54 + 16,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _buildDayPickerBody(),
+                ),
+              )
+            else ...[
               Positioned(
-                top: _handleTop,
+                top: _wheelsTop,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: Container(
-                    width: _handleWidth,
-                    height: _handleHeight,
-                    decoration: BoxDecoration(
-                      color: AppColors.gray200,
-                      borderRadius: BorderRadius.circular(_handleHeight / 2),
-                    ),
-                  ),
-                ),
+                height: _wheelTotalHeight,
+                child: _buildTimePickerWheels(),
               ),
-
-              // Header.
               Positioned(
-                top: _headerTop,
+                top:
+                    _wheelsTop + (_wheelTotalHeight - _selectionBandHeight) / 2,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: Text(headerText, style: AppTypography.headlineSemiBold),
-                ),
-              ),
+                height: _selectionBandHeight,
+                child: IgnorePointer(
+                  child: LayoutBuilder(
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final double bandWidth =
+                              constraints.maxWidth < _selectionBandWidth
+                              ? constraints.maxWidth
+                              : _selectionBandWidth;
 
-              // Body — mode-dependent.
-              if (_mode == BottomSheetMode.dayPicker)
-                Positioned.fill(
-                  top: _headerTop + 40,
-                  bottom: _ctaBottom + 54 + 16,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: _buildDayPickerBody(),
-                  ),
-                )
-              else ...[
-                Positioned(
-                  top: _wheelsTop,
-                  left: 0,
-                  right: 0,
-                  height: _wheelTotalHeight,
-                  child: _buildTimePickerWheels(),
-                ),
-                Positioned(
-                  top:
-                      _wheelsTop +
-                      (_wheelTotalHeight - _selectionBandHeight) / 2,
-                  left: 0,
-                  right: 0,
-                  height: _selectionBandHeight,
-                  child: IgnorePointer(
-                    child: LayoutBuilder(
-                      builder:
-                          (BuildContext context, BoxConstraints constraints) {
-                            final double bandWidth =
-                                constraints.maxWidth < _selectionBandWidth
-                                ? constraints.maxWidth
-                                : _selectionBandWidth;
-
-                            return Center(
-                              child: Opacity(
-                                opacity: 0.8,
-                                child: Container(
-                                  width: bandWidth,
-                                  height: _selectionBandHeight,
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(
-                                        color: AppColors.primary,
-                                        width: 2,
-                                      ),
-                                      bottom: BorderSide(
-                                        color: AppColors.primary,
-                                        width: 2,
-                                      ),
+                          return Center(
+                            child: Opacity(
+                              opacity: 0.8,
+                              child: Container(
+                                width: bandWidth,
+                                height: _selectionBandHeight,
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: AppColors.primary,
+                                      width: 2,
+                                    ),
+                                    bottom: BorderSide(
+                                      color: AppColors.primary,
+                                      width: 2,
                                     ),
                                   ),
-                                  child: const _BandLabels(
-                                    wheelItemWidth: _wheelItemWidth,
-                                    wheelGap: _wheelGap,
-                                  ),
+                                ),
+                                child: const _BandLabels(
+                                  wheelItemWidth: _wheelItemWidth,
+                                  wheelGap: _wheelGap,
                                 ),
                               ),
-                            );
-                          },
-                    ),
+                            ),
+                          );
+                        },
                   ),
-                ),
-              ],
-
-              // CTA.
-              Positioned(
-                left: _ctaHorizontalPadding,
-                right: _ctaHorizontalPadding,
-                bottom: _ctaBottom,
-                child: BridgeButton(
-                  label: '확인',
-                  variant: BridgeButtonVariant.primary,
-                  size: BridgeButtonSize.large,
-                  fullWidth: true,
-                  onPressed: _canConfirm ? _onConfirm : null,
                 ),
               ),
             ],
-          ),
+
+            // CTA.
+            Positioned(
+              left: _ctaHorizontalPadding,
+              right: _ctaHorizontalPadding,
+              bottom: _ctaBottom,
+              child: BridgeButton(
+                label: '확인',
+                variant: BridgeButtonVariant.primary,
+                size: BridgeButtonSize.large,
+                fullWidth: true,
+                onPressed: _canConfirm ? _onConfirm : null,
+              ),
+            ),
+          ],
         ),
       ),
     );
